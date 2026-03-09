@@ -1,0 +1,22 @@
+## .NET
+bin/
+obj/
+publish/
+artifacts/
+
+## Visual Studio
+.vs/
+
+## User-specific files
+*.user
+*.suo
+
+## Temp/deploy scripts
+.tmp_*
+
+## Secrets
+appsettings.json
+appsettings.Development.json
+
+## Publish settings
+*.publishSettings

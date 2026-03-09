@@ -1,0 +1,646 @@
+{
+  "users": [
+    {
+      "id": "e02320b56a404abc9cd4fd54daff8b56",
+      "name": "Pappz"
+    },
+    {
+      "id": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "name": "Duva.com"
+    },
+    {
+      "id": "e7efa7003c9f428a99d7e56e039103cd",
+      "name": "Kompost-Henry"
+    }
+  ],
+  "weeks": [
+    {
+      "id": "dc7f80d351c940888de6a76ffc8f97c8",
+      "weekName": "Vecka 6",
+      "words": [
+        {
+          "sv": "handla",
+          "en": "go shopping"
+        },
+        {
+          "sv": "ryggs\u00E4ck",
+          "en": "backpack"
+        },
+        {
+          "sv": "prova",
+          "en": "try on"
+        },
+        {
+          "sv": "leta efter",
+          "en": "look for"
+        },
+        {
+          "sv": "passar inte",
+          "en": "doesn\u0027t fit"
+        },
+        {
+          "sv": "f\u00F6r liten",
+          "en": "too small"
+        },
+        {
+          "sv": "handskar",
+          "en": "gloves"
+        },
+        {
+          "sv": "halsduk",
+          "en": "scarf"
+        },
+        {
+          "sv": "har p\u00E5 sig",
+          "en": "is wearing"
+        },
+        {
+          "sv": "f\u00F6tter",
+          "en": "feet"
+        },
+        {
+          "sv": "rullstol",
+          "en": "wheelchair"
+        }
+      ]
+    },
+    {
+      "id": "1941718d0bf24152aec9ce8546326da3",
+      "weekName": "Typ Prov Engelska",
+      "words": [
+        {
+          "sv": "bottle-nosed dolphin",
+          "en": "flasknosdelfin"
+        },
+        {
+          "sv": "lionfish",
+          "en": "drakfisk"
+        },
+        {
+          "sv": "transfer",
+          "en": "transportera"
+        },
+        {
+          "sv": "evolve",
+          "en": "utvecklas"
+        },
+        {
+          "sv": "sea-species",
+          "en": "havslevande arter"
+        },
+        {
+          "sv": "melt",
+          "en": "sm\u00E4lta"
+        },
+        {
+          "sv": "pond",
+          "en": "damm"
+        },
+        {
+          "sv": "shoreline",
+          "en": "strandlinje"
+        },
+        {
+          "sv": "thawed",
+          "en": "tinade"
+        },
+        {
+          "sv": "chunk",
+          "en": "stycke"
+        },
+        {
+          "sv": "migratory bird",
+          "en": "flyttf\u00E5gel"
+        },
+        {
+          "sv": "feed",
+          "en": "livn\u00E4ra sig"
+        },
+        {
+          "sv": "caused by",
+          "en": "orsakad av"
+        },
+        {
+          "sv": "global warming",
+          "en": "global uppv\u00E4rmning"
+        },
+        {
+          "sv": "spell trouble",
+          "en": "betyda problem"
+        },
+        {
+          "sv": "issues",
+          "en": "problem"
+        },
+        {
+          "sv": "affect",
+          "en": "p\u00E5verka"
+        },
+        {
+          "sv": "coral reef",
+          "en": "korallrev"
+        },
+        {
+          "sv": "algae",
+          "en": "alger"
+        },
+        {
+          "sv": "rise",
+          "en": "stiga"
+        },
+        {
+          "sv": "endangered",
+          "en": "utrotningshotad"
+        },
+        {
+          "sv": "rainfall",
+          "en": "nederb\u00F6rd"
+        },
+        {
+          "sv": "pattern",
+          "en": "m\u00F6nster"
+        },
+        {
+          "sv": "beetle",
+          "en": "skalbagge"
+        },
+        {
+          "sv": "harm",
+          "en": "skada"
+        },
+        {
+          "sv": "crop",
+          "en": "gr\u00F6da"
+        },
+        {
+          "sv": "flu",
+          "en": "influensa"
+        },
+        {
+          "sv": "nesting ground",
+          "en": "h\u00E4ckningsplats"
+        },
+        {
+          "sv": "despite",
+          "en": "trots"
+        },
+        {
+          "sv": "habitat",
+          "en": "livsmilj\u00F6"
+        },
+        {
+          "sv": "elder",
+          "en": "\u00E4ldre person"
+        },
+        {
+          "sv": "save",
+          "en": "r\u00E4dda"
+        },
+        {
+          "sv": "rainforest",
+          "en": "regnskog"
+        },
+        {
+          "sv": "tropical",
+          "en": "tropisk"
+        },
+        {
+          "sv": "along the equator",
+          "en": "l\u00E4ngs ekvatorn"
+        },
+        {
+          "sv": "the Pacific",
+          "en": "Stilla havet"
+        },
+        {
+          "sv": "humid",
+          "en": "fuktig"
+        },
+        {
+          "sv": "a large amount of",
+          "en": "massvis med"
+        },
+        {
+          "sv": "annual",
+          "en": "\u00E5rlig"
+        },
+        {
+          "sv": "rainfall",
+          "en": "regnm\u00E4ngd"
+        },
+        {
+          "sv": "cool down",
+          "en": "kyla ner"
+        },
+        {
+          "sv": "a proper level",
+          "en": "en bra niv\u00E5"
+        },
+        {
+          "sv": "absorb",
+          "en": "absorbera"
+        },
+        {
+          "sv": "greenhouse gas",
+          "en": "v\u00E4xthusgas"
+        },
+        {
+          "sv": "carbon dioxide",
+          "en": "koldioxid"
+        },
+        {
+          "sv": "cause",
+          "en": "orsaka"
+        },
+        {
+          "sv": "reduce",
+          "en": "minska"
+        },
+        {
+          "sv": "emission",
+          "en": "utsl\u00E4pp"
+        },
+        {
+          "sv": "species",
+          "en": "art"
+        },
+        {
+          "sv": "unknown",
+          "en": "ok\u00E4nd"
+        },
+        {
+          "sv": "remove",
+          "en": "ta bort"
+        },
+        {
+          "sv": "destroy",
+          "en": "f\u00F6rst\u00F6ra"
+        },
+        {
+          "sv": "cattle",
+          "en": "boskap"
+        },
+        {
+          "sv": "meat production",
+          "en": "k\u00F6ttproduktion"
+        },
+        {
+          "sv": "cleared",
+          "en": "rensas bort"
+        },
+        {
+          "sv": "to mine",
+          "en": "gr\u00E4va gruvor"
+        },
+        {
+          "sv": "beneath the ground",
+          "en": "under jorden"
+        },
+        {
+          "sv": "government",
+          "en": "regering"
+        },
+        {
+          "sv": "deforestation",
+          "en": "skogsavverkning"
+        },
+        {
+          "sv": "promote",
+          "en": "st\u00F6dja"
+        },
+        {
+          "sv": "replanting",
+          "en": "\u00E5terplantering"
+        },
+        {
+          "sv": "rewards",
+          "en": "priser"
+        },
+        {
+          "sv": "protect",
+          "en": "skydda"
+        },
+        {
+          "sv": "avoid",
+          "en": "undvika"
+        },
+        {
+          "sv": "in a way that",
+          "en": "p\u00E5 ett s\u00E4tt som"
+        },
+        {
+          "sv": "damage",
+          "en": "skada"
+        },
+        {
+          "sv": "join",
+          "en": "g\u00E5 med i"
+        }
+      ]
+    },
+    {
+      "id": "68ec72b221ba4761bef48b419808a7f8",
+      "weekName": "Vecka 10",
+      "words": [
+        {
+          "sv": "orolig",
+          "en": "worried"
+        },
+        {
+          "sv": "hals",
+          "en": "neck"
+        },
+        {
+          "sv": "Vad st\u00E5r p\u00E5?",
+          "en": "What\u0027s the matter?"
+        },
+        {
+          "sv": "mage",
+          "en": "stomach"
+        },
+        {
+          "sv": "\u00F6gon",
+          "en": "eyes"
+        },
+        {
+          "sv": "betala",
+          "en": "pay"
+        },
+        {
+          "sv": "f\u00F6rsvinna",
+          "en": "disappear"
+        },
+        {
+          "sv": "ledtr\u00E5d",
+          "en": "clue"
+        },
+        {
+          "sv": "springa till skogen",
+          "en": "run to the woods"
+        },
+        {
+          "sv": "Har du ont i huvudet?",
+          "en": "Does your head hurt?"
+        },
+        {
+          "sv": "K\u00E4nner du dig sjuk?",
+          "en": "Do you feel sick?"
+        },
+        {
+          "sv": "K\u00E4nner du dig ok?",
+          "en": "Are you all right?"
+        }
+      ]
+    }
+  ],
+  "highscores": [
+    {
+      "id": "fbd0d26d477842ac8e9472cbb83965f9",
+      "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "score": 1232,
+      "timeSeconds": 165.9637236,
+      "createdUtc": "2026-02-03T17:51:07.7828908Z"
+    },
+    {
+      "id": "2496dbd0784c443c9b5214f84feb225d",
+      "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "score": 1380,
+      "timeSeconds": 117.85316229999998,
+      "createdUtc": "2026-02-04T15:21:04.1095058Z"
+    },
+    {
+      "id": "58fc653d608542aaaac28eedcc4d417f",
+      "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "score": 1559,
+      "timeSeconds": 67.3871525,
+      "createdUtc": "2026-02-04T15:22:54.8653766Z"
+    },
+    {
+      "id": "4c27f1aba6d646f2bd0bdce8f716dfe3",
+      "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "score": 1505,
+      "timeSeconds": 78.68508940000001,
+      "createdUtc": "2026-02-04T15:24:53.4297551Z"
+    },
+    {
+      "id": "f3e3e9bda8dd4e5fb1fb0a2c60565cff",
+      "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "score": 1563,
+      "timeSeconds": 66.23211140000001,
+      "createdUtc": "2026-02-04T15:26:11.9475935Z"
+    },
+    {
+      "id": "8f08cf16cf5645f08176ff5841547d63",
+      "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "score": 1551,
+      "timeSeconds": 69.5882939,
+      "createdUtc": "2026-02-05T19:21:08.3798338Z"
+    },
+    {
+      "id": "aaa4d6fd90a240cda7e4ef3c723664fa",
+      "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "score": 1603,
+      "timeSeconds": 51.5459336,
+      "createdUtc": "2026-02-05T19:22:53.2409879Z"
+    },
+    {
+      "id": "f0ad48f74a85497494fa0be75cd37f84",
+      "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "score": 1598,
+      "timeSeconds": 54.11429680000001,
+      "createdUtc": "2026-02-06T06:45:59.0341234Z"
+    },
+    {
+      "id": "b424a44b2e0e481ca772336e8ac29d01",
+      "weekId": "1941718d0bf24152aec9ce8546326da3",
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "score": 7225,
+      "timeSeconds": 970.2880097000002,
+      "createdUtc": "2026-03-01T17:04:19.9168447Z"
+    },
+    {
+      "id": "c9905e10326749f09e906e5cdbd4443c",
+      "weekId": "1941718d0bf24152aec9ce8546326da3",
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "score": 8727,
+      "timeSeconds": 585.0080459999999,
+      "createdUtc": "2026-03-01T17:14:31.4951761Z"
+    },
+    {
+      "id": "9d8ba23ac7d04ce9a51e1e831ad79e58",
+      "weekId": "1941718d0bf24152aec9ce8546326da3",
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "score": 9048,
+      "timeSeconds": 485.2374342,
+      "createdUtc": "2026-03-01T17:22:49.2885565Z"
+    },
+    {
+      "id": "132ef6f1ab9541ed981254bba2c7530a",
+      "weekId": "1941718d0bf24152aec9ce8546326da3",
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "score": 9386,
+      "timeSeconds": 413.59804420000006,
+      "createdUtc": "2026-03-01T17:30:15.3651872Z"
+    },
+    {
+      "id": "4a92ffee34be46cab84d0badee1a49df",
+      "weekId": "1941718d0bf24152aec9ce8546326da3",
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "score": 9442,
+      "timeSeconds": 370.44655720000003,
+      "createdUtc": "2026-03-01T17:36:41.2996042Z"
+    },
+    {
+      "id": "406333d8f1b04c239e32b0a6e6bb42de",
+      "weekId": "1941718d0bf24152aec9ce8546326da3",
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "score": 9560,
+      "timeSeconds": 1205.4955533,
+      "createdUtc": "2026-03-01T17:56:52.3139677Z"
+    },
+    {
+      "id": "ef109ade62b34d4e8f02f9f3dc1e3df5",
+      "weekId": "1941718d0bf24152aec9ce8546326da3",
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "score": 8818,
+      "timeSeconds": 555.1447505,
+      "createdUtc": "2026-03-02T19:33:11.5826848Z"
+    },
+    {
+      "id": "3dc6161d70e24e2c9ebc5d3b7db57164",
+      "weekId": "1941718d0bf24152aec9ce8546326da3",
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "score": 9595,
+      "timeSeconds": 280.37192590000006,
+      "createdUtc": "2026-03-02T19:37:57.3804234Z"
+    }
+  ],
+  "progressByUser": {
+    "2e4e6a11c8aa42f4aa2b4bd5f3a97156": {
+      "userId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+      "lastUpdatedUtc": "2026-02-06T06:45:59.0318175Z",
+      "weeks": {
+        "dc7f80d351c940888de6a76ffc8f97c8": {
+          "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+          "correctKeys": [
+            "f\u00F6tter|feet",
+            "prova|try on",
+            "ryggs\u00E4ck|backpack",
+            "handla|go shopping",
+            "passar inte|doesn\u0027t fit",
+            "leta efter|look for",
+            "har p\u00E5 sig|is wearing",
+            "handskar|gloves",
+            "f\u00F6r liten|too small",
+            "halsduk|scarf",
+            "rullstol|wheelchair"
+          ]
+        }
+      }
+    },
+    "e7efa7003c9f428a99d7e56e039103cd": {
+      "userId": "e7efa7003c9f428a99d7e56e039103cd",
+      "lastUpdatedUtc": "2026-03-03T22:19:22.9899854Z",
+      "weeks": {
+        "1941718d0bf24152aec9ce8546326da3": {
+          "weekId": "1941718d0bf24152aec9ce8546326da3",
+          "correctKeys": [
+            "endangered|utrotningshotad",
+            "cattle|boskap",
+            "sea-species|havslevande arter",
+            "rainforest|regnskog",
+            "tropical|tropisk",
+            "caused by|orsakad av",
+            "habitat|livsmilj\u00F6",
+            "annual|\u00E5rlig",
+            "reduce|minska",
+            "beneath the ground|under jorden",
+            "government|regering",
+            "to mine|gr\u00E4va gruvor",
+            "emission|utsl\u00E4pp",
+            "save|r\u00E4dda",
+            "despite|trots",
+            "the pacific|stilla havet",
+            "chunk|stycke",
+            "affect|p\u00E5verka",
+            "species|art",
+            "lionfish|drakfisk",
+            "rainfall|regnm\u00E4ngd",
+            "global warming|global uppv\u00E4rmning",
+            "cleared|rensas bort",
+            "humid|fuktig",
+            "rise|stiga",
+            "elder|\u00E4ldre person",
+            "in a way that|p\u00E5 ett s\u00E4tt som",
+            "carbon dioxide|koldioxid",
+            "beetle|skalbagge",
+            "absorb|absorbera",
+            "greenhouse gas|v\u00E4xthusgas",
+            "cause|orsaka",
+            "flu|influensa",
+            "remove|ta bort",
+            "replanting|\u00E5terplantering",
+            "evolve|utvecklas",
+            "bottle-nosed dolphin|flasknosdelfin",
+            "crop|gr\u00F6da",
+            "promote|st\u00F6dja",
+            "damage|skada",
+            "spell trouble|betyda problem",
+            "along the equator|l\u00E4ngs ekvatorn",
+            "pond|damm",
+            "transfer|transportera",
+            "a large amount of|massvis med",
+            "algae|alger",
+            "cool down|kyla ner",
+            "thawed|tinade",
+            "deforestation|skogsavverkning",
+            "issues|problem",
+            "protect|skydda",
+            "rewards|priser",
+            "coral reef|korallrev",
+            "unknown|ok\u00E4nd",
+            "meat production|k\u00F6ttproduktion",
+            "nesting ground|h\u00E4ckningsplats",
+            "destroy|f\u00F6rst\u00F6ra",
+            "pattern|m\u00F6nster",
+            "feed|livn\u00E4ra sig",
+            "migratory bird|flyttf\u00E5gel",
+            "a proper level|en bra niv\u00E5",
+            "melt|sm\u00E4lta",
+            "shoreline|strandlinje",
+            "harm|skada",
+            "avoid|undvika",
+            "rainfall|nederb\u00F6rd",
+            "join|g\u00E5 med i"
+          ]
+        },
+        "dc7f80d351c940888de6a76ffc8f97c8": {
+          "weekId": "dc7f80d351c940888de6a76ffc8f97c8",
+          "correctKeys": [
+            "har p\u00E5 sig|is wearing",
+            "passar inte|doesn\u0027t fit",
+            "leta efter|look for",
+            "halsduk|scarf",
+            "ryggs\u00E4ck|backpack",
+            "handla|go shopping",
+            "rullstol|wheelchair",
+            "f\u00F6r liten|too small",
+            "prova|try on",
+            "f\u00F6tter|feet",
+            "handskar|gloves"
+          ]
+        }
+      }
+    }
+  },
+  "lastActiveUserId": "2e4e6a11c8aa42f4aa2b4bd5f3a97156",
+  "lastSelectedWeekId": "68ec72b221ba4761bef48b419808a7f8"
+}

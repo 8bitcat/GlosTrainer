@@ -1,0 +1,26 @@
+@page
+@model GlosTrainer.Web.Pages.Auth.TeacherLoginModel
+@{
+    ViewData["Title"] = "Larar-login";
+}
+
+<div class="game-shell">
+    <section class="hero-panel">
+        <div style="width:100%;max-width:520px;">
+            <p class="kicker">Larare</p>
+            <h1>Larar-login</h1>
+            <p class="subtitle">Snabblogin med kod.</p>
+
+            @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+            {
+                <p class="feedback bad">@Model.ErrorMessage</p>
+            }
+
+            <form method="post" class="d-grid gap-2">
+                <input asp-for="Input.Code" type="password" placeholder="Larar-kod" />
+                <button type="submit">Logga in som larare</button>
+            </form>
+            <p class="mt-2"><a href="/">Tillbaka</a></p>
+        </div>
+    </section>
+</div>

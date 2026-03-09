@@ -1,0 +1,226 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "GlosTrainer";
+}
+
+<div class="game-shell">
+    <section class="hero-panel">
+        <div>
+            <p class="kicker">Web Edition</p>
+            <h1>GlosTrainer</h1>
+            <p class="subtitle">Trana glosor, bygg streak och kla bossfighten.</p>
+            <p id="authStatusText" class="subtitle"></p>
+            <div class="auth-actions" style="display:none;">
+                <a id="loginLink" class="btn btn-primary" href="/Auth/Login">Logga in</a><a id="registerLink" class="btn btn-outline-primary" href="/Auth/Register">Registrera</a>
+                <a id="teacherLoginLink" class="btn teacher-login-cta" href="/Auth/TeacherLogin">Larar-login</a>
+                <a id="logoutLink" class="btn btn-outline-secondary" href="/auth/logout">Logga ut</a>
+                <a id="adminLink" class="btn btn-outline-dark" href="/Admin/LegacyLinks">Admin</a>
+            </div>
+        </div>
+        <div class="hero-stats">
+            <div><span>Level</span><strong id="levelValue">1</strong></div>
+            <div><span>XP</span><strong id="xpValue">0</strong></div>
+            <div><span>Coins</span><strong id="coinsValue">0</strong></div>
+            <div><span>Streak</span><strong id="streakValue">0</strong></div>
+        </div>
+    </section>
+
+    <section class="controls-panel">
+        <div class="train-cta-shell">
+            <button id="trainModeButton" type="button" class="primary-cta">Trana glosor</button>
+            <select id="weekSelect" class="train-week-select"></select>
+        </div>
+        <label for="appLanguageSelect">Sprak</label>
+        <select id="appLanguageSelect">
+            <option value="english">English</option>
+        </select>
+        <button id="createGroupFightButton" type="button" class="primary-cta">Skapa gruppfight</button>
+        <a id="teacherQuickLoginButton" class="btn teacher-login-cta" href="/Auth/TeacherLogin">Larar-login</a>
+        <button id="toggleModeButton" type="button" class="primary-cta boss-cta" style="display:none;">&#9760; Starta Bossfight</button>
+        <button id="fortressModeButton" type="button" class="primary-cta fortress-cta" style="display:none;"><span class="cta-icon" aria-hidden="true">&#x1F6E1;</span> Byggforsvar</button>
+
+        <label id="userSelectLabel" for="userSelect">Anvandare</label>
+        <select id="userSelect"></select>
+        <label id="guestNameLabel" for="guestNameInput" style="display:none;">Ditt namn</label>
+        <input id="guestNameInput" type="text" placeholder="Skriv ditt namn..." style="display:none;" />
+
+        <label for="bossSelect" style="display:none;">Boss</label>
+        <select id="bossSelect" style="display:none;"></select>
+
+        <label for="playerAvatarSelect">Spelarbild</label>
+        <select id="playerAvatarSelect"></select>
+        <img id="playerAvatarPreview" alt="Spelarbild" style="width:80px;height:80px;border-radius:10px;object-fit:cover;border:1px solid #b8d2e9;background:#fff;" />
+    </section>
+
+    <section class="combat-panel" id="combatPanel">
+        <div class="hp-card">
+            <h2>Du</h2>
+            <div class="hp-bar"><div id="playerHpBar"></div></div>
+            <p id="playerHpText">100 / 100 HP</p>
+            <img id="playerAvatarCard" alt="Spelare" style="width:68px;height:68px;border-radius:999px;object-fit:cover;border:2px solid #b8d2e9;background:#fff;display:none;margin-top:.35rem;" />
+        </div>
+        <div class="hp-card">
+            <h2 id="bossName">Boss</h2>
+            <div class="hp-bar"><div id="bossHpBar"></div></div>
+            <p id="bossHpText">100 / 100 HP</p>
+            <p id="bossTimerText">Tid till krasch: -</p>
+            <p id="bossWordsLeftText">Glosor kvar: -</p>
+            <div id="wordsProgressWrap" class="words-progress" style="display:none;">
+                <div class="words-progress-track">
+                    <div id="wordsProgressFill"></div>
+                </div>
+                <p id="wordsProgressText">0%</p>
+            </div>
+        </div>
+        <div class="battle-canvas-shell">
+            <canvas id="bossFightCanvas" width="900" height="320"></canvas>
+            <div id="duelPrepOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.62);color:#fff;font-weight:800;font-size:1.4rem;align-items:center;justify-content:center;text-align:center;padding:1rem;">Gor dig redo...</div>
+            <div id="groupResultOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.72);color:#fff;font-weight:900;font-size:3rem;align-items:center;justify-content:center;text-align:center;padding:1rem;letter-spacing:.04em;text-transform:uppercase;">DU VANN!</div>
+            <div id="groupBattleFeed" style="display:none;position:absolute;left:10px;right:10px;bottom:10px;color:#fff;background:rgba(15,23,42,.58);border-radius:10px;padding:.45rem .6rem;font-weight:700;"></div>
+        </div>
+    </section>
+
+    <section id="groupBattleBoard" class="card-panel" style="display:none;">
+        <p class="question-label">Gruppfight-status</p>
+        <div id="groupBattleStatusText"></div>
+        <div id="groupBattleProgressWrap" class="words-progress" style="display:none;">
+            <div class="words-progress-track">
+                <div id="groupBattleProgressFill"></div>
+            </div>
+            <p id="groupBattleProgressText">0%</p>
+        </div>
+        <ul id="groupBattlePlayers" class="leaderboard-list"></ul>
+    </section>
+
+    <section class="card-panel">
+        <p id="questionLabel" class="question-label">Oversatt till engelska:</p>
+        <p class="question-word" id="questionWord">Laddar glosor...</p>
+        <form id="answerForm" autocomplete="off">
+            <input id="answerInput" type="text" placeholder="Skriv svaret..." />
+            <button type="submit">Svar</button>
+        </form>
+        <button id="nextWordButton" type="button" class="ghost" style="margin-top:.6rem;">Ny glosa</button>
+        <p id="feedbackText" class="feedback"></p>
+    </section>
+
+    <section class="card-panel">
+        <p class="question-label">Utmaningar</p>
+        <ul id="challengeInboxList" class="leaderboard-list"></ul>
+    </section>
+
+    <div id="groupFightPopup" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:16px;max-width:940px;width:94%;padding:1rem;border:2px solid #7aa7d0;">
+            <h3 style="margin-top:0;">Skapa gruppfight</h3>
+            <p style="margin:.2rem 0 .7rem 0;">Valj sprak, vecka, lag och fyll pa med bottar.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem;">
+                <div>
+                    <label for="groupFightLanguageSelect" style="font-weight:700;display:block;margin-bottom:.25rem;">Sprak</label>
+                    <select id="groupFightLanguageSelect"></select>
+                </div>
+                <div>
+                    <label for="groupFightWeekSelect" style="font-weight:700;display:block;margin-bottom:.25rem;">Vecka</label>
+                    <select id="groupFightWeekSelect"></select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
+                <div style="grid-column:1 / -1;border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
+                    <h4 style="margin:0 0 .5rem 0;">Tillgangliga spelare</h4>
+                    <ul id="groupPoolList" class="leaderboard-list"></ul>
+                </div>
+                <div style="border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
+                    <h4 style="margin:0 0 .5rem 0;">Ditt lag</h4>
+                    <ul id="groupTeamAList" class="leaderboard-list"></ul>
+                </div>
+                <div style="border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
+                    <h4 style="margin:0 0 .5rem 0;">Motstandarlag</h4>
+                    <ul id="groupTeamBList" class="leaderboard-list"></ul>
+                </div>
+            </div>
+            <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem;">
+                <button id="groupFightCreateButton" type="button" style="background:#16a34a;">Skapa</button>
+                <button id="groupFightCancelButton" type="button" style="background:#475569;">Avbryt</button>
+            </div>
+        </div>
+    </div>
+
+    <section class="card-panel">
+        <p class="question-label">Inloggade nu</p>
+        <ul id="onlineUsersList" class="leaderboard-list"></ul>
+    </section>
+
+    <section class="card-panel">
+        <p class="question-label">Slottsnivaer (vecka)</p>
+        <div id="castleTree" class="castle-tree"></div>
+    </section>
+
+    <section class="card-panel">
+        <p class="question-label">Topplista</p>
+        <select id="leaderboardWeekSelect" style="margin-bottom:.6rem;max-width:320px;">
+            <option value="">Alla veckor</option>
+        </select>
+        <ul id="leaderboardList" class="leaderboard-list"></ul>
+    </section>
+
+    <section class="powerups-panel" style="display:none;">
+        <button id="hintButton" type="button">Hint (-15 coins)</button>
+        <button id="healButton" type="button">Heal (-20 coins)</button>
+        <button id="doubleButton" type="button">Double Hit (-25 coins)</button>
+        <button id="saveResultButton" type="button" class="ghost">Spara resultat</button>
+        <button id="resetButton" type="button" class="ghost">Nollstall</button>
+        <button id="soundToggleButton" type="button" class="ghost">Ljud: Pa</button>
+        <p id="hintText"></p>
+    </section>
+
+    <section class="hero-panel">
+        <div style="width:100%">
+            <p class="kicker">Tillfalliga glosor (gastlage)</p>
+            <textarea id="tempWordsInput" rows="4" style="width:100%; border:1px solid #b8d2e9; border-radius:10px; padding:0.75rem;" placeholder="Skriv en rad per glosa, t.ex:
+handla - go shopping
+ryggsack: backpack"></textarea>
+            <div style="display:flex; gap:.6rem; margin-top:.6rem; flex-wrap:wrap;">
+                <button id="tempWordsAddButton" type="button">Lagg till temporart</button>
+            </div>
+            <p id="tempWordsStatus" class="feedback"></p>
+        </div>
+    </section>
+
+    <section class="hero-panel" style="display:none;">
+        <div style="width:100%">
+            <p class="kicker">AI Import</p>
+            <h2 style="margin-top:0">Klistra, slapp eller ladda upp glosor</h2>
+            <textarea id="aiInput" rows="6" style="width:100%; border:1px solid #b8d2e9; border-radius:10px; padding:0.75rem;" placeholder="Exempel:
+handla - go shopping
+ryggsack: backpack"></textarea>
+            <div style="display:flex; gap:.6rem; margin-top:.6rem; flex-wrap:wrap;">
+                <select id="targetLanguageSelect">
+                    <option value="english">English</option>
+                    <option value="swedish">Swedish</option>
+                    <option value="spanish">Spanish</option>
+                    <option value="german">German</option>
+                    <option value="french">French</option>
+                </select>
+                <input id="aiFilesInput" type="file" multiple accept="image/*,.txt,.csv,.md,.json" />
+            </div>
+            <div style="display:flex; gap:.6rem; margin-top:.6rem; flex-wrap:wrap;">
+                <button id="aiParseButton" type="button">Las med AI</button>
+                <button id="aiSaveButton" type="button" class="ghost">Spara till vald vecka</button>
+                <button id="aiCreateWeekButton" type="button" class="ghost">Skapa ny vecka fran AI</button>
+            </div>
+            <p id="aiStatus" class="feedback"></p>
+        </div>
+    </section>
+
+    <section class="hero-panel" style="display:none;">
+        <div style="width:100%">
+            <p class="kicker">Veckooversikt</p>
+            <h2 style="margin-top:0">Alla glosveckor</h2>
+            <div id="weeksOverview"></div>
+        </div>
+    </section>
+
+    <section class="log-panel">
+        <h3>Matchlogg</h3>
+        <ul id="eventLog"></ul>
+    </section>
+</div>

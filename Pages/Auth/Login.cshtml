@@ -1,0 +1,27 @@
+@page
+@model GlosTrainer.Web.Pages.Auth.LoginModel
+@{
+    ViewData["Title"] = "Logga in";
+}
+
+<div class="game-shell">
+    <section class="hero-panel">
+        <div style="width:100%;max-width:520px;">
+            <p class="kicker">Konto</p>
+            <h1>Logga in</h1>
+
+            @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+            {
+                <p class="feedback bad">@Model.ErrorMessage</p>
+            }
+
+            <form method="post" class="d-grid gap-2">
+                <input asp-for="Input.Username" placeholder="Anvandarnamn" />
+                <input asp-for="Input.Password" type="password" placeholder="Losenord" />
+                <button type="submit">Logga in</button>
+            </form>
+            <p class="mt-2">Ingen anvandare? <a href="/Auth/Register">Registrera konto</a></p>
+            <p><a href="/">Tillbaka</a></p>
+        </div>
+    </section>
+</div>

@@ -1,0 +1,111 @@
+﻿@page
+@model GlosTrainer.Web.Pages.Admin.LegacyLinksModel
+@{
+    ViewData["Title"] = "Admin - Lankning";
+}
+
+<div class="game-shell">
+    <section class="hero-panel">
+        <div>
+            <p class="kicker">Admin</p>
+            <h1>Lanka gamla anvandare</h1>
+            <p class="subtitle">Koppla befintliga profiler fran glosdatabasen till Microsoft-login.</p>
+            <p><a href="/">Tillbaka</a></p>
+        </div>
+    </section>
+
+    <section class="hero-panel">
+        <div style="width:100%">
+            <h2>Konton</h2>
+            <table class="table" id="accountsTable">
+                <thead>
+                    <tr>
+                        <th>E-post</th>
+                        <th>Namn</th>
+                        <th>Roll</th>
+                        <th>Kopplad profil</th>
+                        <th>Atgard</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <p id="adminStatus" class="feedback"></p>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+<script>
+(async function () {
+  const tbody = document.querySelector("#accountsTable tbody");
+  const status = document.getElementById("adminStatus");
+
+  async function load() {
+    const response = await fetch("/api/admin/accounts");
+    const data = await response.json();
+    if (!response.ok) {
+      status.className = "feedback bad";
+      status.textContent = data.error || "Kunde inte ladda admin-data.";
+      return;
+    }
+
+    const freeProfiles = data.profiles.filter((p) => !p.isLinked);
+
+    tbody.innerHTML = "";
+    data.accounts.forEach((account) => {
+      const tr = document.createElement("tr");
+      const select = document.createElement("select");
+      select.className = "form-select";
+
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "Valj profil";
+      select.append(empty);
+
+      freeProfiles.forEach((profile) => {
+        const option = document.createElement("option");
+        option.value = profile.id;
+        option.textContent = `${profile.name} (${profile.id})`;
+        select.append(option);
+      });
+
+      const button = document.createElement("button");
+      button.className = "btn btn-sm btn-primary";
+      button.textContent = "Lanka";
+      button.disabled = !!account.userProfileId;
+
+      button.addEventListener("click", async () => {
+        if (!select.value) {
+          return;
+        }
+
+        const linkResponse = await fetch("/api/admin/link-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ appAccountId: account.id, userProfileId: select.value }),
+        });
+
+        const linkData = await linkResponse.json();
+        if (!linkResponse.ok) {
+          status.className = "feedback bad";
+          status.textContent = linkData.error || "Lankning misslyckades.";
+          return;
+        }
+
+        status.className = "feedback good";
+        status.textContent = "Lankning sparad.";
+        await load();
+      });
+
+      tr.innerHTML = `<td>${account.email}</td><td>${account.displayName}</td><td>${account.isAdmin ? "Admin" : "User"}</td><td>${account.userProfileId || "-"}</td>`;
+      const td = document.createElement("td");
+      td.append(select, button);
+      tr.append(td);
+      tbody.append(tr);
+    });
+  }
+
+  await load();
+})();
+</script>
+}

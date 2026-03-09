@@ -1,0 +1,285 @@
+@page
+@model GlosTrainer.Web.Pages.Teacher.WeeksModel
+@{
+    ViewData["Title"] = "Lararverktyg";
+}
+
+<div class="game-shell">
+    <section class="hero-panel">
+        <div style="width:100%">
+            <p class="kicker">Larare</p>
+            <h1>Glosverktyg</h1>
+            <p class="subtitle">Skapa, redigera och AI-tolka glosveckor.</p>
+
+            <div class="d-grid gap-2" style="max-width:780px;">
+                <label for="teacherWeekSelect"><strong>Valj vecka att redigera</strong></label>
+                <select id="teacherWeekSelect"></select>
+                <select id="teacherWeekLanguage">
+                    <option value="english">English</option>
+                    <option value="swedish">Swedish</option>
+                    <option value="spanish">Spanish</option>
+                    <option value="german">German</option>
+                    <option value="french">French</option>
+                </select>
+                <input id="teacherWeekName" type="text" placeholder="Veckonamn" />
+                <textarea id="teacherWords" rows="10" placeholder="svenska - english"></textarea>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+                    <button id="teacherCreateWeek" type="button">Skapa ny vecka</button>
+                    <button id="teacherSaveWeek" type="button">Spara andringar</button>
+                    <button id="teacherDeleteWeek" type="button" class="ghost">Ta bort vecka</button>
+                </div>
+                <hr />
+                <h3 style="margin:.25rem 0;">AI-tolkning</h3>
+                <textarea id="teacherAiInput" rows="6" placeholder="Klistra in text eller ladda upp bild/fil..."></textarea>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+                    <select id="teacherTargetLanguage">
+                        <option value="english">English</option>
+                        <option value="swedish">Swedish</option>
+                        <option value="spanish">Spanish</option>
+                        <option value="german">German</option>
+                        <option value="french">French</option>
+                    </select>
+                    <input id="teacherAiFiles" type="file" multiple accept="image/*,.txt,.csv,.md,.json" />
+                </div>
+                <button id="teacherAiParse" type="button">Tolka med AI</button>
+                <p id="teacherStatus" class="feedback"></p>
+            </div>
+            <p class="mt-2"><a href="/">Till startsidan</a></p>
+        </div>
+    </section>
+</div>
+
+<script>
+(() => {
+  const weekSelect = document.getElementById("teacherWeekSelect");
+  const languageSelect = document.getElementById("teacherWeekLanguage");
+  const nameInput = document.getElementById("teacherWeekName");
+  const wordsInput = document.getElementById("teacherWords");
+  const createButton = document.getElementById("teacherCreateWeek");
+  const saveButton = document.getElementById("teacherSaveWeek");
+  const deleteButton = document.getElementById("teacherDeleteWeek");
+  const aiInput = document.getElementById("teacherAiInput");
+  const aiParseButton = document.getElementById("teacherAiParse");
+  const aiFiles = document.getElementById("teacherAiFiles");
+  const targetLanguage = document.getElementById("teacherTargetLanguage");
+  const status = document.getElementById("teacherStatus");
+  let weeks = [];
+  let selectedWeekId = "";
+
+  function parseLines(text) {
+    return text
+      .split(/\r?\n/)
+      .map(x => x.trim())
+      .filter(Boolean)
+      .map(line => {
+        const parts = line.split(/\s*[-:=]\s*/);
+        if (parts.length < 2) return null;
+        return { sv: parts[0].trim(), en: parts.slice(1).join(" - ").trim() };
+      })
+      .filter(x => x && x.sv && x.en);
+  }
+
+  function renderWeekSelect() {
+    weekSelect.innerHTML = "";
+    const createOpt = document.createElement("option");
+    createOpt.value = "";
+    createOpt.textContent = "-- Ny vecka --";
+    weekSelect.append(createOpt);
+    weeks.forEach((w) => {
+      const opt = document.createElement("option");
+      opt.value = w.id;
+      opt.textContent = w.weekName || "Okand vecka";
+      weekSelect.append(opt);
+    });
+    weekSelect.value = selectedWeekId || "";
+  }
+
+  function fillEditorFromSelected() {
+    const week = weeks.find((w) => w.id === selectedWeekId);
+    if (!week) {
+      languageSelect.value = "english";
+      nameInput.value = "";
+      wordsInput.value = "";
+      return;
+    }
+    languageSelect.value = week.language || "english";
+    nameInput.value = week.weekName || "";
+    wordsInput.value = (week.words || []).map((w) => `${w.sv} - ${w.en}`).join("\n");
+  }
+
+  async function loadWeeks() {
+    const response = await fetch("/api/vocab/data");
+    if (!response.ok) {
+      throw new Error("Kunde inte lasa veckor.");
+    }
+    const data = await response.json();
+    weeks = Array.isArray(data.weeks) ? data.weeks : [];
+    if (selectedWeekId && !weeks.some((w) => w.id === selectedWeekId)) {
+      selectedWeekId = "";
+    }
+    renderWeekSelect();
+    fillEditorFromSelected();
+  }
+
+  weekSelect.addEventListener("change", () => {
+    selectedWeekId = weekSelect.value || "";
+    fillEditorFromSelected();
+  });
+
+  createButton.addEventListener("click", async () => {
+    const weekName = (nameInput.value || "").trim();
+    const words = parseLines(wordsInput.value || "");
+    if (!weekName) {
+      status.className = "feedback bad";
+      status.textContent = "Ange veckonamn.";
+      return;
+    }
+    if (!words.length) {
+      status.className = "feedback bad";
+      status.textContent = "Lagg till minst en glosa.";
+      return;
+    }
+    createButton.disabled = true;
+    status.className = "feedback";
+    status.textContent = "Skapar vecka...";
+    try {
+      const response = await fetch("/api/vocab/weeks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekName, language: languageSelect.value || "english", words }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Kunde inte skapa vecka.");
+      }
+      selectedWeekId = data.weekId || "";
+      await loadWeeks();
+      status.className = "feedback good";
+      status.textContent = `Vecka skapad (${words.length} glosor).`;
+    } catch (err) {
+      status.className = "feedback bad";
+      status.textContent = err instanceof Error ? err.message : "Okant fel.";
+    } finally {
+      createButton.disabled = false;
+    }
+  });
+
+  saveButton.addEventListener("click", async () => {
+    if (!selectedWeekId) {
+      status.className = "feedback bad";
+      status.textContent = "Valj vecka att uppdatera.";
+      return;
+    }
+    const weekName = (nameInput.value || "").trim();
+    const words = parseLines(wordsInput.value || "");
+    if (!words.length) {
+      status.className = "feedback bad";
+      status.textContent = "Lagg till minst en glosa.";
+      return;
+    }
+
+    saveButton.disabled = true;
+    status.className = "feedback";
+    status.textContent = "Sparar andringar...";
+
+    try {
+      const response = await fetch(`/api/vocab/weeks/${encodeURIComponent(selectedWeekId)}/words`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekName, language: languageSelect.value || "english", words }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Kunde inte spara andringar.");
+      }
+
+      await loadWeeks();
+      status.className = "feedback good";
+      status.textContent = `Vecka uppdaterad (${words.length} glosor).`;
+    } catch (err) {
+      status.className = "feedback bad";
+      status.textContent = err instanceof Error ? err.message : "Okant fel.";
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  deleteButton.addEventListener("click", async () => {
+    if (!selectedWeekId) {
+      status.className = "feedback bad";
+      status.textContent = "Valj vecka att ta bort.";
+      return;
+    }
+    if (!confirm("Ta bort vald vecka?")) {
+      return;
+    }
+    deleteButton.disabled = true;
+    status.className = "feedback";
+    status.textContent = "Tar bort vecka...";
+    try {
+      const response = await fetch(`/api/vocab/weeks/${encodeURIComponent(selectedWeekId)}`, { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Kunde inte ta bort vecka.");
+      }
+      selectedWeekId = "";
+      await loadWeeks();
+      status.className = "feedback good";
+      status.textContent = "Vecka borttagen.";
+    } catch (err) {
+      status.className = "feedback bad";
+      status.textContent = err instanceof Error ? err.message : "Okant fel.";
+    } finally {
+      deleteButton.disabled = false;
+    }
+  });
+
+  aiParseButton.addEventListener("click", async () => {
+    const text = (aiInput.value || "").trim();
+    const files = aiFiles.files;
+    if (!text && (!files || files.length === 0)) {
+      status.className = "feedback bad";
+      status.textContent = "Klistra in text eller valj en fil/bild.";
+      return;
+    }
+    aiParseButton.disabled = true;
+    status.className = "feedback";
+    status.textContent = "AI tolkar underlaget...";
+    try {
+      const fd = new FormData();
+      fd.append("text", text);
+      fd.append("targetLanguage", targetLanguage.value || "english");
+      if (files && files.length) {
+        for (const f of files) {
+          fd.append("files", f);
+        }
+      }
+      const response = await fetch("/api/vocab/ai-parse-upload", { method: "POST", body: fd });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "AI-tolkning misslyckades.");
+      }
+      const words = Array.isArray(data.words) ? data.words : [];
+      if (!words.length) {
+        throw new Error("AI hittade inga glosor.");
+      }
+      languageSelect.value = targetLanguage.value || "english";
+      nameInput.value = (data.suggestedWeekName || "").trim() || nameInput.value || "";
+      wordsInput.value = words.map((w) => `${w.sv} - ${w.en}`).join("\n");
+      status.className = "feedback good";
+      status.textContent = `AI tolkade ${words.length} glosor. Sprak: ${data.detectedLanguage || "-"}.`;
+    } catch (err) {
+      status.className = "feedback bad";
+      status.textContent = err instanceof Error ? err.message : "Okant fel.";
+    } finally {
+      aiParseButton.disabled = false;
+    }
+  });
+
+  loadWeeks().catch((err) => {
+    status.className = "feedback bad";
+    status.textContent = err instanceof Error ? err.message : "Kunde inte lasa veckor.";
+  });
+})();
+</script>
