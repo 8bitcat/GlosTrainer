@@ -12,6 +12,15 @@
             <p class="subtitle">Skapa, redigera och AI-tolka glosveckor.</p>
 
             <div class="d-grid gap-2" style="max-width:780px;">
+                <label for="teacherLanguageFilter"><strong>Sprak</strong></label>
+                <select id="teacherLanguageFilter">
+                    <option value="">Alla sprak</option>
+                    <option value="english">English</option>
+                    <option value="swedish">Swedish</option>
+                    <option value="spanish">Spanish</option>
+                    <option value="german">German</option>
+                    <option value="french">French</option>
+                </select>
                 <label for="teacherWeekSelect"><strong>Valj vecka att redigera</strong></label>
                 <select id="teacherWeekSelect"></select>
                 <select id="teacherWeekLanguage">
@@ -32,19 +41,15 @@
                 <h3 style="margin:.25rem 0;">AI-tolkning</h3>
                 <textarea id="teacherAiInput" rows="6" placeholder="Klistra in text eller ladda upp bild/fil..."></textarea>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-                    <select id="teacherTargetLanguage">
-                        <option value="english">English</option>
-                        <option value="swedish">Swedish</option>
-                        <option value="spanish">Spanish</option>
-                        <option value="german">German</option>
-                        <option value="french">French</option>
-                    </select>
                     <input id="teacherAiFiles" type="file" multiple accept="image/*,.txt,.csv,.md,.json" />
                 </div>
                 <button id="teacherAiParse" type="button">Tolka med AI</button>
                 <p id="teacherStatus" class="feedback"></p>
             </div>
-            <p class="mt-2"><a href="/">Till startsidan</a></p>
+            <div style="display:flex;gap:.6rem;margin-top:.8rem;flex-wrap:wrap;">
+                <a href="/">Till startsidan</a>
+                <a href="/auth/logout" style="color:#dc2626;">Logga ut</a>
+            </div>
         </div>
     </section>
 </div>
@@ -53,6 +58,7 @@
 (() => {
   const weekSelect = document.getElementById("teacherWeekSelect");
   const languageSelect = document.getElementById("teacherWeekLanguage");
+  const languageFilter = document.getElementById("teacherLanguageFilter");
   const nameInput = document.getElementById("teacherWeekName");
   const wordsInput = document.getElementById("teacherWords");
   const createButton = document.getElementById("teacherCreateWeek");
@@ -61,8 +67,8 @@
   const aiInput = document.getElementById("teacherAiInput");
   const aiParseButton = document.getElementById("teacherAiParse");
   const aiFiles = document.getElementById("teacherAiFiles");
-  const targetLanguage = document.getElementById("teacherTargetLanguage");
   const status = document.getElementById("teacherStatus");
+  let allWeeks = [];
   let weeks = [];
   let selectedWeekId = "";
 
@@ -77,6 +83,20 @@
         return { sv: parts[0].trim(), en: parts.slice(1).join(" - ").trim() };
       })
       .filter(x => x && x.sv && x.en);
+  }
+
+  function filterWeeks() {
+    const lang = (languageFilter.value || "").toLowerCase();
+    if (!lang) {
+      weeks = allWeeks;
+    } else {
+      weeks = allWeeks.filter(w => (w.language || "english").toLowerCase() === lang);
+    }
+    if (selectedWeekId && !weeks.some(w => w.id === selectedWeekId)) {
+      selectedWeekId = "";
+    }
+    renderWeekSelect();
+    fillEditorFromSelected();
   }
 
   function renderWeekSelect() {
@@ -97,7 +117,7 @@
   function fillEditorFromSelected() {
     const week = weeks.find((w) => w.id === selectedWeekId);
     if (!week) {
-      languageSelect.value = "english";
+      languageSelect.value = languageFilter.value || "english";
       nameInput.value = "";
       wordsInput.value = "";
       return;
@@ -113,13 +133,27 @@
       throw new Error("Kunde inte lasa veckor.");
     }
     const data = await response.json();
-    weeks = Array.isArray(data.weeks) ? data.weeks : [];
-    if (selectedWeekId && !weeks.some((w) => w.id === selectedWeekId)) {
-      selectedWeekId = "";
-    }
-    renderWeekSelect();
-    fillEditorFromSelected();
+    allWeeks = Array.isArray(data.weeks) ? data.weeks : [];
+
+    const languages = [...new Set(allWeeks.map(w => (w.language || "english").toLowerCase()))].sort();
+    const currentFilter = languageFilter.value;
+    const existingValues = new Set(Array.from(languageFilter.options).map(o => o.value));
+    languages.forEach(lang => {
+      if (!existingValues.has(lang)) {
+        const opt = document.createElement("option");
+        opt.value = lang;
+        opt.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
+        languageFilter.append(opt);
+      }
+    });
+    languageFilter.value = currentFilter;
+
+    filterWeeks();
   }
+
+  languageFilter.addEventListener("change", () => {
+    filterWeeks();
+  });
 
   weekSelect.addEventListener("change", () => {
     selectedWeekId = weekSelect.value || "";
@@ -249,7 +283,7 @@
     try {
       const fd = new FormData();
       fd.append("text", text);
-      fd.append("targetLanguage", targetLanguage.value || "english");
+      fd.append("targetLanguage", languageFilter.value || languageSelect.value || "english");
       if (files && files.length) {
         for (const f of files) {
           fd.append("files", f);
@@ -264,7 +298,8 @@
       if (!words.length) {
         throw new Error("AI hittade inga glosor.");
       }
-      languageSelect.value = targetLanguage.value || "english";
+      const detectedLang = (data.detectedLanguage || languageFilter.value || "english").toLowerCase();
+      languageSelect.value = detectedLang;
       nameInput.value = (data.suggestedWeekName || "").trim() || nameInput.value || "";
       wordsInput.value = words.map((w) => `${w.sv} - ${w.en}`).join("\n");
       status.className = "feedback good";
