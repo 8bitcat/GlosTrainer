@@ -15,14 +15,15 @@
     trainModeButton: document.getElementById("trainModeButton"),
     fortressModeButton: document.getElementById("fortressModeButton"),
     nextWordButton: document.getElementById("nextWordButton"),
+    flipDirectionButton: document.getElementById("flipDirectionButton"),
     toggleModeButton: document.getElementById("toggleModeButton"),
-    saveResultButton: document.getElementById("saveResultButton"),
     resetButton: document.getElementById("resetButton"),
     playerHpBar: document.getElementById("playerHpBar"),
     bossHpBar: document.getElementById("bossHpBar"),
     playerAvatarCard: document.getElementById("playerAvatarCard"),
     playerHpText: document.getElementById("playerHpText"),
     bossHpText: document.getElementById("bossHpText"),
+    bossAvatarCard: document.getElementById("bossAvatarCard"),
     bossTimerText: document.getElementById("bossTimerText"),
     bossWordsLeftText: document.getElementById("bossWordsLeftText"),
     wordsProgressWrap: document.getElementById("wordsProgressWrap"),
@@ -34,7 +35,11 @@
     questionLabel: document.getElementById("questionLabel"),
     answerForm: document.getElementById("answerForm"),
     answerInput: document.getElementById("answerInput"),
+    specialCharsRow: document.getElementById("specialCharsRow"),
     feedbackText: document.getElementById("feedbackText"),
+    trainProgressWrap: document.getElementById("trainProgressWrap"),
+    trainProgressBar: document.getElementById("trainProgressBar"),
+    trainProgressText: document.getElementById("trainProgressText"),
     hintButton: document.getElementById("hintButton"),
     healButton: document.getElementById("healButton"),
     doubleButton: document.getElementById("doubleButton"),
@@ -57,6 +62,7 @@
     logoutLink: document.getElementById("logoutLink"),
     adminLink: document.getElementById("adminLink"),
     weeksOverview: document.getElementById("weeksOverview"),
+    weekStatsContainer: document.getElementById("weekStatsContainer"),
     leaderboardList: document.getElementById("leaderboardList"),
     leaderboardWeekSelect: document.getElementById("leaderboardWeekSelect"),
     onlineUsersList: document.getElementById("onlineUsersList"),
@@ -83,6 +89,7 @@
     groupBattleProgressFill: document.getElementById("groupBattleProgressFill"),
     groupBattleProgressText: document.getElementById("groupBattleProgressText"),
     groupBattlePlayers: document.getElementById("groupBattlePlayers"),
+    resetSessionButton: document.getElementById("resetSessionButton"),
   };
 
   const defaultState = {
@@ -100,6 +107,10 @@
     doubleHitReady: false,
     currentWord: null,
     correctKeys: [],
+    trainQueue: [],
+    trainMissed: [],
+    trainTotal: 0,
+    trainDone: 0,
   };
 
   const appState = {
@@ -114,6 +125,7 @@
     suggestedWeekName: "",
     pastedFiles: [],
     tempWordsByWeek: {},
+    flippedDirection: true,
     bossFight: {
       selectedBossId: "oiia",
       roundIndex: 0,
@@ -235,12 +247,12 @@
   let toastSeed = 0;
 
   const bossRoster = [
-    { id: "oiia", name: "OIIA Cat", color: "#f8d7a7", imageUrl: "/images/bosses/oiia.gif" },
-    { id: "dino", name: "Chrome Dino", color: "#1f2937", imageUrl: "/images/bosses/dino.gif" },
-    { id: "kirby", name: "Kirby", color: "#ff8fc4", imageUrl: "/images/bosses/kirby.gif" },
-    { id: "t90", name: "T90 Tank", color: "#4b5d3e", imageUrl: "/images/bosses/t90.gif" },
-    { id: "shelly", name: "Shelly", color: "#8c6c4a", imageUrl: "/images/bosses/shelly.gif" },
-    { id: "reaper", name: "Liemannen", color: "#262626", imageUrl: "/images/bosses/reaper.gif" },
+    { id: "oiia", name: "OIIA Cat", color: "#f8d7a7", imageUrl: "/images/bosses/oiia.gif", difficulty: 1, difficultyLabel: "Lätt" },
+    { id: "dino", name: "Chrome Dino", color: "#1f2937", imageUrl: "/images/bosses/dino.gif", difficulty: 2, difficultyLabel: "Medel" },
+    { id: "kirby", name: "Kirby", color: "#ff8fc4", imageUrl: "/images/bosses/kirby.gif", difficulty: 3, difficultyLabel: "Medel" },
+    { id: "t90", name: "T90 Tank", color: "#4b5d3e", imageUrl: "/images/bosses/t90.gif", difficulty: 4, difficultyLabel: "Svår" },
+    { id: "shelly", name: "Shelly", color: "#8c6c4a", imageUrl: "/images/bosses/shelly.gif", difficulty: 5, difficultyLabel: "Mycket svår" },
+    { id: "reaper", name: "Liemannen", color: "#262626", imageUrl: "/images/bosses/reaper.gif", difficulty: 6, difficultyLabel: "Extrem" },
   ];
 
   const botRoster = bossRoster.map((boss) => ({
@@ -263,8 +275,9 @@
 
     const ctx = canvas.getContext("2d");
     const arena = {
-      mode: "boss",
+      mode: "idle",
       phase: 0,
+      textFlash: null,
       flashes: [],
       playerProjectiles: [],
       bossProjectiles: [],
@@ -1543,6 +1556,32 @@
         drawFortressMode(t);
       } else if (arena.mode === "duel") {
         drawDuelMode();
+      } else if (arena.mode === "idle") {
+        ctx.save();
+        ctx.fillStyle = "rgba(15,23,42,0.55)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        if (arena.textFlash && Date.now() < arena.textFlash.expiresAt) {
+          const tf = arena.textFlash;
+          const elapsed = Date.now() - tf.startedAt;
+          const alpha = Math.max(0, 1 - elapsed / tf.duration);
+          ctx.globalAlpha = 0.15 + 0.85 * alpha;
+          ctx.font = "bold 32px sans-serif";
+          ctx.fillStyle = tf.color;
+          ctx.fillText(tf.line1, canvas.width / 2, canvas.height / 2 - (tf.line2 ? 18 : 0));
+          if (tf.line2) {
+            ctx.font = "bold 20px sans-serif";
+            ctx.fillStyle = "#fff";
+            ctx.fillText(tf.line2, canvas.width / 2, canvas.height / 2 + 22);
+          }
+        } else {
+          arena.textFlash = null;
+          ctx.font = "bold 22px sans-serif";
+          ctx.fillStyle = "#fff";
+          ctx.fillText("Välj en vecka och börja svara, eller skapa gruppfight", canvas.width / 2, canvas.height / 2);
+        }
+        ctx.restore();
       } else {
         drawBoss(t);
       }
@@ -1560,6 +1599,10 @@
       },
       setMode(mode) {
         arena.mode = mode;
+      },
+      showTextFlash(line1, color, line2, durationMs) {
+        const now = Date.now();
+        arena.textFlash = { line1, color, line2: line2 || null, duration: durationMs || 2000, startedAt: now, expiresAt: now + (durationMs || 2000) };
       },
       getBossById(id) {
         return bossRoster.find((b) => b.id === id) || bossRoster[0];
@@ -2190,13 +2233,13 @@
     const headers = { "Content-Type": "application/json" };
     if (!appState.auth.isAuthenticated) {
       headers["X-Guest-Session"] = getGuestSessionId();
-      headers["X-Guest-Name"] = (elements.guestNameInput.value || appState.selectedUserId || "GAST").trim();
+      headers["X-Guest-Name"] = (elements.guestNameInput.value || appState.selectedUserId || "GÄST").trim();
     }
     return headers;
   }
 
   function fortressButtonLabel(isActive) {
-    const text = isActive ? "Avsluta Byggforsvar" : "Byggforsvar";
+    const text = isActive ? "Avsluta Byggförsvar" : "Byggförsvar";
     return `<span class="cta-icon" aria-hidden="true">&#x1F6E1;</span> ${text}`;
   }
 
@@ -2246,19 +2289,15 @@
   }
 
   function loadState() {
-    try {
-      const raw = localStorage.getItem(stateKey());
-      state = raw ? { ...defaultState, ...JSON.parse(raw) } : { ...defaultState };
-      if (!Array.isArray(state.correctKeys)) {
-        state.correctKeys = [];
-      }
-    } catch {
-      state = { ...defaultState };
-    }
+    state = { ...defaultState };
   }
 
   function saveState() {
-    localStorage.setItem(stateKey(), JSON.stringify(state));
+    // State is no longer persisted to localStorage (reset on each page load)
+  }
+
+  function escapeHtml(str) {
+    return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
   function normalize(value) {
@@ -2287,11 +2326,11 @@
   function languageDisplayName(value) {
     const normalized = normalizeLanguage(value);
     const names = {
-      english: "English",
-      swedish: "Swedish",
-      spanish: "Spanish",
-      german: "German",
-      french: "French",
+      english: "Engelska",
+      swedish: "Svenska",
+      spanish: "Spanska",
+      german: "Tyska",
+      french: "Franska",
     };
     return names[normalized] || normalized;
   }
@@ -2331,29 +2370,91 @@
     localStorage.setItem(appLanguageKey(), normalizeLanguage(appState.selectedLanguage));
   }
 
+  function selectedWeekKey() {
+    return "glos_selected_week_v1";
+  }
+
+  function loadSelectedWeek() {
+    return localStorage.getItem(selectedWeekKey()) || "";
+  }
+
+  function saveSelectedWeek() {
+    localStorage.setItem(selectedWeekKey(), appState.selectedWeekId || "");
+  }
+
   function expectedAnswerForCurrentWord() {
     if (!state.currentWord) {
       return "";
     }
-    return String(state.currentWord.en || "");
+    return appState.flippedDirection ? String(state.currentWord.sv || "") : String(state.currentWord.en || "");
   }
 
   function questionTextForWord(word) {
     if (!word) {
       return "";
     }
-    return String(word.sv || "");
+    return appState.flippedDirection ? String(word.en || "") : String(word.sv || "");
   }
 
   function renderQuestionLabel() {
     if (!elements.questionLabel) {
       return;
     }
-    elements.questionLabel.textContent = `Oversatt till ${languageDisplayName(appState.practiceAnswerLanguage)}:`;
+    if (appState.flippedDirection) {
+      elements.questionLabel.textContent = `Översätt till svenska:`;
+    } else {
+      elements.questionLabel.textContent = `Översätt till ${languageDisplayName(appState.practiceAnswerLanguage)}:`;
+    }
+  }
+
+  function renderFlipButton() {
+    if (!elements.flipDirectionButton) {
+      return;
+    }
+    const lang = languageDisplayName(appState.practiceAnswerLanguage);
+    if (appState.flippedDirection) {
+      elements.flipDirectionButton.textContent = `Klicka för att välja ordning: ${lang} \u2192 Svenska`;
+    } else {
+      elements.flipDirectionButton.textContent = `Klicka för att välja ordning: Svenska \u2192 ${lang}`;
+    }
+  }
+
+  function renderSpecialChars() {
+    if (!elements.specialCharsRow) return;
+    const lang = normalizeLanguage(appState.practiceAnswerLanguage || appState.selectedLanguage || "english");
+    const charSets = {
+      spanish: ["\u00e1", "\u00e9", "\u00ed", "\u00f3", "\u00fa", "\u00fc", "\u00f1", "\u00bf", "\u00a1"],
+      french: ["\u00e0", "\u00e2", "\u00e7", "\u00e8", "\u00e9", "\u00ea", "\u00eb", "\u00ee", "\u00ef", "\u00f4", "\u00f9", "\u00fb", "\u00fc", "\u0153"],
+      german: ["\u00e4", "\u00f6", "\u00fc", "\u00df"],
+    };
+    const chars = charSets[lang];
+    if (!chars) {
+      elements.specialCharsRow.style.display = "none";
+      return;
+    }
+    elements.specialCharsRow.style.display = "flex";
+    elements.specialCharsRow.innerHTML = "";
+    chars.forEach((ch) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = ch;
+      btn.style.cssText = "min-width:32px;height:32px;padding:0 6px;font-size:1.05rem;font-weight:700;border:1px solid #b8d2e9;border-radius:8px;background:#f1f5f9;color:#1e293b;cursor:pointer;";
+      btn.addEventListener("mousedown", (e) => { e.preventDefault(); });
+      btn.addEventListener("click", () => {
+        const inp = elements.answerInput;
+        inp.focus();
+        const start = inp.selectionStart ?? inp.value.length;
+        const end = inp.selectionEnd ?? inp.value.length;
+        const val = inp.value;
+        inp.value = val.slice(0, start) + ch + val.slice(end);
+        inp.selectionStart = inp.selectionEnd = start + ch.length;
+      });
+      elements.specialCharsRow.append(btn);
+    });
   }
 
   function renderSoundToggle() {
-    elements.soundToggleButton.textContent = appState.settings.soundEnabled ? "Ljud: Pa" : "Ljud: Av";
+    elements.soundToggleButton.textContent = appState.settings.soundEnabled ? "Ljud: På" : "Ljud: Av";
   }
 
   function getAudioContext() {
@@ -2471,6 +2572,8 @@
     const week = currentWeek();
     appState.practiceAnswerLanguage = normalizeLanguage(week?.language || appState.selectedLanguage || "english");
     renderQuestionLabel();
+    renderFlipButton();
+    renderSpecialChars();
   }
 
   function currentWords() {
@@ -2481,8 +2584,11 @@
   }
 
   function getBossDurationSec(roundIndex) {
-    const durations = [20, 16, 12, 10, 8];
-    return durations[Math.min(roundIndex, durations.length - 1)];
+    const selectedBoss = bossRoster.find((b) => b.id === appState.bossFight.selectedBossId) || bossRoster[0];
+    const baseDurations = [20, 16, 12, 10, 8];
+    const base = baseDurations[Math.min(roundIndex, baseDurations.length - 1)];
+    const difficultyMultiplier = 1 + (selectedBoss.difficulty - 1) * 0.15;
+    return Math.max(4, Math.round(base / difficultyMultiplier));
   }
 
   function shuffleWords(words) {
@@ -2563,8 +2669,8 @@
         state.bossMode = false;
         state.streak = 0;
         elements.feedbackText.className = "feedback bad";
-        elements.feedbackText.textContent = "Borgen exploderar! Forsvarslaget ar utslaget.";
-        setQuestion(null, { focus: false, emptyText: "Borgen ar forstord. Nollstaller..." });
+        elements.feedbackText.textContent = "Borgen exploderar! Försvarslaget är utslaget.";
+        setQuestion(null, { focus: false, emptyText: "Borgen är förstörd. Nollställer..." });
         pushLog("Borgen gick till 0 HP. Total explosion och reset startad.");
         renderStats();
 
@@ -2574,7 +2680,7 @@
           state.playerHp = state.playerMaxHp;
           state.bossHp = state.bossMaxHp;
           elements.feedbackText.className = "feedback bad";
-          elements.feedbackText.textContent = "Byggforsvar avslutat efter 0 HP. Allt ar nollstallt.";
+          elements.feedbackText.textContent = "Byggförsvar avslutat efter 0 HP. Allt är nollställt.";
           setQuestion(pickWord(), { focus: false });
           renderStats();
         });
@@ -2609,11 +2715,11 @@
       const ownCorrect = myPlayers.reduce((s, p) => s + Math.max(0, Number(p.correct || 0)), 0);
       const ownTotal = Math.max(1, myPlayers.length * Math.max(1, appState.groupBattle.totalWords || 1));
       elements.bossWordsLeftText.textContent = `Lagets glosor: ${ownCorrect}/${ownTotal}`;
-      elements.bossName.textContent = `Motstandarlag (${enemyPlayers.length})`;
+      elements.bossName.textContent = `Motståndarlag (${enemyPlayers.length})`;
     } else if (appState.duel.active) {
       elements.bossTimerText.textContent = `Duel aktiv - x${appState.duel.myMultiplier}`;
       elements.bossWordsLeftText.textContent = `Glosor kvar: ${Math.max(0, appState.duel.totalWords - appState.duel.myCorrect)}`;
-      elements.bossName.textContent = elements.bossName.textContent || "Motstandare";
+      elements.bossName.textContent = elements.bossName.textContent || "Motståndare";
     } else if (bossFightEngine && state.fortressMode) {
       state.playerHp = Math.max(0, bossFightEngine.getFortressCastleHp());
       const remaining = bossFightEngine.getFortressRemainingSec();
@@ -2631,6 +2737,17 @@
       elements.bossTimerText.textContent = "Tid till krasch: -";
       const selected = bossRoster.find((b) => b.id === appState.bossFight.selectedBossId);
       elements.bossName.textContent = selected ? selected.name : "Boss";
+    }
+
+    if (elements.bossAvatarCard) {
+      const showBossAvatar = state.bossMode || state.fortressMode || (!appState.duel.active && !appState.groupBattle.active);
+      const activeBoss = bossRoster.find((b) => b.id === appState.bossFight.selectedBossId);
+      if (showBossAvatar && activeBoss && activeBoss.imageUrl) {
+        elements.bossAvatarCard.src = activeBoss.imageUrl;
+        elements.bossAvatarCard.style.display = "block";
+      } else {
+        elements.bossAvatarCard.style.display = "none";
+      }
     }
 
     const playerPercent = state.playerMaxHp > 0 ? (state.playerHp / state.playerMaxHp) * 100 : 0;
@@ -2759,7 +2876,6 @@
       elements.loginLink.style.display = "none";
       elements.registerLink.style.display = "none";
       elements.logoutLink.style.display = "inline-block";
-      elements.saveResultButton.disabled = false;
       elements.aiSaveButton.disabled = false;
       elements.aiCreateWeekButton.disabled = false;
 
@@ -2778,7 +2894,6 @@
       elements.registerLink.style.display = "inline-block";
       elements.logoutLink.style.display = "none";
       elements.adminLink.style.display = "none";
-      elements.saveResultButton.disabled = true;
       elements.aiSaveButton.disabled = true;
       elements.aiCreateWeekButton.disabled = true;
       elements.userSelect.disabled = false;
@@ -2802,6 +2917,7 @@
     const emptyText = options.emptyText || "Inga glosor hittades i vald vecka";
     state.currentWord = word;
     elements.questionWord.textContent = word ? questionTextForWord(word) : emptyText;
+    elements.questionWord.style.color = "";
     renderQuestionLabel();
     elements.answerInput.value = "";
     elements.hintText.textContent = "";
@@ -2811,12 +2927,71 @@
     saveState();
   }
 
-  function pickWord() {
-    const words = currentWords();
-    if (!words.length) {
-      return null;
+  function shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return words[Math.floor(Math.random() * words.length)];
+    return arr;
+  }
+
+  function initTrainQueue() {
+    const words = currentWords();
+    state.trainQueue = shuffleArray([...words]);
+    state.trainMissed = [];
+    state.trainTotal = words.length;
+    state.trainDone = 0;
+    renderTrainProgress();
+  }
+
+  function pickWord() {
+    if (state.bossMode || state.fortressMode || appState.duel.active || appState.groupBattle.active) {
+      const words = currentWords();
+      if (!words.length) return null;
+      return words[Math.floor(Math.random() * words.length)];
+    }
+    if (state.trainQueue.length === 0 && state.trainMissed.length === 0) {
+      initTrainQueue();
+    }
+    if (state.trainQueue.length > 0) {
+      return state.trainQueue[0];
+    }
+    if (state.trainMissed.length > 0) {
+      state.trainQueue = shuffleArray([...state.trainMissed]);
+      state.trainMissed = [];
+      return state.trainQueue[0];
+    }
+    return null;
+  }
+
+  function onTrainCorrect() {
+    if (state.trainQueue.length > 0) {
+      state.trainQueue.shift();
+    }
+    state.trainDone += 1;
+    renderTrainProgress();
+  }
+
+  function onTrainWrong(word) {
+    if (state.trainQueue.length > 0) {
+      state.trainQueue.shift();
+    }
+    if (word) {
+      state.trainMissed.push(word);
+    }
+    renderTrainProgress();
+  }
+
+  function renderTrainProgress() {
+    const isTraining = !state.bossMode && !state.fortressMode && !appState.duel.active && !appState.groupBattle.active;
+    if (!isTraining || state.trainTotal === 0) {
+      elements.trainProgressWrap.style.display = "none";
+      return;
+    }
+    elements.trainProgressWrap.style.display = "";
+    const pct = Math.min(100, Math.round((state.trainDone / state.trainTotal) * 100));
+    elements.trainProgressBar.style.width = pct + "%";
+    elements.trainProgressText.textContent = `${state.trainDone} / ${state.trainTotal} (${pct}%)`;
   }
 
   function grantXp(amount) {
@@ -2826,7 +3001,7 @@
       state.xp -= threshold;
       state.level += 1;
       state.coins += 20;
-      pushLog(`Level up! Nu ar du level ${state.level}.`);
+      pushLog(`Level up! Nu är du level ${state.level}.`);
       threshold = xpToNextLevel(state.level);
     }
   }
@@ -2836,6 +3011,36 @@
     if (!state.correctKeys.includes(key)) {
       state.correctKeys.push(key);
     }
+    saveProgressQuiet();
+  }
+
+  let _saveProgressTimer = null;
+  function saveProgressQuiet() {
+    if (_saveProgressTimer) clearTimeout(_saveProgressTimer);
+    _saveProgressTimer = setTimeout(async () => {
+      _saveProgressTimer = null;
+      try {
+        const hdrs = { "Content-Type": "application/json" };
+        if (!appState.auth.isAuthenticated) {
+          hdrs["X-Guest-Session"] = getGuestSessionId();
+          hdrs["X-Guest-Name"] = (elements.guestNameInput.value || appState.selectedUserId || "GÄST").trim();
+        }
+        const resp = await fetch("/api/vocab/progress", {
+          method: "POST",
+          headers: hdrs,
+          body: JSON.stringify({
+            weekId: appState.selectedWeekId,
+            score: state.level * 100 + state.xp + state.coins,
+            timeSeconds: 0,
+            correctKeys: state.correctKeys,
+            quietSave: true,
+          }),
+        });
+        if (resp.ok) {
+          loadWeekStats();
+        }
+      } catch (_) {}
+    }, 500);
   }
 
   function onCorrect() {
@@ -2910,8 +3115,8 @@
       const nextFortressWord = appState.bossFight.roundWords[appState.bossFight.wordIndex] || null;
       if (!nextFortressWord) {
         elements.feedbackText.className = "feedback good";
-        elements.feedbackText.textContent = `Ratt! +${xpGain} XP, +${coinGain} coins. Spranger block och laddar slutgranat...`;
-        pushLog("Alla glosor klara. Blocken sprangs och slutgranat avfyras.");
+        elements.feedbackText.textContent = `Rätt! +${xpGain} XP, +${coinGain} coins. Sprängde block och laddar slutgranat...`;
+        pushLog("Alla glosor klara. Blocken sprängdes och slutgranat avfyras.");
         setQuestion(null, { focus: false, emptyText: "Alla glosor avklarade. Slutsekvens startar..." });
         renderStats();
         if (bossFightEngine) {
@@ -2938,11 +3143,11 @@
               playBossExplosionSound();
               state.playerHp = Math.min(state.playerMaxHp, state.playerHp + 15);
               state.coins += 30;
-              pushLog("Boss sprangdes av sista glosan!");
+              pushLog("Boss sprängdes av sista glosan!");
               state.bossMode = false;
               elements.feedbackText.className = "feedback good";
-              elements.feedbackText.textContent = "Bossen ar totalforstord. Du vann fighten!";
-              setQuestion(null, { focus: false, emptyText: "Boss besegrad! Valj lage for ny runda." });
+              elements.feedbackText.textContent = "Bossen är totalförstörd. Du vann fighten!";
+              setQuestion(null, { focus: false, emptyText: "Boss besegrad! Välj läge för ny runda." });
               renderStats();
               return;
             }
@@ -2973,7 +3178,7 @@
     }
 
     elements.feedbackText.className = "feedback good";
-    elements.feedbackText.textContent = `Ratt! +${xpGain} XP, +${coinGain} coins.`;
+    elements.feedbackText.textContent = `Rätt! +${xpGain} XP, +${coinGain} coins.`;
 
     renderStats();
     renderCastleTree();
@@ -2986,7 +3191,19 @@
         setQuestion(next);
       }
     } else {
-      setQuestion(pickWord());
+      onTrainCorrect();
+      if (bossFightEngine) {
+        bossFightEngine.showTextFlash("Rätt!", "#22c55e", `+${xpGain} XP, +${coinGain} coins`, 1500);
+      }
+      const next = pickWord();
+      if (next) {
+        setQuestion(next);
+      } else {
+        setQuestion(null, { focus: false, emptyText: "Alla glosor klarade! Bra jobbat!" });
+        if (bossFightEngine) {
+          bossFightEngine.showTextFlash("Klart!", "#22c55e", "Alla glosor klarade!", 3000);
+        }
+      }
     }
   }
 
@@ -3025,9 +3242,10 @@
     }
 
     elements.feedbackText.className = "feedback bad";
-    elements.feedbackText.textContent = `Fel. Ratt svar: ${expectedAnswerForCurrentWord()}`;
+    elements.feedbackText.textContent = `Fel. Rätt svar: ${expectedAnswerForCurrentWord()}`;
+    elements.questionWord.style.color = "#dc2626";
     if (state.bossMode) {
-      pushLog(`Miss. Boss traffade dig for ${dmg} HP.`);
+      pushLog(`Miss. Boss träffade dig för ${dmg} HP.`);
     } else if (state.fortressMode) {
       if (bossFightEngine) {
         bossFightEngine.triggerFortressBarrage(1);
@@ -3042,7 +3260,9 @@
         });
         await refreshDuelState();
       })();
-      pushLog("Miss i duel. Nasta skott blir starkare.");
+      pushLog("Miss i duel. Nästa skott blir starkare.");
+    } else if (bossFightEngine) {
+      bossFightEngine.showTextFlash("Fel!", "#ef4444", `Rätt svar: ${expectedAnswerForCurrentWord()}`, 2500);
     }
 
     if (state.bossMode && state.playerHp <= 0) {
@@ -3058,8 +3278,8 @@
       const next = appState.bossFight.roundWords[appState.bossFight.wordIndex] || null;
       if (!next) {
         elements.feedbackText.className = "feedback good";
-        elements.feedbackText.textContent = "Alla glosor ar gjorda. Blocken sprangs och slutgranat avfyras!";
-        pushLog("Ordlistan ar slut. Slutsekvens mot bossen startar.");
+        elements.feedbackText.textContent = "Alla glosor är gjorda. Blocken sprängdes och slutgranat avfyras!";
+        pushLog("Ordlistan är slut. Slutsekvens mot bossen startar.");
         setQuestion(null, { focus: false, emptyText: "Alla glosor avklarade. Slutsekvens startar..." });
         if (bossFightEngine) {
           bossFightEngine.runFortressVictorySequence(() => {
@@ -3073,7 +3293,8 @@
       } else {
         setQuestion(next);
       }
-    } else if (!state.bossMode) {
+    } else if (!state.bossMode && !appState.duel.active) {
+      onTrainWrong(state.currentWord);
       setQuestion(pickWord());
     }
   }
@@ -3122,7 +3343,7 @@
   async function loadData() {
     const response = await fetch("/api/vocab/data");
     if (!response.ok) {
-      throw new Error("Kunde inte lasa databasdata");
+      throw new Error("Kunde inte läsa databasdata");
     }
 
     const data = await response.json();
@@ -3133,17 +3354,30 @@
       : Array.from(new Set(appState.weeks.map((x) => normalizeLanguage(x.language || "english"))));
 
     appState.selectedUserId = data.lastActiveUserId || (appState.users[0] && appState.users[0].id) || "";
-    appState.selectedWeekId = data.lastSelectedWeekId || (appState.weeks[0] && appState.weeks[0].id) || "";
-    const currentSelectedWeek = appState.weeks.find((w) => w.id === appState.selectedWeekId);
-    if (currentSelectedWeek?.language) {
-      appState.selectedLanguage = normalizeLanguage(currentSelectedWeek.language);
+
+    // Prefer: localStorage week > server week > first matching week
+    const localWeekId = loadSelectedWeek();
+    const serverWeekId = data.lastSelectedWeekId || "";
+    const candidateWeekId = localWeekId || serverWeekId || "";
+    appState.selectedWeekId = candidateWeekId;
+
+    // If chosen week exists, sync language from it
+    if (appState.selectedWeekId) {
+      const chosenWeek = appState.weeks.find((w) => w.id === appState.selectedWeekId);
+      if (chosenWeek?.language) {
+        appState.selectedLanguage = normalizeLanguage(chosenWeek.language);
+      }
     }
+
+    // Validate that saved language is available; fall back if not
     if (!appState.availableLanguages.includes(normalizeLanguage(appState.selectedLanguage))) {
       appState.selectedLanguage = appState.availableLanguages[0] || "english";
     }
-    const firstVisibleWeek = filteredWeeks()[0];
-    if (!filteredWeeks().some((w) => w.id === appState.selectedWeekId)) {
-      appState.selectedWeekId = firstVisibleWeek?.id || "";
+
+    // Ensure selectedWeekId matches the current language filter
+    const visibleWeeks = filteredWeeks();
+    if (!appState.selectedWeekId || !visibleWeeks.some((w) => w.id === appState.selectedWeekId)) {
+      appState.selectedWeekId = (visibleWeeks[0] && visibleWeeks[0].id) || (appState.weeks[0] && appState.weeks[0].id) || "";
     }
 
     if (appState.auth.linkedProfileId) {
@@ -3225,6 +3459,21 @@
     }
   }
 
+  function saveAvatarToServer() {
+    const selected = appState.playerAvatars.find((x) => x.id === appState.selectedPlayerImage);
+    const avatarUrl = selected ? selected.url : "";
+    const hdrs = { "Content-Type": "application/json" };
+    if (!appState.auth.isAuthenticated) {
+      hdrs["X-Guest-Session"] = getGuestSessionId();
+      hdrs["X-Guest-Name"] = (elements.guestNameInput.value || appState.selectedUserId || "GÄST").trim();
+    }
+    fetch("/api/profile/avatar", {
+      method: "POST",
+      headers: hdrs,
+      body: JSON.stringify({ avatarUrl }),
+    }).catch(() => {});
+  }
+
   function buildPlayerOptions() {
     if (!elements.playerAvatarSelect) {
       return;
@@ -3249,6 +3498,7 @@
     }
     elements.playerAvatarSelect.value = appState.selectedPlayerImage;
     renderPlayerAvatarPreview();
+    saveAvatarToServer();
   }
 
   function avatarForName(name) {
@@ -3317,10 +3567,8 @@
       option.textContent = `${week.weekName} (${(week.words || []).length})`;
       elements.groupFightWeekSelect.append(option);
     });
-    if (!weeks.some((week) => week.id === appState.selectedWeekId)) {
-      appState.selectedWeekId = weeks[0]?.id || "";
-    }
-    elements.groupFightWeekSelect.value = appState.selectedWeekId || "";
+    const gfWeekId = weeks.some((week) => week.id === appState.selectedWeekId) ? appState.selectedWeekId : (weeks[0]?.id || "");
+    elements.groupFightWeekSelect.value = gfWeekId;
   }
 
   function buildLeaderboardWeekOptions() {
@@ -3354,7 +3602,7 @@
     const weekQuery = weekId ? `?weekId=${encodeURIComponent(weekId)}` : "";
     const response = await fetch(`/api/vocab/leaderboard-correct${weekQuery}`);
     if (!response.ok) {
-      elements.leaderboardList.innerHTML = "<li>Kunde inte lasa topplista.</li>";
+      elements.leaderboardList.innerHTML = "<li>Kunde inte läsa topplista.</li>";
       return;
     }
     const data = await response.json();
@@ -3370,7 +3618,7 @@
       rank.textContent = `${index + 1}.`;
       const avatar = document.createElement("img");
       avatar.className = "leader-avatar";
-      const avatarUrl = avatarForName(item.userName);
+      const avatarUrl = item.avatarUrl || avatarForName(item.userName);
       if (avatarUrl) {
         avatar.src = avatarUrl;
         avatar.alt = item.userName;
@@ -3384,15 +3632,92 @@
     });
   }
 
+  async function loadWeekStats() {
+    if (!elements.weekStatsContainer) {
+      return;
+    }
+    try {
+      const response = await fetch("/api/vocab/week-stats");
+      if (!response.ok) {
+        elements.weekStatsContainer.innerHTML = "<p>Kunde inte ladda veckostatistik.</p>";
+        return;
+      }
+      const data = await response.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (!items.length) {
+        elements.weekStatsContainer.innerHTML = "<p>Ingen statistik än.</p>";
+        return;
+      }
+      elements.weekStatsContainer.innerHTML = "";
+      items.forEach((week) => {
+        const section = document.createElement("div");
+        section.style.cssText = "margin-bottom:1rem;";
+
+        const header = document.createElement("h4");
+        header.style.cssText = "margin:0 0 .3rem 0;font-size:.95rem;";
+        header.textContent = `${week.weekName} (${week.totalWords} glosor) — ${languageDisplayName(week.language)}`;
+        section.append(header);
+
+        const users = Array.isArray(week.users) ? week.users : [];
+        if (!users.length) {
+          const empty = document.createElement("p");
+          empty.style.cssText = "margin:0;font-size:.85rem;color:#64748b;";
+          empty.textContent = "Ingen har sparat framsteg än.";
+          section.append(empty);
+        } else {
+          const table = document.createElement("table");
+          table.style.cssText = "width:100%;border-collapse:collapse;font-size:.85rem;";
+          const thead = document.createElement("thead");
+          thead.innerHTML = "<tr><th style='text-align:left;padding:.25rem .4rem;border-bottom:1px solid #d6e4f3;'>Namn</th><th style='text-align:right;padding:.25rem .4rem;border-bottom:1px solid #d6e4f3;'>Klarade</th><th style='text-align:right;padding:.25rem .4rem;border-bottom:1px solid #d6e4f3;'>%</th><th style='text-align:center;padding:.25rem .4rem;border-bottom:1px solid #d6e4f3;'>Pokaler</th></tr>";
+          table.append(thead);
+          const tbody = document.createElement("tbody");
+          users.forEach((u) => {
+            const tr = document.createElement("tr");
+            const pct = Number(u.percent || 0);
+            const pc = u.perfectCount || 0;
+            const barColor = pct >= 100 ? "#16a34a" : pct >= 50 ? "#eab308" : "#ef4444";
+            const trophies = [
+              { need: 1, icon: "\uD83C\uDFC6", label: "Trä", bg: "#d4a574", color: "#5c3a1e" },
+              { need: 3, icon: "\uD83C\uDFC6", label: "Brons", bg: "#cd7f32", color: "#fff" },
+              { need: 5, icon: "\uD83C\uDFC6", label: "Silver", bg: "#c0c0c0", color: "#333" },
+              { need: 10, icon: "\uD83C\uDFC6", label: "Guld", bg: "#ffd700", color: "#5c3a1e" },
+            ];
+            let trophyHtml = "";
+            trophies.forEach((t) => {
+              const achieved = pc >= t.need;
+              const progressPct = achieved ? 100 : Math.round((pc / t.need) * 100);
+              const opacity = achieved ? "1" : "0.35";
+              trophyHtml += `<span title="${t.label} (${t.need}x 100%) — ${achieved ? 'Klar!' : progressPct + '%'}" style="display:inline-flex;flex-direction:column;align-items:center;margin:0 6px;opacity:${opacity};font-size:1rem;line-height:1;">` +
+                `<span style="font-size:1.6rem;">${t.icon}</span>` +
+                `<span style="display:inline-block;width:32px;height:6px;background:#e2e8f0;border-radius:3px;margin-top:2px;"><span style="display:block;height:100%;width:${progressPct}%;background:${t.bg};border-radius:3px;"></span></span>` +
+                `<span style="font-size:.7rem;color:#64748b;margin-top:1px;">${achieved ? t.label : progressPct + '%'}</span>` +
+                `</span>`;
+            });
+            const safeAvatarUrl = escapeHtml(u.avatarUrl);
+            const safeUserName = escapeHtml(u.userName);
+            const avatarImg = safeAvatarUrl ? `<img src="${safeAvatarUrl}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;border:1px solid #b8d2e9;" />` : "";
+            tr.innerHTML = `<td style="padding:.25rem .4rem;">${avatarImg}${safeUserName}</td>` +
+              `<td style="text-align:right;padding:.25rem .4rem;">${u.correctCount}/${u.totalWords}</td>` +
+              `<td style="text-align:right;padding:.25rem .4rem;"><span style="display:inline-block;width:40px;height:8px;background:#e2e8f0;border-radius:4px;vertical-align:middle;margin-right:4px;"><span style="display:block;height:100%;width:${Math.min(100, pct)}%;background:${barColor};border-radius:4px;"></span></span>${pct}%</td>` +
+              `<td style="text-align:center;padding:.25rem .4rem;">${trophyHtml}</td>`;
+            tbody.append(tr);
+          });
+          table.append(tbody);
+          section.append(table);
+        }
+        elements.weekStatsContainer.append(section);
+      });
+    } catch {
+      elements.weekStatsContainer.innerHTML = "<p>Kunde inte ladda veckostatistik.</p>";
+    }
+  }
+
   async function sendHeartbeat() {
     if (appState.auth.isAuthenticated) {
       await fetch("/api/presence/heartbeat", { method: "POST" });
       return;
     }
-    const guestName = (elements.guestNameInput.value || appState.selectedUserId || "").trim();
-    if (!guestName) {
-      return;
-    }
+    const guestName = (elements.guestNameInput.value || appState.selectedUserId || "GÄST").trim();
     await fetch("/api/presence/guest-heartbeat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3489,7 +3814,7 @@
     const marker = document.createElement("strong");
     marker.textContent = "•";
     const text = document.createElement("span");
-    text.textContent = user.name || "Okand";
+    text.textContent = user.name || "Okänd";
     const actions = document.createElement("div");
     actions.style.display = "flex";
     actions.style.gap = "0.35rem";
@@ -3550,7 +3875,7 @@
     }
 
     if (appState.groupFight.readOnly) {
-      elements.groupPoolList.innerHTML = "<li>Inbjudan ar lasbar. Endast skaparen kan andra lag.</li>";
+      elements.groupPoolList.innerHTML = "<li>Inbjudan är låst. Endast skaparen kan ändra lag.</li>";
       if (!appState.groupFight.teamA.length) {
         elements.groupTeamAList.innerHTML = "<li>Tomt lag.</li>";
       } else {
@@ -3621,7 +3946,7 @@
       .filter((user) => !search || normalize(user.name || "").includes(search));
     if (!poolUsers.length) {
       const noUsers = document.createElement("li");
-      noUsers.textContent = "Inga fler spelare att valja.";
+      noUsers.textContent = "Inga fler spelare att välja.";
       elements.groupPoolList.append(noUsers);
     } else {
       poolUsers.forEach((user) => {
@@ -3742,7 +4067,7 @@
   }
 
   function getActorName() {
-    return (appState.auth.displayName || elements.guestNameInput.value || appState.selectedUserId || "GAST").trim();
+    return (appState.auth.displayName || elements.guestNameInput.value || appState.selectedUserId || "GÄST").trim();
   }
 
   function isCurrentActorPlayer(player) {
@@ -4002,7 +4327,7 @@
     const myMax = myTeam === "A" ? appState.groupBattle.maxHpA : appState.groupBattle.maxHpB;
     const enemyHp = myTeam === "A" ? appState.groupBattle.hpB : appState.groupBattle.hpA;
     const enemyMax = myTeam === "A" ? appState.groupBattle.maxHpB : appState.groupBattle.maxHpA;
-    elements.groupBattleStatusText.textContent = `Ditt lag HP ${Math.round(myHp)}/${Math.round(myMax)} | Motstandare HP ${Math.round(enemyHp)}/${Math.round(enemyMax)}`;
+    elements.groupBattleStatusText.textContent = `Ditt lag HP ${Math.round(myHp)}/${Math.round(myMax)} | Motståndare HP ${Math.round(enemyHp)}/${Math.round(enemyMax)}`;
     if (elements.groupBattleProgressWrap && elements.groupBattleProgressFill && elements.groupBattleProgressText) {
       const myPlayers = myTeam === "A" ? appState.groupBattle.teamA : appState.groupBattle.teamB;
       const ownCorrect = myPlayers.reduce((s, p) => s + Math.max(0, Number(p.correct || 0)), 0);
@@ -4015,8 +4340,8 @@
     elements.groupBattlePlayers.innerHTML = "";
     [...appState.groupBattle.teamA, ...appState.groupBattle.teamB].forEach((p) => {
       const li = document.createElement("li");
-      const side = p.team === myTeam ? "Ditt lag" : "Motstandare";
-      li.innerHTML = `<strong>${side}</strong><span>${p.name}</span><strong>${p.correct}/${appState.groupBattle.totalWords}</strong>`;
+      const side = p.team === myTeam ? "Ditt lag" : "Motståndare";
+      li.innerHTML = `<strong>${side}</strong><span>${escapeHtml(p.name)}</span><strong>${p.correct}/${appState.groupBattle.totalWords}</strong>`;
       elements.groupBattlePlayers.append(li);
     });
   }
@@ -4044,7 +4369,7 @@
       pushLog(reason);
     }
     if (bossFightEngine && !appState.duel.active && !state.bossMode && !state.fortressMode) {
-      bossFightEngine.setPreviewBoss(appState.bossFight.selectedBossId);
+      bossFightEngine.setMode("idle");
     }
     updateGroupBattleBoard();
   }
@@ -4073,7 +4398,7 @@
     appState.groupBattle.finishing = true;
     appState.groupBattle.winnerTeam = canonicalWinnerTeam === "B" ? "B" : "A";
     triggerGroupBattleVictoryFx(appState.groupBattle.winnerTeam, winnerName);
-    const winnerText = appState.groupBattle.winnerTeam === getLocalGroupTeam() ? "Du vann gruppfighten!" : `Motstandaren vann (${winnerName}).`;
+    const winnerText = appState.groupBattle.winnerTeam === getLocalGroupTeam() ? "Du vann gruppfighten!" : `Motståndaren vann (${winnerName}).`;
     elements.feedbackText.className = appState.groupBattle.winnerTeam === getLocalGroupTeam() ? "feedback good" : "feedback bad";
     elements.feedbackText.textContent = winnerText;
     showGroupBattleResultOverlay(appState.groupBattle.winnerTeam === getLocalGroupTeam(), winnerName || "Lag");
@@ -4128,7 +4453,7 @@
       }
       const hitPayload = `__HIT__:${player.team}|${player.id || ""}|${target?.id || ""}|${Number(target?.hp || 0).toFixed(2)}|${Number(appState.groupBattle.hpA || 0).toFixed(2)}|${Number(appState.groupBattle.hpB || 0).toFixed(2)}|${Math.max(0, Number(player.correct || 0))}|${Math.max(0, Number(appState.groupBattle.resolvedWords || 0))}`;
       sendGroupFightBroadcast(player.team, hitPayload, true);
-      pushGroupBattleFeed(`${player.name} skrev RATT glosa${target ? ` och traffade ${target.name}` : ""}!`);
+      pushGroupBattleFeed(`${player.name} skrev RÄTT glosa${target ? ` och träffade ${target.name}` : ""}!`);
       if (isGroupTeamDone(player.team)) {
         announceGroupBattleWinner(player.team, player.name || (player.team === "A" ? "Lag A" : "Lag B"));
         return;
@@ -4308,6 +4633,7 @@
       appState.selectedWeekId = invite.weekId || appState.selectedWeekId;
       buildAppLanguageOptions();
       buildSelectOptions();
+      closeGroupFightPopup();
       const ok = startGroupBattle({
         teamA: mapped.teamA,
         teamB: mapped.teamB,
@@ -4371,7 +4697,7 @@
           appState.groupBattle.finishing = true;
           appState.groupBattle.winnerTeam = parsedWinner.team;
           triggerGroupBattleVictoryFx(parsedWinner.team, parsedWinner.name);
-          const winnerText = parsedWinner.team === getLocalGroupTeam() ? "Du vann gruppfighten!" : `Motstandaren vann (${parsedWinner.name}).`;
+          const winnerText = parsedWinner.team === getLocalGroupTeam() ? "Du vann gruppfighten!" : `Motståndaren vann (${parsedWinner.name}).`;
           elements.feedbackText.className = parsedWinner.team === getLocalGroupTeam() ? "feedback good" : "feedback bad";
           elements.feedbackText.textContent = winnerText;
           showGroupBattleResultOverlay(parsedWinner.team === getLocalGroupTeam(), parsedWinner.name || "Lag");
@@ -4413,7 +4739,7 @@
         }
         bossFightEngine.syncGroupBattleState(getProjectedGroupState());
         bossFightEngine.setGroupBattleBroadcast(toVisualGroupTeam(canonicalTeam), `${shooter?.name || "Spelare"} klarade glosan`, true);
-        pushGroupBattleFeed(`${shooter?.name || "Spelare"} skrev RATT glosa${target ? ` och traffade ${target.name}` : ""}!`);
+        pushGroupBattleFeed(`${shooter?.name || "Spelare"} skrev RÄTT glosa${target ? ` och träffade ${target.name}` : ""}!`);
         updateGroupBattleBoard();
         renderStats();
         return;
@@ -4461,9 +4787,9 @@
     const groupResponse = await fetch("/api/groupfight/inbox", { headers: challengeHeaders() });
     if (!groupResponse.ok) {
       if (groupResponse.status === 401) {
-        elements.challengeInboxList.innerHTML = "<li>Vanta... ansluter utmaningar.</li>";
+        elements.challengeInboxList.innerHTML = "<li>Vänta... ansluter utmaningar.</li>";
       } else {
-        elements.challengeInboxList.innerHTML = "<li>Kunde inte lasa utmaningar.</li>";
+        elements.challengeInboxList.innerHTML = "<li>Kunde inte läsa utmaningar.</li>";
       }
       return;
     }
@@ -4521,20 +4847,24 @@
         openBtn.type = "button";
         openBtn.textContent = "Se gruppfight";
         openBtn.style.background = "#2563eb";
-        openBtn.addEventListener("click", async () => {
+        openBtn.addEventListener("click", () => {
           const mapped = inviteToTeams(item);
-          openGroupFightPopup();
+          appState.groupInvite.current = item;
+          appState.groupFight.open = true;
           appState.groupFight.answerLanguage = normalizeLanguage(item.answerLanguage || "english");
           appState.selectedLanguage = appState.groupFight.answerLanguage;
           appState.selectedWeekId = item.weekId || appState.selectedWeekId;
           appState.groupFight.teamA = mapped.teamA;
           appState.groupFight.teamB = mapped.teamB;
           appState.groupFight.readOnly = true;
+          appState.groupFight.filterText = "";
           buildAppLanguageOptions();
           buildGroupFightLanguageOptions();
           buildGroupFightWeekOptions();
           renderGroupFightPopup();
-          await respondGroupFightInvite(item.id, true);
+          if (elements.groupFightPopup) {
+            elements.groupFightPopup.style.display = "flex";
+          }
         });
 
         const decline = document.createElement("button");
@@ -4588,7 +4918,7 @@
     const response = await fetch("/api/duel/current", {
       headers: appState.auth.isAuthenticated ? {} : {
         "X-Guest-Session": getGuestSessionId(),
-        "X-Guest-Name": (elements.guestNameInput.value || appState.selectedUserId || "GAST").trim(),
+        "X-Guest-Name": (elements.guestNameInput.value || appState.selectedUserId || "GÄST").trim(),
       },
     });
     if (!response.ok) {
@@ -4608,8 +4938,8 @@
       appState.duel.visualMatchId = null;
       appState.duel.lastSyncPlayerHp = null;
       appState.duel.lastSyncEnemyHp = null;
-      if (bossFightEngine && !state.bossMode && !state.fortressMode) {
-        bossFightEngine.setPreviewBoss(appState.bossFight.selectedBossId);
+      if (bossFightEngine && !state.bossMode && !state.fortressMode && !appState.groupBattle.active) {
+        bossFightEngine.setMode("idle");
         bossFightEngine.setDuelPrepEndsAt(0);
       }
       return;
@@ -4631,9 +4961,11 @@
     if (bossFightEngine) {
       bossFightEngine.setDuelPrepEndsAt(appState.duel.prepEndsAtMs);
     }
-    appState.selectedWeekId = match.weekId;
-    buildSelectOptions();
-    loadState();
+    if (appState.duel.visualMatchId !== match.id) {
+      appState.selectedWeekId = match.weekId;
+      buildSelectOptions();
+      loadState();
+    }
     const myId = appState.auth.linkedProfileId || `guest:${getGuestSessionId()}`;
     const isChallenger = myId === match.challengerProfileId;
     const myHp = isChallenger ? match.challengerHp : match.opponentHp;
@@ -4733,9 +5065,10 @@
       elements.userSelect.value = appState.selectedUserId;
     }
 
-    const stillExists = visibleWeeks.some((w) => w.id === previousWeek);
+    const stillExists = visibleWeeks.some((w) => w.id === appState.selectedWeekId);
     if (!stillExists) {
       appState.selectedWeekId = (visibleWeeks[0] && visibleWeeks[0].id) || "";
+      saveSelectedWeek();
     }
     elements.weekSelect.value = appState.selectedWeekId;
     syncAnswerLanguageFromCurrentWeek();
@@ -4746,7 +5079,7 @@
     bossRoster.forEach((boss) => {
       const option = document.createElement("option");
       option.value = boss.id;
-      option.textContent = boss.name;
+      option.textContent = `${boss.name} (${boss.difficultyLabel})`;
       elements.bossSelect.append(option);
     });
     elements.bossSelect.value = appState.bossFight.selectedBossId;
@@ -4778,34 +5111,6 @@
     }
   }
 
-  async function saveProgress() {
-    if (!appState.auth.isAuthenticated) {
-      elements.feedbackText.className = "feedback bad";
-      elements.feedbackText.textContent = "Logga in for att spara resultat.";
-      return;
-    }
-
-    const response = await fetch("/api/vocab/progress", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        weekId: appState.selectedWeekId,
-        score: state.level * 100 + state.xp + state.coins,
-        timeSeconds: 0,
-        correctKeys: state.correctKeys,
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      elements.feedbackText.className = "feedback bad";
-      elements.feedbackText.textContent = data.error || "Kunde inte spara resultat.";
-      return;
-    }
-
-    elements.feedbackText.className = "feedback good";
-    elements.feedbackText.textContent = "Resultat sparat till databasen.";
-  }
 
   async function parseWithAi() {
     const text = elements.aiInput.value.trim();
@@ -5004,7 +5309,26 @@
         await reloadWeeksAndUi();
       });
 
-      actions.append(selectBtn, saveBtn, deleteBtn);
+      const flipBtn = document.createElement("button");
+      flipBtn.type = "button";
+      flipBtn.className = "ghost";
+      flipBtn.textContent = "Vänd ordning";
+      flipBtn.disabled = !appState.auth.isAuthenticated;
+      flipBtn.addEventListener("click", async () => {
+        const flipped = (week.words || []).map((w) => ({ sv: w.en, en: w.sv }));
+        const response = await fetch(`/api/vocab/weeks/${encodeURIComponent(week.id)}/words`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ weekName: title.value, language: week.language || appState.selectedLanguage || "english", words: flipped }),
+        });
+        if (!response.ok) {
+          alert("Kunde inte vända ordningen.");
+          return;
+        }
+        await reloadWeeksAndUi();
+      });
+
+      actions.append(selectBtn, saveBtn, flipBtn, deleteBtn);
       wrapper.append(title, textarea, actions);
       elements.weeksOverview.append(wrapper);
     });
@@ -5041,9 +5365,11 @@
         appState.selectedLanguage = normalizeLanguage(elements.appLanguageSelect.value || "english");
         saveSelectedLanguage();
         buildSelectOptions();
+        saveSelectedWeek();
         buildLeaderboardWeekOptions();
         renderCastleTree();
         renderWeeksOverview();
+        initTrainQueue();
         await saveSelection();
         await loadLeaderboard();
         setQuestion(pickWord());
@@ -5108,14 +5434,14 @@
           appState.groupInvite.current = {
             id: inviteId,
             weekId: appState.selectedWeekId,
-            weekName: (currentWeek() && currentWeek().weekName) || "Okand vecka",
+            weekName: (currentWeek() && currentWeek().weekName) || "Okänd vecka",
             answerLanguage: normalizeLanguage(appState.groupFight.answerLanguage || appState.selectedLanguage || "english"),
             status: "Pending",
             teamA: summaryTeam(appState.groupFight.teamA, "A"),
             teamB: summaryTeam(appState.groupFight.teamB, "B"),
           };
           elements.feedbackText.className = "feedback good";
-          elements.feedbackText.textContent = "Gruppfight skapad. Vantar pa svar...";
+          elements.feedbackText.textContent = "Gruppfight skapad. Väntar på svar...";
           pushLog(`Gruppfight-inbjudan skapad (${inviteId}).`);
           closeGroupFightPopup();
           await pollGroupFightCurrent();
@@ -5153,9 +5479,11 @@
 
     elements.weekSelect.addEventListener("change", async () => {
       appState.selectedWeekId = elements.weekSelect.value;
+      saveSelectedWeek();
       syncAnswerLanguageFromCurrentWeek();
       await saveSelection();
       loadState();
+      initTrainQueue();
       renderStats();
       await loadLeaderboard();
       renderCastleTree();
@@ -5175,6 +5503,7 @@
         appState.selectedPlayerImage = elements.playerAvatarSelect.value;
         localStorage.setItem(playerAvatarKey(), appState.selectedPlayerImage || "");
         renderPlayerAvatarPreview();
+        saveAvatarToServer();
       });
     }
 
@@ -5214,23 +5543,47 @@
       renderSoundToggle();
     });
 
+    if (elements.flipDirectionButton) {
+      elements.flipDirectionButton.addEventListener("click", () => {
+        appState.flippedDirection = !appState.flippedDirection;
+        renderFlipButton();
+        renderQuestionLabel();
+        if (state.currentWord) {
+          elements.questionWord.textContent = questionTextForWord(state.currentWord);
+        }
+      });
+    }
+
     elements.nextWordButton.addEventListener("click", () => {
+      if (!state.bossMode && !state.fortressMode && !appState.duel.active && !appState.groupBattle.active && state.trainQueue.length > 1) {
+        const skipped = state.trainQueue.shift();
+        state.trainQueue.push(skipped);
+      }
       setQuestion(pickWord());
     });
 
-    elements.trainModeButton.addEventListener("click", () => {
-      stopGroupBattle("");
-      state.bossMode = false;
-      state.fortressMode = false;
-      if (bossFightEngine) {
-        bossFightEngine.setPreviewBoss(appState.bossFight.selectedBossId);
-      }
-      elements.feedbackText.className = "feedback good";
-      elements.feedbackText.textContent = "Traningslage aktivt. Svara pa glosorna for att ova.";
-      setQuestion(pickWord());
-      renderStats();
-      pushLog("Traningslage valt via huvudknappen.");
-    });
+    if (elements.resetSessionButton) {
+      elements.resetSessionButton.addEventListener("click", () => {
+        location.reload();
+      });
+    }
+
+    if (elements.trainModeButton) {
+      elements.trainModeButton.addEventListener("click", () => {
+        stopGroupBattle("");
+        state.bossMode = false;
+        state.fortressMode = false;
+        if (bossFightEngine) {
+          bossFightEngine.setMode("idle");
+        }
+        initTrainQueue();
+        elements.feedbackText.className = "feedback good";
+        elements.feedbackText.textContent = "Träningsläge aktivt. Svara på glosorna för att öva.";
+        setQuestion(pickWord());
+        renderStats();
+        pushLog("Träningsläge valt via huvudknappen.");
+      });
+    }
 
     if (elements.fortressModeButton) {
       elements.fortressModeButton.addEventListener("click", () => {
@@ -5242,12 +5595,12 @@
           if (!startFortressMode()) {
             return;
           }
-          pushLog("Byggforsvar startat. Ratt glosa slapper ner ett block.");
+          pushLog("Byggförsvar startat. Rätt glosa släpper ner ett block.");
         } else {
           if (bossFightEngine) {
-            bossFightEngine.setPreviewBoss(appState.bossFight.selectedBossId);
+            bossFightEngine.setMode("idle");
           }
-          pushLog("Byggforsvar avslutat.");
+          pushLog("Byggförsvar avslutat.");
         }
         renderStats();
       });
@@ -5268,7 +5621,7 @@
         pushLog(`Bossfight startad mot ${elements.bossSelect.options[elements.bossSelect.selectedIndex].text}.`);
       } else {
         if (bossFightEngine) {
-          bossFightEngine.setPreviewBoss(appState.bossFight.selectedBossId);
+          bossFightEngine.setMode("idle");
         }
         pushLog("Bossfight avslutad.");
       }
@@ -5313,14 +5666,10 @@
       }
       state.doubleHitReady = true;
       elements.feedbackText.className = "feedback good";
-      elements.feedbackText.textContent = "Double Hit ar laddad till nasta ratt svar.";
+      elements.feedbackText.textContent = "Double Hit är laddad till nästa rätt svar.";
       renderStats();
     });
 
-    elements.saveResultButton.addEventListener("click", async () => {
-      await saveProgress();
-      await loadLeaderboard();
-    });
 
     elements.resetButton.addEventListener("click", () => {
       state = { ...defaultState };
@@ -5328,7 +5677,7 @@
       if (bossFightEngine) {
         bossFightEngine.reset();
       }
-      pushLog("All progression ar nollstalld for vald anvandare/vecka.");
+      pushLog("All progression är nollställd för vald användare/vecka.");
       renderStats();
       setQuestion(pickWord());
     });
@@ -5393,9 +5742,6 @@
       ensureDynamicControls();
       ensureWordsProgressElements();
       bossFightEngine = createBossFightEngine(elements.bossFightCanvas);
-      if (bossFightEngine) {
-        bossFightEngine.setPreviewBoss(appState.bossFight.selectedBossId);
-      }
       await loadAuthStatus();
       loadSelectedLanguage();
       await loadData();
@@ -5409,13 +5755,13 @@
       buildLeaderboardWeekOptions();
       buildBossOptions();
       buildPlayerOptions();
-      if (bossFightEngine) {
-        bossFightEngine.setPreviewBoss(appState.bossFight.selectedBossId);
-      }
       loadSettings();
       renderSoundToggle();
+      renderFlipButton();
+      renderSpecialChars();
       renderWeeksOverview();
       await loadLeaderboard();
+      try { await loadWeekStats(); } catch {}
       renderCastleTree();
       applyAuthUi();
       loadState();
@@ -5458,8 +5804,8 @@
         try { await refreshDuelState(); } catch {}
       }, 250);
       renderStats();
-      setQuestion(pickWord());
-      pushLog("GlosTrainer ar redo.");
+      setQuestion(null, { focus: false, emptyText: "Välj en vecka och börja svara på glosorna." });
+      pushLog("GlosTrainer är redo.");
     } catch (error) {
       elements.questionWord.textContent = "Kunde inte ladda glosdatabasen.";
       elements.feedbackText.className = "feedback bad";

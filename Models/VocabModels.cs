@@ -123,6 +123,12 @@ public sealed class ProgressSaveRequest
     public int Score { get; set; }
     public double TimeSeconds { get; set; }
     public List<string>? CorrectKeys { get; set; }
+    public bool QuietSave { get; set; }
+}
+
+public sealed class AvatarSaveRequest
+{
+    public string? AvatarUrl { get; set; }
 }
 
 public sealed class AdminLinkProfileRequest

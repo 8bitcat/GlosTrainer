@@ -1,10 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git credential-manager github list)",
-      "Bash(git credential-manager list)",
-      "Bash(gh auth status)",
-      "Bash(gh repo create GlosTrainer --public --source=. --remote=origin --push)"
+      "Bash(*)",
+      "Edit(*)",
+      "Write(*)",
+      "Read(*)",
+      "WebFetch(*)"
     ]
   }
 }

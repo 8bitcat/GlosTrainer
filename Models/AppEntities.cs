@@ -32,6 +32,7 @@ public sealed class UserProfile
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = string.Empty;
+    public string AvatarUrl { get; set; } = string.Empty;
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 
     public AppAccount? AppAccount { get; set; }
@@ -79,6 +80,7 @@ public sealed class ProgressRecord
     public string UserProfileId { get; set; } = string.Empty;
     public UserProfile? UserProfile { get; set; }
     public string CorrectKeysJson { get; set; } = "[]";
+    public int PerfectCount { get; set; }
     public DateTime LastUpdatedUtc { get; set; } = DateTime.UtcNow;
 }
 

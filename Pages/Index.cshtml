@@ -9,11 +9,11 @@
         <div>
             <p class="kicker">Web Edition</p>
             <h1>GlosTrainer</h1>
-            <p class="subtitle">Trana glosor, bygg streak och kla bossfighten.</p>
+            <p class="subtitle">Träna glosor, bygg streak och klå bossfighten.</p>
             <p id="authStatusText" class="subtitle"></p>
             <div class="auth-actions" style="display:none;">
                 <a id="loginLink" class="btn btn-primary" href="/Auth/Login">Logga in</a><a id="registerLink" class="btn btn-outline-primary" href="/Auth/Register">Registrera</a>
-                <a id="teacherLoginLink" class="btn teacher-login-cta" href="/Auth/TeacherLogin">Larar-login</a>
+                <a id="teacherLoginLink" class="btn teacher-login-cta" href="/Auth/TeacherLogin">Lärar-login</a>
                 <a id="logoutLink" class="btn btn-outline-secondary" href="/auth/logout">Logga ut</a>
                 <a id="adminLink" class="btn btn-outline-dark" href="/Admin/LegacyLinks">Admin</a>
             </div>
@@ -28,19 +28,18 @@
 
     <section class="controls-panel">
         <div class="train-cta-shell">
-            <button id="trainModeButton" type="button" class="primary-cta">Trana glosor</button>
             <select id="weekSelect" class="train-week-select"></select>
         </div>
-        <label for="appLanguageSelect">Sprak</label>
+        <label for="appLanguageSelect">Språk</label>
         <select id="appLanguageSelect">
-            <option value="english">English</option>
+            <option value="english">Engelska</option>
         </select>
-        <button id="createGroupFightButton" type="button" class="primary-cta">Skapa gruppfight</button>
-        <a id="teacherQuickLoginButton" class="btn teacher-login-cta" href="/Auth/TeacherLogin">Larar-login</a>
+        <button id="createGroupFightButton" type="button" class="primary-cta" style="background:#16a34a;color:#fff;">Skapa gruppfight / bossfight</button>
+        <a id="teacherQuickLoginButton" class="btn teacher-login-cta" href="/Auth/TeacherLogin">Lärar-login</a>
         <button id="toggleModeButton" type="button" class="primary-cta boss-cta" style="display:none;">&#9760; Starta Bossfight</button>
-        <button id="fortressModeButton" type="button" class="primary-cta fortress-cta" style="display:none;"><span class="cta-icon" aria-hidden="true">&#x1F6E1;</span> Byggforsvar</button>
+        <button id="fortressModeButton" type="button" class="primary-cta fortress-cta" style="display:none;"><span class="cta-icon" aria-hidden="true">&#x1F6E1;</span> Byggförsvar</button>
 
-        <label id="userSelectLabel" for="userSelect">Anvandare</label>
+        <label id="userSelectLabel" for="userSelect">Användare</label>
         <select id="userSelect"></select>
         <label id="guestNameLabel" for="guestNameInput" style="display:none;">Ditt namn</label>
         <input id="guestNameInput" type="text" placeholder="Skriv ditt namn..." style="display:none;" />
@@ -64,6 +63,7 @@
             <h2 id="bossName">Boss</h2>
             <div class="hp-bar"><div id="bossHpBar"></div></div>
             <p id="bossHpText">100 / 100 HP</p>
+            <img id="bossAvatarCard" alt="Boss" style="width:68px;height:68px;border-radius:999px;object-fit:cover;border:2px solid #ef4444;background:#fff;display:none;margin-top:.35rem;" />
             <p id="bossTimerText">Tid till krasch: -</p>
             <p id="bossWordsLeftText">Glosor kvar: -</p>
             <div id="wordsProgressWrap" class="words-progress" style="display:none;">
@@ -75,7 +75,7 @@
         </div>
         <div class="battle-canvas-shell">
             <canvas id="bossFightCanvas" width="900" height="320"></canvas>
-            <div id="duelPrepOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.62);color:#fff;font-weight:800;font-size:1.4rem;align-items:center;justify-content:center;text-align:center;padding:1rem;">Gor dig redo...</div>
+            <div id="duelPrepOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.62);color:#fff;font-weight:800;font-size:1.4rem;align-items:center;justify-content:center;text-align:center;padding:1rem;">Gör dig redo...</div>
             <div id="groupResultOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.72);color:#fff;font-weight:900;font-size:3rem;align-items:center;justify-content:center;text-align:center;padding:1rem;letter-spacing:.04em;text-transform:uppercase;">DU VANN!</div>
             <div id="groupBattleFeed" style="display:none;position:absolute;left:10px;right:10px;bottom:10px;color:#fff;background:rgba(15,23,42,.58);border-radius:10px;padding:.45rem .6rem;font-weight:700;"></div>
         </div>
@@ -94,13 +94,24 @@
     </section>
 
     <section class="card-panel">
-        <p id="questionLabel" class="question-label">Oversatt till engelska:</p>
+        <button id="flipDirectionButton" type="button" style="display:block;width:100%;padding:.7rem;margin-bottom:.6rem;font-size:1rem;font-weight:800;border:none;border-radius:10px;background:#16a34a;color:#fff;cursor:pointer;">Klicka för att välja ordning: English → Svenska</button>
+        <p id="questionLabel" class="question-label" style="display:none;"></p>
         <p class="question-word" id="questionWord">Laddar glosor...</p>
         <form id="answerForm" autocomplete="off">
-            <input id="answerInput" type="text" placeholder="Skriv svaret..." />
+            <input id="answerInput" type="text" placeholder="Skriv svaret..." style="font-size:1.15rem;padding:.85rem 1rem;" />
             <button type="submit">Svar</button>
+            <div id="specialCharsRow" style="display:none;margin-top:.4rem;gap:.3rem;flex-wrap:wrap;"></div>
         </form>
-        <button id="nextWordButton" type="button" class="ghost" style="margin-top:.6rem;">Ny glosa</button>
+        <div style="display:flex;gap:.6rem;margin-top:.6rem;">
+            <button id="nextWordButton" type="button" class="ghost">Ny glosa</button>
+            <button id="resetSessionButton" type="button" class="ghost" style="color:#ef4444;border-color:#ef4444;">Nollställ</button>
+        </div>
+        <div id="trainProgressWrap" style="display:none;margin-top:.6rem;">
+            <div style="position:relative;width:100%;height:32px;border-radius:10px;overflow:hidden;background:#334155;border:2px solid #475569;">
+                <div id="trainProgressBar" style="height:100%;width:0%;border-radius:8px;background:linear-gradient(90deg,#ef4444 0%,#eab308 50%,#22c55e 100%);transition:width .35s ease;"></div>
+                <span id="trainProgressText" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.95rem;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);">0%</span>
+            </div>
+        </div>
         <p id="feedbackText" class="feedback"></p>
     </section>
 
@@ -111,11 +122,11 @@
 
     <div id="groupFightPopup" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:9999;align-items:center;justify-content:center;">
         <div style="background:#fff;border-radius:16px;max-width:940px;width:94%;padding:1rem;border:2px solid #7aa7d0;">
-            <h3 style="margin-top:0;">Skapa gruppfight</h3>
-            <p style="margin:.2rem 0 .7rem 0;">Valj sprak, vecka, lag och fyll pa med bottar.</p>
+            <h3 style="margin-top:0;">Skapa gruppfight / bossfight</h3>
+            <p style="margin:.2rem 0 .7rem 0;">Välj språk, vecka, lag och fyll på med bottar.</p>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem;">
                 <div>
-                    <label for="groupFightLanguageSelect" style="font-weight:700;display:block;margin-bottom:.25rem;">Sprak</label>
+                    <label for="groupFightLanguageSelect" style="font-weight:700;display:block;margin-bottom:.25rem;">Språk</label>
                     <select id="groupFightLanguageSelect"></select>
                 </div>
                 <div>
@@ -125,7 +136,7 @@
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
                 <div style="grid-column:1 / -1;border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
-                    <h4 style="margin:0 0 .5rem 0;">Tillgangliga spelare</h4>
+                    <h4 style="margin:0 0 .5rem 0;">Tillgängliga spelare</h4>
                     <ul id="groupPoolList" class="leaderboard-list"></ul>
                 </div>
                 <div style="border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
@@ -133,7 +144,7 @@
                     <ul id="groupTeamAList" class="leaderboard-list"></ul>
                 </div>
                 <div style="border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
-                    <h4 style="margin:0 0 .5rem 0;">Motstandarlag</h4>
+                    <h4 style="margin:0 0 .5rem 0;">Motståndarlag</h4>
                     <ul id="groupTeamBList" class="leaderboard-list"></ul>
                 </div>
             </div>
@@ -150,8 +161,13 @@
     </section>
 
     <section class="card-panel">
-        <p class="question-label">Slottsnivaer (vecka)</p>
+        <p class="question-label">Slottsnivåer (vecka)</p>
         <div id="castleTree" class="castle-tree"></div>
+    </section>
+
+    <section class="card-panel">
+        <p class="question-label">Veckostatistik</p>
+        <div id="weekStatsContainer"></div>
     </section>
 
     <section class="card-panel">
@@ -166,20 +182,19 @@
         <button id="hintButton" type="button">Hint (-15 coins)</button>
         <button id="healButton" type="button">Heal (-20 coins)</button>
         <button id="doubleButton" type="button">Double Hit (-25 coins)</button>
-        <button id="saveResultButton" type="button" class="ghost">Spara resultat</button>
-        <button id="resetButton" type="button" class="ghost">Nollstall</button>
-        <button id="soundToggleButton" type="button" class="ghost">Ljud: Pa</button>
+        <button id="resetButton" type="button" class="ghost">Nollställ</button>
+        <button id="soundToggleButton" type="button" class="ghost">Ljud: På</button>
         <p id="hintText"></p>
     </section>
 
     <section class="hero-panel">
         <div style="width:100%">
-            <p class="kicker">Tillfalliga glosor (gastlage)</p>
+            <p class="kicker">Tillfälliga glosor (gästläge)</p>
             <textarea id="tempWordsInput" rows="4" style="width:100%; border:1px solid #b8d2e9; border-radius:10px; padding:0.75rem;" placeholder="Skriv en rad per glosa, t.ex:
 handla - go shopping
 ryggsack: backpack"></textarea>
             <div style="display:flex; gap:.6rem; margin-top:.6rem; flex-wrap:wrap;">
-                <button id="tempWordsAddButton" type="button">Lagg till temporart</button>
+                <button id="tempWordsAddButton" type="button">Lägg till temporärt</button>
             </div>
             <p id="tempWordsStatus" class="feedback"></p>
         </div>
@@ -188,24 +203,24 @@ ryggsack: backpack"></textarea>
     <section class="hero-panel" style="display:none;">
         <div style="width:100%">
             <p class="kicker">AI Import</p>
-            <h2 style="margin-top:0">Klistra, slapp eller ladda upp glosor</h2>
+            <h2 style="margin-top:0">Klistra, släpp eller ladda upp glosor</h2>
             <textarea id="aiInput" rows="6" style="width:100%; border:1px solid #b8d2e9; border-radius:10px; padding:0.75rem;" placeholder="Exempel:
 handla - go shopping
 ryggsack: backpack"></textarea>
             <div style="display:flex; gap:.6rem; margin-top:.6rem; flex-wrap:wrap;">
                 <select id="targetLanguageSelect">
-                    <option value="english">English</option>
-                    <option value="swedish">Swedish</option>
-                    <option value="spanish">Spanish</option>
-                    <option value="german">German</option>
-                    <option value="french">French</option>
+                    <option value="english">Engelska</option>
+                    <option value="swedish">Svenska</option>
+                    <option value="spanish">Spanska</option>
+                    <option value="german">Tyska</option>
+                    <option value="french">Franska</option>
                 </select>
                 <input id="aiFilesInput" type="file" multiple accept="image/*,.txt,.csv,.md,.json" />
             </div>
             <div style="display:flex; gap:.6rem; margin-top:.6rem; flex-wrap:wrap;">
-                <button id="aiParseButton" type="button">Las med AI</button>
+                <button id="aiParseButton" type="button">Läs med AI</button>
                 <button id="aiSaveButton" type="button" class="ghost">Spara till vald vecka</button>
-                <button id="aiCreateWeekButton" type="button" class="ghost">Skapa ny vecka fran AI</button>
+                <button id="aiCreateWeekButton" type="button" class="ghost">Skapa ny vecka från AI</button>
             </div>
             <p id="aiStatus" class="feedback"></p>
         </div>
@@ -213,14 +228,13 @@ ryggsack: backpack"></textarea>
 
     <section class="hero-panel" style="display:none;">
         <div style="width:100%">
-            <p class="kicker">Veckooversikt</p>
+            <p class="kicker">Veckoöversikt</p>
             <h2 style="margin-top:0">Alla glosveckor</h2>
             <div id="weeksOverview"></div>
         </div>
     </section>
 
-    <section class="log-panel">
-        <h3>Matchlogg</h3>
+    <section class="log-panel" style="display:none;">
         <ul id="eventLog"></ul>
     </section>
 </div>

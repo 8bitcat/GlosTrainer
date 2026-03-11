@@ -154,7 +154,13 @@ app.MapGet("/api/names/random", async (AppDbContext db, CancellationToken ct) =>
     }
 
     var rnd = Random.Shared;
-    var name = $"{colors[rnd.Next(colors.Count)]}-{animals[rnd.Next(animals.Count)]}".ToUpperInvariant();
+    string name;
+    int attempts = 0;
+    do
+    {
+        name = $"{colors[rnd.Next(colors.Count)]}-{animals[rnd.Next(animals.Count)]}".ToUpperInvariant();
+        attempts++;
+    } while (attempts < 50 && await db.UserProfiles.AnyAsync(x => x.Name == name, ct));
     return Results.Ok(new { name });
 });
 
@@ -246,6 +252,37 @@ app.MapPost("/api/vocab/selection", async (SelectionUpdateRequest request, HttpC
     await db.SaveChangesAsync(ct);
     return Results.Ok(new { lastSelectedWeekId = preference.LastSelectedWeekId });
 }).RequireAuthorization();
+
+app.MapPost("/api/profile/avatar", async (AvatarSaveRequest request, HttpContext httpContext, AppDbContext db, LocalAuthService authService, CancellationToken ct) =>
+{
+    string? profileId = null;
+    var account = await authService.GetCurrentUserAsync(httpContext.User, ct);
+    if (account?.UserProfileId is not null)
+    {
+        profileId = account.UserProfileId;
+    }
+    else
+    {
+        var guestSession = httpContext.Request.Headers["X-Guest-Session"].FirstOrDefault()?.Trim();
+        var guestName = httpContext.Request.Headers["X-Guest-Name"].FirstOrDefault()?.Trim();
+        if (!string.IsNullOrWhiteSpace(guestSession))
+        {
+            var presence = await db.SitePresences.FirstOrDefaultAsync(x => x.SessionId == guestSession, ct);
+            profileId = presence?.UserProfileId;
+        }
+    }
+    if (string.IsNullOrWhiteSpace(profileId)) return Results.Unauthorized();
+    var profile = await db.UserProfiles.FirstOrDefaultAsync(p => p.Id == profileId, ct);
+    if (profile is null) return Results.NotFound();
+    var avatarUrl = request.AvatarUrl ?? "";
+    if (avatarUrl.Length > 500 || (avatarUrl.Length > 0 && !avatarUrl.StartsWith("/images/")))
+    {
+        return Results.BadRequest(new { error = "Ogiltig avatar-URL." });
+    }
+    profile.AvatarUrl = avatarUrl;
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(new { saved = true });
+});
 
 app.MapPost("/api/presence/heartbeat", async (HttpContext httpContext, AppDbContext db, LocalAuthService authService, CancellationToken ct) =>
 {
@@ -442,9 +479,9 @@ app.MapGet("/api/challenges/inbox", async (HttpContext httpContext, AppDbContext
     {
         x.Id,
         challengerProfileId = x.ChallengerProfileId,
-        challengerName = names.TryGetValue(x.ChallengerProfileId, out var n) ? n : (guestNames.TryGetValue(x.ChallengerProfileId, out var gn) ? gn : "Okand"),
+        challengerName = names.TryGetValue(x.ChallengerProfileId, out var n) ? n : (guestNames.TryGetValue(x.ChallengerProfileId, out var gn) ? gn : "Okänd"),
         x.WeekId,
-        weekName = weeks.TryGetValue(x.WeekId, out var w) ? w : "Okand vecka",
+        weekName = weeks.TryGetValue(x.WeekId, out var w) ? w : "Okänd vecka",
         x.CreatedUtc
     });
 
@@ -527,7 +564,7 @@ app.MapGet("/api/duel/current", async (HttpContext httpContext, AppDbContext db,
         .Where(x => guestSessionIds.Contains(x.SessionId))
         .ToDictionaryAsync(x => $"guest:{x.SessionId}", x => x.DisplayName, ct);
 
-    var weekName = await db.Weeks.AsNoTracking().Where(x => x.Id == match.WeekId).Select(x => x.WeekName).FirstOrDefaultAsync(ct) ?? "Okand vecka";
+    var weekName = await db.Weeks.AsNoTracking().Where(x => x.Id == match.WeekId).Select(x => x.WeekName).FirstOrDefaultAsync(ct) ?? "Okänd vecka";
 
     return Results.Ok(new
     {
@@ -538,9 +575,9 @@ app.MapGet("/api/duel/current", async (HttpContext httpContext, AppDbContext db,
             weekName,
             match.TotalWords,
             match.ChallengerProfileId,
-            challengerName = names.TryGetValue(match.ChallengerProfileId, out var cn) ? cn : (guestNames.TryGetValue(match.ChallengerProfileId, out var cgn) ? cgn : "Okand"),
+            challengerName = names.TryGetValue(match.ChallengerProfileId, out var cn) ? cn : (guestNames.TryGetValue(match.ChallengerProfileId, out var cgn) ? cgn : "Okänd"),
             match.OpponentProfileId,
-            opponentName = names.TryGetValue(match.OpponentProfileId, out var on) ? on : (guestNames.TryGetValue(match.OpponentProfileId, out var ogn) ? ogn : "Okand"),
+            opponentName = names.TryGetValue(match.OpponentProfileId, out var on) ? on : (guestNames.TryGetValue(match.OpponentProfileId, out var ogn) ? ogn : "Okänd"),
             match.ChallengerHp,
             match.OpponentHp,
             match.ChallengerCorrect,
@@ -796,7 +833,7 @@ app.MapGet("/api/groupfight/inbox", async (HttpContext httpContext, AppDbContext
     {
         inv.Id,
         inv.WeekId,
-        weekName = weeks.TryGetValue(inv.WeekId, out var wn) ? wn : "Okand vecka",
+        weekName = weeks.TryGetValue(inv.WeekId, out var wn) ? wn : "Okänd vecka",
         answerLanguage = NormalizeAppLanguage(inv.AnswerLanguage),
         inv.CreatorActorId,
         inv.Status,
@@ -840,7 +877,7 @@ app.MapGet("/api/groupfight/current", async (HttpContext httpContext, AppDbConte
         .Where(x => x.InviteId == invite.Id)
         .OrderBy(x => x.Team).ThenBy(x => x.DisplayName)
         .ToListAsync(ct);
-    var weekName = await db.Weeks.AsNoTracking().Where(x => x.Id == invite.WeekId).Select(x => x.WeekName).FirstOrDefaultAsync(ct) ?? "Okand vecka";
+    var weekName = await db.Weeks.AsNoTracking().Where(x => x.Id == invite.WeekId).Select(x => x.WeekName).FirstOrDefaultAsync(ct) ?? "Okänd vecka";
     var me = members.FirstOrDefault(x => x.ActorId == actorId);
 
     var prepUtc = invite.PrepEndsUtc.HasValue
@@ -1088,10 +1125,73 @@ app.MapDelete("/api/vocab/weeks/{weekId}", async (string weekId, AppDbContext db
 
 app.MapPost("/api/vocab/progress", async (ProgressSaveRequest request, HttpContext httpContext, AppDbContext db, LocalAuthService authService, CancellationToken ct) =>
 {
+    string? profileId = null;
+
     var account = await authService.GetCurrentUserAsync(httpContext.User, ct);
-    if (account?.UserProfileId is null)
+    if (account?.UserProfileId is not null)
     {
-        return Results.Unauthorized();
+        profileId = account.UserProfileId;
+    }
+    else
+    {
+        var guestSession = httpContext.Request.Headers["X-Guest-Session"].FirstOrDefault()?.Trim();
+        var guestName = httpContext.Request.Headers["X-Guest-Name"].FirstOrDefault()?.Trim();
+        if (string.IsNullOrWhiteSpace(guestSession) || string.IsNullOrWhiteSpace(guestName))
+        {
+            return Results.BadRequest(new { error = "Namn och session krävs." });
+        }
+        var presence = await db.SitePresences.FirstOrDefaultAsync(x => x.SessionId == guestSession, ct);
+        if (presence?.UserProfileId is not null)
+        {
+            profileId = presence.UserProfileId;
+            var existingProfile = await db.UserProfiles.FirstOrDefaultAsync(x => x.Id == profileId, ct);
+            if (existingProfile is not null && existingProfile.Name != guestName)
+            {
+                existingProfile.Name = guestName;
+            }
+        }
+        else
+        {
+            // Ensure unique name
+            var uniqueName = guestName;
+            if (await db.UserProfiles.AnyAsync(x => x.Name == uniqueName, ct))
+            {
+                for (int i = 2; i <= 99; i++)
+                {
+                    var candidate = $"{guestName}-{i}";
+                    if (!await db.UserProfiles.AnyAsync(x => x.Name == candidate, ct))
+                    {
+                        uniqueName = candidate;
+                        break;
+                    }
+                }
+            }
+            var profile = new UserProfile { Name = uniqueName };
+            db.UserProfiles.Add(profile);
+            await db.SaveChangesAsync(ct);
+            profileId = profile.Id;
+            if (presence is not null)
+            {
+                presence.UserProfileId = profileId;
+            }
+            else
+            {
+                db.SitePresences.Add(new SitePresence
+                {
+                    SessionId = guestSession,
+                    DisplayName = guestName,
+                    IsAuthenticated = false,
+                    UserProfileId = profileId,
+                    LastSeenUtc = DateTime.UtcNow
+                });
+            }
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
+    if (string.IsNullOrWhiteSpace(profileId))
+    {
+        return Results.BadRequest(new { error = "Kunde inte identifiera användare." });
     }
 
     if (string.IsNullOrWhiteSpace(request.WeekId))
@@ -1099,38 +1199,49 @@ app.MapPost("/api/vocab/progress", async (ProgressSaveRequest request, HttpConte
         return Results.BadRequest(new { error = "WeekId is required." });
     }
 
-    var weekExists = await db.Weeks.AnyAsync(x => x.Id == request.WeekId, ct);
-    if (!weekExists)
+    var week = await db.Weeks.AsNoTracking().Include(w => w.Words).FirstOrDefaultAsync(x => x.Id == request.WeekId, ct);
+    if (week is null)
     {
         return Results.NotFound(new { error = "Week not found." });
     }
 
-    var progress = await db.ProgressRecords.FirstOrDefaultAsync(x => x.UserProfileId == account.UserProfileId && x.WeekId == request.WeekId, ct);
+    var progress = await db.ProgressRecords.FirstOrDefaultAsync(x => x.UserProfileId == profileId && x.WeekId == request.WeekId, ct);
     if (progress is null)
     {
         progress = new ProgressRecord
         {
-            UserProfileId = account.UserProfileId,
+            UserProfileId = profileId,
             WeekId = request.WeekId
         };
         db.ProgressRecords.Add(progress);
     }
 
-    progress.CorrectKeysJson = JsonSerializer.Serialize(request.CorrectKeys ?? []);
+    var correctKeys = request.CorrectKeys ?? [];
+    progress.CorrectKeysJson = JsonSerializer.Serialize(correctKeys);
     progress.LastUpdatedUtc = DateTime.UtcNow;
 
-    db.Highscores.Add(new HighscoreRecord
+    // Check for 100% completion
+    var totalWords = week.Words.Count;
+    if (totalWords > 0 && correctKeys.Count >= totalWords)
     {
-        WeekId = request.WeekId,
-        UserProfileId = account.UserProfileId,
-        Score = request.Score,
-        TimeSeconds = request.TimeSeconds,
-        CreatedUtc = DateTime.UtcNow
-    });
+        progress.PerfectCount += 1;
+    }
+
+    if (!request.QuietSave)
+    {
+        db.Highscores.Add(new HighscoreRecord
+        {
+            WeekId = request.WeekId,
+            UserProfileId = profileId,
+            Score = request.Score,
+            TimeSeconds = request.TimeSeconds,
+            CreatedUtc = DateTime.UtcNow
+        });
+    }
 
     await db.SaveChangesAsync(ct);
-    return Results.Ok(new { saved = true });
-}).RequireAuthorization();
+    return Results.Ok(new { saved = true, perfectCount = progress.PerfectCount });
+}).AllowAnonymous();
 
 app.MapGet("/api/vocab/highscores", async (string? weekId, AppDbContext db, CancellationToken ct) =>
 {
@@ -1151,8 +1262,8 @@ app.MapGet("/api/vocab/highscores", async (string? weekId, AppDbContext db, Canc
         .Take(20)
         .Select(x => new
         {
-            userName = x.UserProfile != null ? x.UserProfile.Name : "Okand",
-            weekName = x.Week != null ? x.Week.WeekName : "Okand vecka",
+            userName = x.UserProfile != null ? x.UserProfile.Name : "Okänd",
+            weekName = x.Week != null ? x.Week.WeekName : "Okänd vecka",
             x.Score,
             x.TimeSeconds,
             x.CreatedUtc
@@ -1205,17 +1316,22 @@ app.MapGet("/api/vocab/leaderboard-correct", async (string? weekId, AppDbContext
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToList();
 
-    var userNames = await db.UserProfiles.AsNoTracking()
+    var userProfileMap = await db.UserProfiles.AsNoTracking()
         .Where(x => allUserIds.Contains(x.Id))
-        .ToDictionaryAsync(x => x.Id, x => x.Name, StringComparer.OrdinalIgnoreCase, ct);
+        .ToDictionaryAsync(x => x.Id, x => x, StringComparer.OrdinalIgnoreCase, ct);
 
     var items = allUserIds
-        .Select(id => new
+        .Select(id =>
         {
-            userProfileId = id,
-            userName = userNames.TryGetValue(id, out var name) ? name : "Okand",
-            totalCorrect = totalCorrectByUser.TryGetValue(id, out var correct) ? correct : 0,
-            matchWins = winsByUser.TryGetValue(id, out var wins) ? wins : 0
+            userProfileMap.TryGetValue(id, out var profile);
+            return new
+            {
+                userProfileId = id,
+                userName = profile?.Name ?? "Okänd",
+                avatarUrl = profile?.AvatarUrl ?? "",
+                totalCorrect = totalCorrectByUser.TryGetValue(id, out var correct) ? correct : 0,
+                matchWins = winsByUser.TryGetValue(id, out var wins) ? wins : 0
+            };
         })
         .OrderByDescending(x => x.totalCorrect)
         .ThenByDescending(x => x.matchWins)
@@ -1223,6 +1339,55 @@ app.MapGet("/api/vocab/leaderboard-correct", async (string? weekId, AppDbContext
         .Take(30)
         .ToList();
 
+    return Results.Ok(new { items });
+});
+
+app.MapGet("/api/vocab/week-stats", async (AppDbContext db, CancellationToken ct) =>
+{
+    var weeks = await db.Weeks.AsNoTracking().Include(w => w.Words).OrderBy(w => w.WeekName).ToListAsync(ct);
+    var progressRows = await db.ProgressRecords.AsNoTracking().ToListAsync(ct);
+    var userProfiles = await db.UserProfiles.AsNoTracking().ToDictionaryAsync(u => u.Id, u => u, StringComparer.OrdinalIgnoreCase, ct);
+
+    var items = new List<object>();
+    foreach (var week in weeks)
+    {
+        var totalWords = week.Words.Count;
+        var weekProgress = progressRows.Where(p => p.WeekId == week.Id).ToList();
+        var users = weekProgress.Select(p =>
+        {
+            int correctCount = 0;
+            try
+            {
+                var keys = JsonSerializer.Deserialize<List<string>>(p.CorrectKeysJson ?? "[]") ?? [];
+                correctCount = keys.Count;
+            }
+            catch { }
+
+            var percent = totalWords > 0 ? Math.Round((double)correctCount / totalWords * 100, 0) : 0;
+            userProfiles.TryGetValue(p.UserProfileId, out var profile);
+            return new
+            {
+                userName = profile?.Name ?? "Okänd",
+                avatarUrl = profile?.AvatarUrl ?? "",
+                percent,
+                correctCount,
+                totalWords,
+                perfectCount = p.PerfectCount
+            };
+        })
+        .OrderByDescending(u => u.percent)
+        .ThenByDescending(u => u.perfectCount)
+        .ToList<object>();
+
+        items.Add(new
+        {
+            weekId = week.Id,
+            weekName = week.WeekName,
+            language = week.Language,
+            totalWords,
+            users
+        });
+    }
     return Results.Ok(new { items });
 });
 

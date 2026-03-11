@@ -243,6 +243,16 @@ BEGIN
     CREATE INDEX [IX_GroupFightInviteMembers_ActorId_Status] ON [dbo].[GroupFightInviteMembers]([ActorId],[Status]);
 END
 
+IF COL_LENGTH(N'[dbo].[ProgressRecords]', N'PerfectCount') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[ProgressRecords] ADD [PerfectCount] INT NOT NULL CONSTRAINT [DF_ProgressRecords_PerfectCount] DEFAULT 0;
+END
+
+IF COL_LENGTH(N'[dbo].[UserProfiles]', N'AvatarUrl') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[UserProfiles] ADD [AvatarUrl] NVARCHAR(500) NOT NULL CONSTRAINT [DF_UserProfiles_AvatarUrl] DEFAULT '';
+END
+
 IF OBJECT_ID(N'[dbo].[GroupFightEvents]', N'U') IS NULL
 BEGIN
     CREATE TABLE [dbo].[GroupFightEvents](
