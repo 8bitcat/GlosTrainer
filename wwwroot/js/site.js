@@ -90,6 +90,7 @@
     groupBattleProgressText: document.getElementById("groupBattleProgressText"),
     groupBattlePlayers: document.getElementById("groupBattlePlayers"),
     resetSessionButton: document.getElementById("resetSessionButton"),
+    combatPanel: document.getElementById("combatPanel"),
   };
 
   const defaultState = {
@@ -201,6 +202,7 @@
       inbox: [],
       lastInviteId: null,
       lastEventId: 0,
+      initialPollDone: false,
     },
     availableLanguages: [],
     selectedLanguage: "english",
@@ -2692,6 +2694,11 @@
   }
 
   function updateBars() {
+    const combatActive = state.bossMode || state.fortressMode || appState.duel.active || appState.groupBattle.active;
+    if (elements.combatPanel) {
+      elements.combatPanel.style.display = combatActive ? "" : "none";
+    }
+
     let wordsProgressPercent = null;
     let wordsProgressLabel = "";
     const wordsLeft = (state.bossMode || state.fortressMode)
@@ -4542,7 +4549,7 @@
     appState.duel.active = false;
     appState.bossFight.roundWords = words;
     appState.bossFight.wordIndex = 0;
-    setQuestion(null, { focus: false, emptyText: "GOR DIG REDO - gruppfight startar om 10..." });
+    setQuestion(null, { focus: false, emptyText: "GÖR DIG REDO - gruppfight startar om 10..." });
     if (bossFightEngine) {
       bossFightEngine.startGroupBattleMode(getProjectedGroupState());
     }
@@ -4626,7 +4633,7 @@
       appState.groupInvite.lastEventId = 0;
     }
 
-    if (invite.status === "Active" && appState.groupInvite.lastInviteId !== invite.id) {
+    if (invite.status === "Active" && appState.groupInvite.lastInviteId !== invite.id && appState.groupInvite.initialPollDone) {
       appState.groupInvite.lastInviteId = invite.id;
       const mapped = inviteToTeams(invite);
       appState.selectedLanguage = normalizeLanguage(invite.answerLanguage || "english");
@@ -4644,9 +4651,10 @@
       });
       if (ok) {
         elements.feedbackText.className = "feedback good";
-        elements.feedbackText.textContent = "Gruppfight startad - gor dig redo!";
+        elements.feedbackText.textContent = "Gruppfight startad - gör dig redo!";
       }
     }
+    appState.groupInvite.initialPollDone = true;
     await pollGroupFightEvents();
   }
 
@@ -5783,7 +5791,8 @@
       window.setInterval(async () => {
         try { await sendHeartbeat(); } catch {}
         try { await loadOnlineUsers(); } catch {}
-      }, 5000);
+        try { await loadWeekStats(); } catch {}
+      }, 15000);
       window.setInterval(async () => {
         try { await pollChallengeInbox(); } catch {}
         try { await pollGroupFightCurrent(); } catch {}
