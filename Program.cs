@@ -1375,6 +1375,19 @@ app.MapGet("/api/vocab/week-stats", async (AppDbContext db, CancellationToken ct
                 perfectCount = p.PerfectCount
             };
         })
+        .GroupBy(u => {
+            // Strip "-N" suffix from guest names (e.g. "Kompostry-42" → "Kompostry")
+            var name = u.userName;
+            var lastDash = name.LastIndexOf('-');
+            if (lastDash > 0 && int.TryParse(name[(lastDash + 1)..], out _))
+                return name[..lastDash];
+            return name;
+        }, StringComparer.OrdinalIgnoreCase)
+        .Select(g => {
+            var best = g.OrderByDescending(u => u.correctCount).ThenByDescending(u => u.perfectCount).First();
+            // Use the base name (without suffix) as display name
+            return new { userName = g.Key, best.avatarUrl, best.percent, best.correctCount, best.totalWords, best.perfectCount };
+        })
         .OrderByDescending(u => u.percent)
         .ThenByDescending(u => u.perfectCount)
         .ToList<object>();

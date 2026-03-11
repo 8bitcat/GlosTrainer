@@ -167,6 +167,7 @@
       lastSyncPlayerHp: null,
       lastSyncEnemyHp: null,
       pendingEnemyVisualShots: 0,
+      initialPollDone: false,
     },
     onlineUsers: [],
     groupFight: {
@@ -3684,20 +3685,20 @@
             const pc = u.perfectCount || 0;
             const barColor = pct >= 100 ? "#16a34a" : pct >= 50 ? "#eab308" : "#ef4444";
             const trophies = [
-              { need: 1, icon: "\uD83C\uDFC6", label: "Trä", bg: "#d4a574", color: "#5c3a1e" },
-              { need: 3, icon: "\uD83C\uDFC6", label: "Brons", bg: "#cd7f32", color: "#fff" },
-              { need: 5, icon: "\uD83C\uDFC6", label: "Silver", bg: "#c0c0c0", color: "#333" },
-              { need: 10, icon: "\uD83C\uDFC6", label: "Guld", bg: "#ffd700", color: "#5c3a1e" },
+              { need: 1, label: "Trä", bg: "#d4a574", tint: "sepia(60%) saturate(30%) brightness(90%)" },
+              { need: 3, label: "Brons", bg: "#cd7f32", tint: "sepia(80%) saturate(200%) hue-rotate(-10deg) brightness(85%)" },
+              { need: 5, label: "Silver", bg: "#c0c0c0", tint: "saturate(0%) brightness(130%)" },
+              { need: 10, label: "Guld", bg: "#ffd700", tint: "sepia(60%) saturate(500%) hue-rotate(10deg) brightness(105%)" },
             ];
             let trophyHtml = "";
             trophies.forEach((t) => {
               const achieved = pc >= t.need;
               const progressPct = achieved ? 100 : Math.round((pc / t.need) * 100);
-              const opacity = achieved ? "1" : "0.35";
-              trophyHtml += `<span title="${t.label} (${t.need}x 100%) — ${achieved ? 'Klar!' : progressPct + '%'}" style="display:inline-flex;flex-direction:column;align-items:center;margin:0 6px;opacity:${opacity};font-size:1rem;line-height:1;">` +
-                `<span style="font-size:1.6rem;">${t.icon}</span>` +
+              const trophyOpacity = achieved ? "1" : "0.3";
+              trophyHtml += `<span title="${t.label} (${t.need}x 100%) — ${achieved ? 'Klar!' : progressPct + '%'}" style="display:inline-flex;flex-direction:column;align-items:center;margin:0 6px;font-size:1rem;line-height:1;">` +
+                `<span style="font-size:1.6rem;filter:${t.tint};opacity:${trophyOpacity};">\uD83C\uDFC6</span>` +
                 `<span style="display:inline-block;width:32px;height:6px;background:#e2e8f0;border-radius:3px;margin-top:2px;"><span style="display:block;height:100%;width:${progressPct}%;background:${t.bg};border-radius:3px;"></span></span>` +
-                `<span style="font-size:.7rem;color:#64748b;margin-top:1px;">${achieved ? t.label : progressPct + '%'}</span>` +
+                `<span style="font-size:.7rem;color:${t.bg};font-weight:700;margin-top:1px;">${achieved ? t.label : progressPct + '%'}</span>` +
                 `</span>`;
             });
             const safeAvatarUrl = escapeHtml(u.avatarUrl);
@@ -4953,6 +4954,10 @@
       return;
     }
 
+    if (!appState.duel.initialPollDone) {
+      appState.duel.initialPollDone = true;
+      return;
+    }
     appState.duel.active = match.status === "Active";
     appState.duel.matchId = match.id;
     appState.duel.weekId = match.weekId;
