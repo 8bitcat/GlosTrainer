@@ -1,6 +1,13 @@
 # Ship — Review, Commit, Push, and Deploy
 
-Full pipeline: review changes → commit → push → build → deploy → verify. Each step must pass before proceeding to the next.
+Full pipeline: pre-flight checks → review → commit → push → build → deploy → verify. Each step must pass before proceeding.
+
+## Step 0: Pre-flight Safety Checks
+
+1. **GitHub identity**: Run `gh auth status` — active account MUST be `8bitcat`. If `carlpalsson` is active: run `gh auth switch --user 8bitcat && gh auth setup-git` and re-check.
+2. **Repository**: Run `git remote -v` — origin MUST be `8bitcat/GlosTrainer`. If wrong repo: **STOP** immediately.
+3. **Branch**: Run `git branch --show-current` — MUST NOT be `main`. If on main: **STOP** and ask user for a branch name.
+4. If any check fails: **STOP** — fix before continuing.
 
 ## Step 1: Review
 
@@ -25,9 +32,10 @@ Full pipeline: review changes → commit → push → build → deploy → verif
 
 ## Step 3: Push
 
-1. Run `git push`
-2. **Validate**: Check exit code is 0
-3. If push fails (auth, permissions): **STOP** — report error, suggest fix (e.g. `gh auth switch`)
+1. **Re-verify**: Run `gh auth status` one more time — MUST be `8bitcat`
+2. Run `git push -u origin HEAD`
+3. **Validate**: Check exit code is 0
+4. If push fails (auth, permissions): **STOP** — report error, try `gh auth switch --user 8bitcat && gh auth setup-git`
 
 ## Step 4: Build
 

@@ -1324,13 +1324,28 @@ app.MapGet("/api/vocab/leaderboard-correct", async (string? weekId, AppDbContext
         .Select(id =>
         {
             userProfileMap.TryGetValue(id, out var profile);
+            var name = profile?.Name ?? "Okänd";
             return new
             {
                 userProfileId = id,
-                userName = profile?.Name ?? "Okänd",
+                userName = name,
+                baseName = StripGuestSuffix(name),
                 avatarUrl = profile?.AvatarUrl ?? "",
                 totalCorrect = totalCorrectByUser.TryGetValue(id, out var correct) ? correct : 0,
                 matchWins = winsByUser.TryGetValue(id, out var wins) ? wins : 0
+            };
+        })
+        .GroupBy(x => x.baseName, StringComparer.OrdinalIgnoreCase)
+        .Select(g =>
+        {
+            var best = g.OrderByDescending(x => x.totalCorrect).ThenByDescending(x => x.matchWins).First();
+            return new
+            {
+                best.userProfileId,
+                userName = g.Key,
+                best.avatarUrl,
+                totalCorrect = g.Sum(x => x.totalCorrect),
+                matchWins = g.Sum(x => x.matchWins)
             };
         })
         .OrderByDescending(x => x.totalCorrect)
@@ -1375,14 +1390,7 @@ app.MapGet("/api/vocab/week-stats", async (AppDbContext db, CancellationToken ct
                 perfectCount = p.PerfectCount
             };
         })
-        .GroupBy(u => {
-            // Strip "-N" suffix from guest names (e.g. "Kompostry-42" → "Kompostry")
-            var name = u.userName;
-            var lastDash = name.LastIndexOf('-');
-            if (lastDash > 0 && int.TryParse(name[(lastDash + 1)..], out _))
-                return name[..lastDash];
-            return name;
-        }, StringComparer.OrdinalIgnoreCase)
+        .GroupBy(u => StripGuestSuffix(u.userName), StringComparer.OrdinalIgnoreCase)
         .Select(g => {
             var best = g.OrderByDescending(u => u.correctCount).ThenByDescending(u => u.perfectCount).First();
             // Use the base name (without suffix) as display name
@@ -1579,6 +1587,14 @@ static async Task<(string ActorId, string DisplayName)?> ResolveChallengeActorAs
     }
 
     return ($"guest:{normalizedSession}", presence.DisplayName);
+}
+
+static string StripGuestSuffix(string name)
+{
+    var lastDash = name.LastIndexOf('-');
+    if (lastDash > 0 && int.TryParse(name[(lastDash + 1)..], out _))
+        return name[..lastDash];
+    return name;
 }
 
 static string NormalizeAppLanguage(string? value)
