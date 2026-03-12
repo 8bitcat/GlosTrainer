@@ -166,6 +166,8 @@ app.MapGet("/api/names/random", async (AppDbContext db, CancellationToken ct) =>
 
 app.MapGet("/api/vocab/data", async (HttpContext httpContext, AppDbContext db, LocalAuthService authService, CancellationToken ct) =>
 {
+    httpContext.Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    httpContext.Response.Headers["Pragma"] = "no-cache";
     var users = await db.UserProfiles.AsNoTracking()
         .OrderBy(x => x.Name)
         .Select(x => new VocabUser { Id = x.Id, Name = x.Name })

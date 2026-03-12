@@ -3349,7 +3349,7 @@
   }
 
   async function loadData() {
-    const response = await fetch("/api/vocab/data");
+    const response = await fetch("/api/vocab/data?_t=" + Date.now());
     if (!response.ok) {
       throw new Error("Kunde inte läsa databasdata");
     }
@@ -5826,6 +5826,13 @@
       elements.feedbackText.textContent = error instanceof Error ? error.message : "Okant fel.";
     }
   }
+
+  // Reload vocab data when user returns to the tab (catches teacher updates)
+  document.addEventListener("visibilitychange", async () => {
+    if (!document.hidden) {
+      try { await reloadWeeksAndUi(); } catch {}
+    }
+  });
 
   start();
 })();
