@@ -599,7 +599,7 @@
     const MENU_TABS = [
       { id: "play", label: "SPELA" },
       { id: "fight", label: "FIGHT" },
-      { id: "challenges", label: "UTMANA" },
+      { id: "challenges", label: "UTMANINGAR" },
       { id: "leaderboard", label: "TOPP" },
       { id: "stats", label: "STATS" },
       { id: "levels", label: "NIVÅ" },
@@ -1931,25 +1931,25 @@
       ctx.fillStyle = "#f0c0c0";
       ctx.fillText(`${s.enemySoldiers.length} ⚔`, canvas.width - 14, barY + barH + 26);
 
-      // MENY + GE UPP buttons (top center)
-      const btnH = 14, btnW = 56;
-      const menuBtnX = canvas.width / 2 - btnW - 2, menuBtnY = barY;
-      const giveUpX = canvas.width / 2 + 2, giveUpY = barY;
+      // MENY + GE UPP buttons (top center, bigger)
+      const btnH = 22, btnW = 70;
+      const menuBtnX = canvas.width / 2 - btnW - 4, menuBtnY = 2;
+      const giveUpX = canvas.width / 2 + 4, giveUpY = 2;
       // MENY
-      ctx.fillStyle = "rgba(15,23,42,0.7)";
+      ctx.fillStyle = "rgba(15,23,42,0.85)";
       ctx.fillRect(menuBtnX, menuBtnY, btnW, btnH);
-      ctx.strokeStyle = "#3060a0"; ctx.lineWidth = 1;
+      ctx.strokeStyle = "#4080c0"; ctx.lineWidth = 2;
       ctx.strokeRect(menuBtnX, menuBtnY, btnW, btnH);
-      ctx.fillStyle = "#80a0c0"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-      ctx.fillText("MENY", menuBtnX + btnW / 2, menuBtnY + 10);
+      ctx.fillStyle = "#a0c0e0"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+      ctx.fillText("MENY", menuBtnX + btnW / 2, menuBtnY + 15);
       s.menuBtnBounds = { x: menuBtnX, y: menuBtnY, w: btnW, h: btnH };
       // GE UPP
-      ctx.fillStyle = "rgba(80,15,15,0.7)";
+      ctx.fillStyle = "rgba(120,20,20,0.85)";
       ctx.fillRect(giveUpX, giveUpY, btnW, btnH);
-      ctx.strokeStyle = "#c03030"; ctx.lineWidth = 1;
+      ctx.strokeStyle = "#e04040"; ctx.lineWidth = 2;
       ctx.strokeRect(giveUpX, giveUpY, btnW, btnH);
-      ctx.fillStyle = "#ff6060"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-      ctx.fillText("GE UPP", giveUpX + btnW / 2, giveUpY + 10);
+      ctx.fillStyle = "#ff8080"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+      ctx.fillText("GE UPP", giveUpX + btnW / 2, giveUpY + 15);
       s.giveUpBtnBounds = { x: giveUpX, y: giveUpY, w: btnW, h: btnH };
       ctx.restore();
 
@@ -4160,6 +4160,7 @@
           return handleMenuClick(cx, cy);
         }
         if (arena.mode === "siege") {
+          console.log("[SIEGE CLICK]", Math.round(cx), Math.round(cy), "menu:", JSON.stringify(arena.siege.menuBtnBounds), "giveup:", JSON.stringify(arena.siege.giveUpBtnBounds));
           // Menu button
           if (arena.siege.menuBtnBounds) {
             const mb = arena.siege.menuBtnBounds;
@@ -5648,8 +5649,9 @@
             }
           }
           if (result.status === "Active") {
-            // All accepted — start siege with countdown!
-            startSiegeGame(10);
+            // All accepted — start siege with server-synced countdown
+            const serverCountdown = result.prepEndsUnixMs ? Math.max(1, Math.ceil((result.prepEndsUnixMs - Date.now()) / 1000)) : 10;
+            startSiegeGame(serverCountdown);
           } else {
             // Still waiting for others — update display
             await pollChallengeInbox();
@@ -5676,8 +5678,10 @@
       if (bossFightEngine && bossFightEngine.isSiegeMode()) {
         const team = getLocalGroupTeam() || "A";
         sendGroupFightBroadcast(team, `__SIEGE_SURRENDER__:${team}`, false);
+        // Show defeat animation
+        bossFightEngine.triggerGiveUp();
       }
-      // Immediately end fight and go to menu
+      // Kill all sessions
       state.bossMode = false;
       state.fortressMode = false;
       appState.duel.active = false;
@@ -5689,7 +5693,8 @@
       }
       appState.groupFight._lastInviteId = null;
       appState._lastHandledActiveInvite = null;
-      showCanvasMenu();
+      // Wait for animation then go to menu
+      setTimeout(() => showCanvasMenu(), 3000);
     } else if (hit.action === "playAgain") {
       appState._lastHandledActiveInvite = null;
       appState.groupFight._lastInviteId = null;
@@ -7157,19 +7162,18 @@
     const data = await response.json();
     const invite = data && data.invite ? data.invite : null;
     // In canvas menu: if invite is Active, auto-start siege with countdown
-    if (inCanvasMode && invite && invite.status === "Active") {
-      if (bossFightEngine.isMenuMode && bossFightEngine.isMenuMode() && appState._lastHandledActiveInvite !== invite.id) {
-        appState._lastHandledActiveInvite = invite.id;
-        appState.selectedWeekId = invite.weekId;
-        if (elements.weekSelect) elements.weekSelect.value = invite.weekId;
-        startSiegeGame(10);
-      }
-      return;
-    }
     if (inCanvasMode) {
-      // Still poll events for siege sync, but skip old UI updates
       appState.groupInvite.current = invite;
       if (invite && invite.status === "Active") {
+        // Auto-start siege when invite becomes Active (only once, only from menu)
+        if (bossFightEngine.isMenuMode && bossFightEngine.isMenuMode() && appState._lastHandledActiveInvite !== invite.id) {
+          appState._lastHandledActiveInvite = invite.id;
+          appState.selectedWeekId = invite.weekId;
+          if (elements.weekSelect) elements.weekSelect.value = invite.weekId;
+          const serverCountdown = invite.prepEndsUnixMs ? Math.max(1, Math.ceil((invite.prepEndsUnixMs - Date.now()) / 1000)) : 10;
+          startSiegeGame(serverCountdown);
+        }
+        // Always poll events for siege sync
         await pollGroupFightEvents();
       }
       return;
@@ -8283,6 +8287,11 @@
 
       // Siege mode typing
       if (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          handleCanvasAction({ action: "giveUp" });
+          return;
+        }
         const siegeState = bossFightEngine.getSiegeState();
         if (siegeState.gameOver) return;
         if (siegeState.countdownActive) return;
@@ -8492,6 +8501,7 @@
       ensureDynamicControls();
       ensureWordsProgressElements();
       bossFightEngine = createBossFightEngine(elements.bossFightCanvas);
+      window.__engine = bossFightEngine;
       await loadAuthStatus();
       loadSelectedLanguage();
       await loadData();
@@ -8535,6 +8545,15 @@
         updateDuelPrepOverlay();
         updateGroupBattlePrep();
       }, 200);
+      // Fast event polling during siege for multiplayer sync
+      window.setInterval(async () => {
+        if (bossFightEngine && bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) {
+          const invite = appState.groupInvite?.current;
+          if (invite && invite.id && invite.status === "Active") {
+            try { await pollGroupFightEvents(); } catch {}
+          }
+        }
+      }, 500);
       window.setInterval(async () => {
         try { await sendHeartbeat(); } catch {}
         try { await loadOnlineUsers(); } catch {}
