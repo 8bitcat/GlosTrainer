@@ -375,6 +375,8 @@
         stuckArrows: [],
         arrows: [],
         isGroupFight: false,
+        bossArmy: ["soldier"],
+        selectedBossId: "oiia",
       },
       bootStartMs: performance.now(),
       bootDone: false,
@@ -397,6 +399,7 @@
         teacherTyping: false,
         nameEditing: false,
         nameBuffer: "",
+        selectedBossId: "oiia",
         pendingChallenges: [],
       },
     };
@@ -414,6 +417,14 @@
     const SIEGE_SOLDIER_DMG = 4;
     const SIEGE_CASTLE_DMG = 15;
     const SIEGE_ATTACK_COOLDOWN = 36;
+
+    const SIEGE_BOSSES = [
+      { id: "oiia", name: "OIIA Cat", icon: "🐱", army: ["soldier", "soldier", "soldier", "archer", "soldier", "soldier", "knight", "soldier", "soldier", "boss"] },
+      { id: "keyboard", name: "Keyboard Cat", icon: "🎹", army: ["soldier", "soldier", "archer", "soldier", "soldier", "archer", "soldier", "soldier", "knight", "boss"] },
+      { id: "grumpy", name: "Grumpy Cat", icon: "😾", army: ["soldier", "knight", "soldier", "soldier", "soldier", "knight", "soldier", "soldier", "soldier", "boss"] },
+      { id: "nyan", name: "Nyan Cat", icon: "🌈", army: ["soldier", "soldier", "nyan", "soldier", "soldier", "nyan", "soldier", "soldier", "nyan", "boss"] },
+      { id: "longcat", name: "Longcat", icon: "🐈", army: ["soldier", "soldier", "soldier", "soldier", "knight", "soldier", "soldier", "archer", "knight", "boss"] },
+    ];
 
     bossRoster.forEach((boss) => {
       if (!boss.imageUrl) {
@@ -681,28 +692,33 @@
 
     function drawPlayTab(m) {
       const w = canvas.width, contentY = 90;
+      const half = Math.floor(w / 2);
+
       // Language selector
       const langs = m.languages.length ? m.languages : ["english"];
-      const langTabW = 80, langTabH = 20;
-      const langStartX = 30;
+      const langTabW = 70, langTabH = 18;
+      const langStartX = 20;
       langs.forEach((lang, i) => {
-        const tx = langStartX + i * (langTabW + 4);
+        const tx = langStartX + i * (langTabW + 3);
         const sel = lang === m.selectedLanguage;
         ctx.fillStyle = sel ? "#2050c0" : "#0f1a2a";
         ctx.fillRect(tx, contentY, langTabW, langTabH);
         ctx.strokeStyle = sel ? "#4080f0" : "#1a2a40";
         ctx.lineWidth = 1; ctx.strokeRect(tx, contentY, langTabW, langTabH);
         ctx.fillStyle = sel ? "#f0f0f0" : "#607080";
-        ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+        ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
         const dn = lang === "english" ? "ENGELSKA" : lang === "spanish" ? "SPANSKA" : lang === "french" ? "FRANSKA" : lang === "german" ? "TYSKA" : lang.toUpperCase();
-        ctx.fillText(dn, tx + langTabW / 2, contentY + 14);
+        ctx.fillText(dn, tx + langTabW / 2, contentY + 13);
         m.buttons.push({ type: "lang", lang, x: tx, y: contentY, w: langTabW, h: langTabH });
       });
 
-      // Week list
-      const listX = 30, listY = contentY + 30, listW = w - 60, itemH = 22;
-      const maxVis = Math.min(10, Math.floor((canvas.height - listY - 100) / itemH));
+      // Left column: Week list
+      const listX = 20, listY = contentY + 26, listW = half - 30, itemH = 20;
+      const maxVis = Math.min(12, Math.floor((canvas.height - listY - 60) / itemH));
       const filtered = m.weeks.filter(wk => (wk.language || "english").toLowerCase() === m.selectedLanguage);
+
+      ctx.fillStyle = "#506880"; ctx.font = "bold 9px monospace"; ctx.textAlign = "left";
+      ctx.fillText("VÄLJ VECKA:", listX, listY - 4);
 
       ctx.fillStyle = "rgba(10,16,32,0.8)";
       ctx.fillRect(listX, listY, listW, maxVis * itemH + 4);
@@ -710,42 +726,75 @@
       ctx.strokeRect(listX, listY, listW, maxVis * itemH + 4);
 
       if (!filtered.length) {
-        ctx.fillStyle = "#405060"; ctx.font = "12px monospace"; ctx.textAlign = "center";
-        ctx.fillText("Inga veckor", w / 2, listY + 40);
+        ctx.fillStyle = "#405060"; ctx.font = "11px monospace"; ctx.textAlign = "center";
+        ctx.fillText("Inga veckor", listX + listW / 2, listY + 40);
       } else {
         const si = Math.max(0, Math.min(m.scrollOffset, filtered.length - maxVis));
         const ei = Math.min(filtered.length, si + maxVis);
         for (let i = si; i < ei; i++) {
           const wk = filtered[i], iy = listY + 2 + (i - si) * itemH;
           const sel = wk.id === m.selectedWeekId;
-          const hov = m.hoveredItem && m.hoveredItem.type === "week" && m.hoveredItem.weekId === wk.id;
-          ctx.fillStyle = sel ? "#1a3870" : hov ? "#101830" : "transparent";
-          if (sel || hov) ctx.fillRect(listX + 2, iy, listW - 4, itemH - 2);
+          ctx.fillStyle = sel ? "#1a3870" : "transparent";
+          if (sel) ctx.fillRect(listX + 2, iy, listW - 4, itemH - 2);
           if (sel) { ctx.strokeStyle = "#4080f0"; ctx.lineWidth = 1; ctx.strokeRect(listX + 2, iy, listW - 4, itemH - 2); }
           ctx.fillStyle = sel ? "#f0f0f0" : "#b0c0d0";
-          ctx.font = sel ? "bold 11px monospace" : "11px monospace"; ctx.textAlign = "left";
+          ctx.font = sel ? "bold 10px monospace" : "10px monospace"; ctx.textAlign = "left";
           const wc = Array.isArray(wk.words) ? wk.words.length : "?";
-          ctx.fillText(`${wk.weekName || wk.name || "Vecka"} (${wc} ord)`, listX + 10, iy + 14);
+          ctx.fillText(`${wk.weekName || wk.name || "Vecka"} (${wc})`, listX + 6, iy + 13);
           m.buttons.push({ type: "week", weekId: wk.id, x: listX, y: iy, w: listW, h: itemH - 2 });
         }
-        if (si > 0) m.buttons.push({ type: "scrollUp", x: listX, y: listY - 16, w: listW, h: 14 });
-        if (ei < filtered.length) m.buttons.push({ type: "scrollDown", x: listX, y: listY + maxVis * itemH + 6, w: listW, h: 14 });
+        // Scroll arrows
+        if (si > 0) {
+          ctx.fillStyle = "#8090a0"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+          ctx.fillText("▲", listX + listW / 2, listY - 2);
+          m.buttons.push({ type: "scrollUp", x: listX, y: listY - 14, w: listW, h: 14 });
+        }
+        if (ei < filtered.length) {
+          ctx.fillStyle = "#8090a0"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+          ctx.fillText("▼", listX + listW / 2, listY + maxVis * itemH + 14);
+          m.buttons.push({ type: "scrollDown", x: listX, y: listY + maxVis * itemH + 4, w: listW, h: 14 });
+        }
       }
 
-      // Player name + change button (left-aligned, stacked)
-      const nameY = listY + maxVis * itemH + 20;
+      // Right column: Boss selection
+      const bossX = half + 10, bossW = half - 30;
+      ctx.fillStyle = "#506880"; ctx.font = "bold 9px monospace"; ctx.textAlign = "left";
+      ctx.fillText("VÄLJ BOSS:", bossX, listY - 4);
+
+      SIEGE_BOSSES.forEach((boss, i) => {
+        const by = listY + i * 34;
+        const sel = boss.id === m.selectedBossId;
+        ctx.fillStyle = sel ? "#3a1a40" : "rgba(20,15,25,0.6)";
+        ctx.fillRect(bossX, by, bossW, 30);
+        if (sel) { ctx.strokeStyle = "#a040c0"; ctx.lineWidth = 2; ctx.strokeRect(bossX, by, bossW, 30); }
+        // Icon
+        ctx.font = "20px sans-serif"; ctx.textAlign = "left";
+        ctx.fillText(boss.icon, bossX + 6, by + 22);
+        // Name
+        ctx.fillStyle = sel ? "#e0c0f0" : "#a0a0b0";
+        ctx.font = sel ? "bold 12px monospace" : "11px monospace";
+        ctx.fillText(boss.name, bossX + 32, by + 14);
+        // Army preview
+        ctx.fillStyle = "#606070"; ctx.font = "8px monospace";
+        const armyPreview = [...new Set(boss.army)].join(", ");
+        ctx.fillText(`Armé: ${armyPreview}`, bossX + 32, by + 25);
+        m.buttons.push({ type: "selectBoss", bossId: boss.id, x: bossX, y: by, w: bossW, h: 30 });
+      });
+
+      // Player name
+      const nameY = canvas.height - 54;
       const nameDisplay = m.guestName || "GÄST";
-      ctx.fillStyle = "#90b0d0"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
-      ctx.fillText(`SPELARE: ${nameDisplay}`, listX, nameY);
-      const nameBtnW = 72, nameBtnH = 16, nameBtnX = listX, nameBtnY = nameY + 6;
+      ctx.fillStyle = "#90b0d0"; ctx.font = "bold 10px monospace"; ctx.textAlign = "left";
+      ctx.fillText(`SPELARE: ${nameDisplay}`, 20, nameY);
+      const nameBtnW = 66, nameBtnH = 14, nameBtnX = 20, nameBtnY = nameY + 4;
       ctx.fillStyle = "#1a2a40"; ctx.fillRect(nameBtnX, nameBtnY, nameBtnW, nameBtnH);
       ctx.strokeStyle = "#4070a0"; ctx.lineWidth = 1; ctx.strokeRect(nameBtnX, nameBtnY, nameBtnW, nameBtnH);
-      ctx.fillStyle = "#90c0f0"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-      ctx.fillText("BYT NAMN", nameBtnX + nameBtnW / 2, nameBtnY + 12);
+      ctx.fillStyle = "#90c0f0"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+      ctx.fillText("BYT NAMN", nameBtnX + nameBtnW / 2, nameBtnY + 10);
       m.buttons.push({ type: "changeName", x: nameBtnX, y: nameBtnY, w: nameBtnW, h: nameBtnH });
 
       // Start button
-      const btnW = 300, btnH = 36, btnX = w / 2 - btnW / 2, btnY = nameY + 32;
+      const btnW = 280, btnH = 32, btnX = w / 2 - btnW / 2, btnY = canvas.height - 38;
       const canStart = !!m.selectedWeekId;
       ctx.fillStyle = "#0f0f1a"; ctx.fillRect(btnX - 2, btnY - 2, btnW + 4, btnH + 4);
       ctx.fillStyle = canStart ? "#1a5a1a" : "#1a1a2a";
@@ -1172,6 +1221,7 @@
           if (btn.type === "lang") return { action: "changeLanguage", lang: btn.lang };
           if (btn.type === "scrollUp") { m.scrollOffset = Math.max(0, m.scrollOffset - 1); return null; }
           if (btn.type === "scrollDown") { m.scrollOffset += 1; return null; }
+          if (btn.type === "selectBoss") { m.selectedBossId = btn.bossId; return null; }
           if (btn.type === "changeName") return { action: "startNameEdit" };
           if (btn.type === "addBotA") return { action: "addBotA" };
           if (btn.type === "addBotB") return { action: "addBotB" };
@@ -1550,9 +1600,20 @@
       // Unit type: every 10th = knight, every 7th = archer, every 5th = nyan
       let unitType = "soldier";
       let unitHp = SIEGE_SOLDIER_MAX_HP;
-      if (count % 10 === 0) { unitType = "knight"; unitHp = SIEGE_SOLDIER_MAX_HP * 4; }
-      else if (count % 7 === 0) { unitType = "archer"; unitHp = SIEGE_SOLDIER_MAX_HP; }
-      else if (count % 5 === 0) { unitType = "nyan"; unitHp = SIEGE_SOLDIER_MAX_HP * 2; }
+      if (isEnemy) {
+        // Enemy army — based on selected boss
+        const bossArmy = arena.siege.bossArmy || ["soldier"];
+        const armyIdx = count % bossArmy.length;
+        unitType = bossArmy[armyIdx];
+        if (unitType === "knight") unitHp = SIEGE_SOLDIER_MAX_HP * 3;
+        else if (unitType === "nyan") unitHp = SIEGE_SOLDIER_MAX_HP * 2;
+        else if (unitType === "archer") unitHp = Math.floor(SIEGE_SOLDIER_MAX_HP * 0.6);
+        else if (unitType === "boss") unitHp = SIEGE_SOLDIER_MAX_HP * 5;
+      } else {
+        // Player army — humans only
+        if (count % 10 === 0) { unitType = "knight"; unitHp = SIEGE_SOLDIER_MAX_HP * 3; }
+        else if (count % 7 === 0) { unitType = "archer"; unitHp = Math.floor(SIEGE_SOLDIER_MAX_HP * 0.6); }
+      }
       const soldier = {
         x: team === "player" ? SIEGE_SOLDIER_SPAWN_LEFT : SIEGE_SOLDIER_SPAWN_RIGHT,
         hp: unitHp,
@@ -1565,7 +1626,7 @@
         direction: team === "player" ? 1 : -1,
         team,
         unitType,
-        isOiia: unitType === "nyan",
+        isOiia: unitType === "nyan" || unitType === "boss",
       };
       if (team === "player") {
         s.playerSoldiers.push(soldier);
@@ -1832,7 +1893,7 @@
       ].sort((a, b) => a.x - b.x);
 
       allSoldiers.forEach(sol => {
-        if (sol.unitType === "nyan") {
+        if (sol.unitType === "nyan" || sol.unitType === "boss") {
           drawNyanCat(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.hp, sol.maxHp);
         } else if (sol.unitType === "archer") {
           drawPixelSoldier(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.attackFrame, sol.colors, sol.hp, sol.maxHp);
@@ -1936,26 +1997,31 @@
       ctx.fillStyle = "#f0c0c0";
       ctx.fillText(`${s.enemySoldiers.length} ⚔`, canvas.width - 14, barY + barH + 26);
 
-      // MENY + GE UPP buttons (top center, bigger)
-      const btnH = 22, btnW = 70;
-      const menuBtnX = canvas.width / 2 - btnW - 4, menuBtnY = 2;
-      const giveUpX = canvas.width / 2 + 4, giveUpY = 2;
+      // Top buttons: MENY | SPRÅK | GE UPP
+      const sBtnH = 16, sBtnW = 52;
+      const totalW = sBtnW * 3 + 8;
+      const startX = canvas.width / 2 - totalW / 2;
       // MENY
-      ctx.fillStyle = "rgba(15,23,42,0.85)";
-      ctx.fillRect(menuBtnX, menuBtnY, btnW, btnH);
-      ctx.strokeStyle = "#4080c0"; ctx.lineWidth = 2;
-      ctx.strokeRect(menuBtnX, menuBtnY, btnW, btnH);
-      ctx.fillStyle = "#a0c0e0"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
-      ctx.fillText("MENY", menuBtnX + btnW / 2, menuBtnY + 15);
-      s.menuBtnBounds = { x: menuBtnX, y: menuBtnY, w: btnW, h: btnH };
+      ctx.fillStyle = "rgba(15,23,42,0.85)"; ctx.fillRect(startX, 2, sBtnW, sBtnH);
+      ctx.strokeStyle = "#4080c0"; ctx.lineWidth = 1; ctx.strokeRect(startX, 2, sBtnW, sBtnH);
+      ctx.fillStyle = "#a0c0e0"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+      ctx.fillText("MENY", startX + sBtnW / 2, 14);
+      s.menuBtnBounds = { x: startX, y: 2, w: sBtnW, h: sBtnH };
+      // SPRÅK flip
+      const flipX = startX + sBtnW + 4;
+      const flipLabel = siegeFlipped ? "EN→SV" : "SV→EN";
+      ctx.fillStyle = "rgba(20,50,20,0.85)"; ctx.fillRect(flipX, 2, sBtnW, sBtnH);
+      ctx.strokeStyle = "#40a060"; ctx.lineWidth = 1; ctx.strokeRect(flipX, 2, sBtnW, sBtnH);
+      ctx.fillStyle = "#80e0a0"; ctx.font = "bold 8px monospace";
+      ctx.fillText(flipLabel, flipX + sBtnW / 2, 14);
+      s.flipBtnBounds = { x: flipX, y: 2, w: sBtnW, h: sBtnH };
       // GE UPP
-      ctx.fillStyle = "rgba(120,20,20,0.85)";
-      ctx.fillRect(giveUpX, giveUpY, btnW, btnH);
-      ctx.strokeStyle = "#e04040"; ctx.lineWidth = 2;
-      ctx.strokeRect(giveUpX, giveUpY, btnW, btnH);
-      ctx.fillStyle = "#ff8080"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
-      ctx.fillText("GE UPP", giveUpX + btnW / 2, giveUpY + 15);
-      s.giveUpBtnBounds = { x: giveUpX, y: giveUpY, w: btnW, h: btnH };
+      const giveUpX = flipX + sBtnW + 4;
+      ctx.fillStyle = "rgba(80,15,15,0.85)"; ctx.fillRect(giveUpX, 2, sBtnW, sBtnH);
+      ctx.strokeStyle = "#c03030"; ctx.lineWidth = 1; ctx.strokeRect(giveUpX, 2, sBtnW, sBtnH);
+      ctx.fillStyle = "#ff6060"; ctx.font = "bold 9px monospace";
+      ctx.fillText("GE UPP", giveUpX + sBtnW / 2, 14);
+      s.giveUpBtnBounds = { x: giveUpX, y: 2, w: sBtnW, h: sBtnH };
       ctx.restore();
 
       // Countdown or Glosa display
@@ -3999,6 +4065,9 @@
         s.lastEnemySpawnMs = performance.now();
         s.spawnIntervalMs = Number(options.spawnIntervalMs || 5000);
         s.isGroupFight = !!options.isGroupFight;
+        s.selectedBossId = options.bossId || "oiia";
+        const boss = SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0];
+        s.bossArmy = boss.army || ["soldier"];
         s.glosaText = null;
         s.glosaFeedback = null;
         s.gameOver = false;
@@ -4172,6 +4241,13 @@
             const mb = arena.siege.menuBtnBounds;
             if (cx >= mb.x && cx <= mb.x + mb.w && cy >= mb.y && cy <= mb.y + mb.h) {
               return { action: "menu" };
+            }
+          }
+          // Flip language button
+          if (arena.siege.flipBtnBounds) {
+            const fb = arena.siege.flipBtnBounds;
+            if (cx >= fb.x && cx <= fb.x + fb.w && cy >= fb.y && cy <= fb.y + fb.h) {
+              return { action: "flipSiegeLanguage" };
             }
           }
           // Give up button
@@ -5429,20 +5505,21 @@
     return words[Math.floor(Math.random() * words.length)];
   }
 
+  let siegeFlipped = false; // false = show sv, answer en. true = show en, answer sv.
+
   function showSiegeGlosa() {
     const word = pickSiegeWord();
     if (!word) return;
     state.currentWord = word;
     if (bossFightEngine) {
-      // Siege always shows Swedish word, player answers in target language
-      const showText = String(word.sv || "");
+      const showText = siegeFlipped ? String(word.en || "") : String(word.sv || "");
       bossFightEngine.setSiegeGlosa(showText);
     }
   }
 
   function expectedSiegeAnswer() {
     if (!state.currentWord) return "";
-    return String(state.currentWord.en || "");
+    return siegeFlipped ? String(state.currentWord.sv || "") : String(state.currentWord.en || "");
   }
 
   function onSiegeCorrect() {
@@ -5678,6 +5755,9 @@
         // Re-poll to sync (other player will see it removed on next poll)
         await pollChallengeInbox();
       } catch (e) { console.error("[CHALLENGE] Decline error:", e); }
+    } else if (hit.action === "flipSiegeLanguage") {
+      siegeFlipped = !siegeFlipped;
+      showSiegeGlosa();
     } else if (hit.action === "giveUp") {
       // Broadcast surrender to opponent
       if (bossFightEngine && bossFightEngine.isSiegeMode()) {
@@ -5743,11 +5823,13 @@
         appState.groupBattle.botTimerId = 0;
       }
 
+      const selectedBoss = bossFightEngine.getMenuState?.()?.selectedBossId || "oiia";
       bossFightEngine.startSiegeMode({
         playerCastleHp: 200,
         playerCastleMaxHp: 200,
         enemyCastleHp: 200,
         enemyCastleMaxHp: 200,
+        bossId: selectedBoss,
         spawnIntervalMs: appState.groupInvite?.current?.id ? 999999 : 5000,
         isGroupFight: !!appState.groupInvite?.current?.id,
         onGameOver: (winner) => {
