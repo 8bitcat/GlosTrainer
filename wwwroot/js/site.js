@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.2.0";
+  const GAME_VERSION = "1.3.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -425,19 +425,19 @@
 
     // Bosses ordered easy→hard. Each has unique army theme + colors.
     const SIEGE_BOSSES = [
-      { id: "oiia", name: "OIIA Cat", icon: "🐱", skulls: 1, accuracy: 0.30, spawnMs: 6000,
+      { id: "oiia", name: "OIIA Cat", icon: "🐱", skulls: 1, accuracy: 0.40, spawnMs: 5000,
         theme: "cat", army: ["grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "boss"],
         colors: { armor: "#c08040", armorLight: "#d0a060", helmet: "#a07030", helmetLight: "#c09050", shield: "#906020", shieldLight: "#b08040", boots: "#5a3a1a", crest: "#e0a040" } },
-      { id: "keyboard", name: "Keyboard Cat", icon: "🎹", skulls: 2, accuracy: 0.40, spawnMs: 5000,
+      { id: "keyboard", name: "Keyboard Cat", icon: "🎹", skulls: 2, accuracy: 0.50, spawnMs: 4500,
         theme: "wolf", army: ["grunt", "grunt", "grunt", "archer", "grunt", "grunt", "grunt", "archer", "grunt", "boss"],
         colors: { armor: "#505060", armorLight: "#707080", helmet: "#404050", helmetLight: "#606070", shield: "#383848", shieldLight: "#505060", boots: "#2a2a30", crest: "#8080a0" } },
-      { id: "grumpy", name: "Grumpy Cat", icon: "😾", skulls: 3, accuracy: 0.50, spawnMs: 4000,
+      { id: "grumpy", name: "Grumpy Cat", icon: "😾", skulls: 3, accuracy: 0.60, spawnMs: 3500,
         theme: "zombie", army: ["grunt", "grunt", "knight", "grunt", "grunt", "archer", "grunt", "grunt", "knight", "boss"],
         colors: { armor: "#406030", armorLight: "#508040", helmet: "#305020", helmetLight: "#407030", shield: "#2a4018", shieldLight: "#386028", boots: "#1a2a0e", crest: "#60a040" } },
-      { id: "nyan", name: "Nyan Cat", icon: "🌈", skulls: 4, accuracy: 0.60, spawnMs: 3500,
+      { id: "nyan", name: "Nyan Cat", icon: "🌈", skulls: 4, accuracy: 0.70, spawnMs: 3000,
         theme: "skeleton", army: ["grunt", "knight", "grunt", "archer", "grunt", "knight", "archer", "grunt", "knight", "boss"],
         colors: { armor: "#606068", armorLight: "#808088", helmet: "#505058", helmetLight: "#707078", shield: "#404048", shieldLight: "#606068", boots: "#303038", crest: "#a0a0b0" } },
-      { id: "dino", name: "Chrome Dino", icon: "🦕", skulls: 5, accuracy: 0.75, spawnMs: 3000,
+      { id: "dino", name: "Chrome Dino", icon: "🦕", skulls: 5, accuracy: 0.85, spawnMs: 2500,
         theme: "dino", army: ["grunt", "knight", "archer", "knight", "grunt", "knight", "archer", "knight", "knight", "boss"],
         colors: { armor: "#3a3a3a", armorLight: "#5a5a5a", helmet: "#2a2a2a", helmetLight: "#4a4a4a", shield: "#1a1a1a", shieldLight: "#3a3a3a", boots: "#1a1a1a", crest: "#808080" } },
     ];
@@ -729,7 +729,7 @@
       });
 
       // Left column: Week list
-      const listX = 20, listY = contentY + 26, listW = half - 30, itemH = 20;
+      const listX = 20, listY = contentY + 38, listW = half - 30, itemH = 20;
       const maxVis = Math.min(12, Math.floor((canvas.height - listY - 60) / itemH));
       const filtered = m.weeks.filter(wk => (wk.language || "english").toLowerCase() === m.selectedLanguage);
 
@@ -2200,10 +2200,18 @@
         // Background
         ctx.fillStyle = "#0a1020";
         ctx.fillRect(pBarX - 1, pBarY - 1, pBarW + 2, pBarH + 2);
-        // Fill
-        const barColor = correctPct >= 1 ? "#f0d040" : correctPct >= 0.8 ? "#30c030" : correctPct >= 0.5 ? "#e0a020" : "#4080c0";
-        ctx.fillStyle = barColor;
-        ctx.fillRect(pBarX, pBarY, pBarW * pct, pBarH);
+        // Fill — gradient from red to yellow to green
+        const fillW = pBarW * pct;
+        if (fillW > 0) {
+          const grad = ctx.createLinearGradient(pBarX, 0, pBarX + pBarW, 0);
+          grad.addColorStop(0, "#e04040");
+          grad.addColorStop(0.3, "#e08020");
+          grad.addColorStop(0.5, "#e0c020");
+          grad.addColorStop(0.7, "#80c020");
+          grad.addColorStop(1, "#20d040");
+          ctx.fillStyle = grad;
+          ctx.fillRect(pBarX, pBarY, fillW, pBarH);
+        }
         ctx.strokeStyle = "#2a3a5a"; ctx.lineWidth = 1;
         ctx.strokeRect(pBarX - 1, pBarY - 1, pBarW + 2, pBarH + 2);
 
@@ -2211,22 +2219,25 @@
         ctx.fillStyle = "#c0d0e0"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
         ctx.fillText(`${s.correctWords}/${s.totalWords} rätt (${Math.round(correctPct * 100)}%)`, canvas.width / 2, pBarY - 3);
 
-        // Trophy indicators
+        // Trophy indicators (1x=wood, 3x=bronze, 5x=silver, 10x=gold)
+        const weekId = arena.siege.selectedBossId ? appState.selectedWeekId : "";
+        const perfectCount = weekId ? getSiegePerfectCount(weekId) : 0;
         const trophyY = pBarY + pBarH + 10;
         const trophies = [
-          { need: 0.5, label: "🥉", color: "#c08040" },
-          { need: 0.8, label: "🥈", color: "#c0c0d0" },
-          { need: 1.0, label: "🥇", color: "#f0d040" },
+          { need: 1, label: "🪵", color: "#8b6914", name: "TRÄ" },
+          { need: 3, label: "🥉", color: "#c08040", name: "BRONS" },
+          { need: 5, label: "🥈", color: "#c0c0d0", name: "SILVER" },
+          { need: 10, label: "🥇", color: "#f0d040", name: "GULD" },
         ];
         trophies.forEach((t, i) => {
-          const tx = canvas.width / 2 - 50 + i * 40;
-          const achieved = correctPct >= t.need;
-          ctx.globalAlpha = achieved ? 1 : 0.25;
-          ctx.font = "14px sans-serif";
+          const tx = canvas.width / 2 - 70 + i * 40;
+          const achieved = perfectCount >= t.need;
+          ctx.globalAlpha = achieved ? 1 : 0.2;
+          ctx.font = "12px sans-serif";
           ctx.fillText(t.label, tx, trophyY);
-          ctx.font = "bold 7px monospace";
+          ctx.font = "bold 6px monospace";
           ctx.fillStyle = achieved ? t.color : "#404050";
-          ctx.fillText(`${Math.round(t.need * 100)}%`, tx, trophyY + 10);
+          ctx.fillText(`${t.need}x`, tx, trophyY + 9);
         });
         ctx.globalAlpha = 1;
         ctx.restore();
@@ -5682,10 +5693,78 @@
   }
 
   // ─── SIEGE MODE ANSWER HANDLERS ──────────────────────────────────
-  function pickSiegeWord() {
+  let siegeWordQueue = [];
+  let siegeWrongQueue = [];
+  let siegeCompletedRounds = 0;
+
+  // Trophy system: tracks perfect completions per week
+  function getSiegePerfectCount(weekId) {
+    try { return Number(localStorage.getItem(`siegePerfect_${weekId}`) || 0); } catch { return 0; }
+  }
+  function addSiegePerfectCount(weekId) {
+    try {
+      const count = getSiegePerfectCount(weekId) + 1;
+      localStorage.setItem(`siegePerfect_${weekId}`, String(count));
+      return count;
+    } catch { return 1; }
+  }
+  function getSiegeTrophy(weekId) {
+    const count = getSiegePerfectCount(weekId);
+    if (count >= 10) return { level: "gold", label: "🥇", name: "GULD" };
+    if (count >= 5) return { level: "silver", label: "🥈", name: "SILVER" };
+    if (count >= 3) return { level: "bronze", label: "🥉", name: "BRONS" };
+    if (count >= 1) return { level: "wood", label: "🪵", name: "TRÄ" };
+    return null;
+  }
+
+  function initSiegeWordQueue() {
     const words = currentWords();
-    if (!words.length) return null;
-    return words[Math.floor(Math.random() * words.length)];
+    siegeWordQueue = [...words].sort(() => Math.random() - 0.5);
+    siegeWrongQueue = [];
+  }
+
+  function pickSiegeWord() {
+    // First exhaust the main queue, then the wrong queue
+    if (siegeWordQueue.length > 0) {
+      return siegeWordQueue[0];
+    }
+    if (siegeWrongQueue.length > 0) {
+      // Shuffle wrong answers and move to main queue
+      siegeWordQueue = [...siegeWrongQueue].sort(() => Math.random() - 0.5);
+      siegeWrongQueue = [];
+      return siegeWordQueue[0];
+    }
+    // All done — check if perfect round (no wrong answers queued)
+    siegeCompletedRounds++;
+    if (siegeWrongQueue.length === 0 && bossFightEngine) {
+      // Perfect round! Track it
+      const weekId = appState.selectedWeekId;
+      if (weekId) {
+        const count = addSiegePerfectCount(weekId);
+        const trophy = getSiegeTrophy(weekId);
+        if (trophy) {
+          bossFightEngine.setSiegeFeedback(
+            `${trophy.label} PERFEKT!`,
+            "#f0d040",
+            `${count}x 100% — ${trophy.name}`,
+            4000
+          );
+        }
+      }
+    }
+    initSiegeWordQueue();
+    return siegeWordQueue.length > 0 ? siegeWordQueue[0] : null;
+  }
+
+  function siegeWordAnswered(correct) {
+    const word = siegeWordQueue.shift();
+    if (!correct && word) {
+      // Wrong answer — put it back at a random position in the back half
+      const insertAt = siegeWrongQueue.length > 0
+        ? Math.floor(Math.random() * siegeWrongQueue.length)
+        : 0;
+      siegeWrongQueue.splice(insertAt, 0, word);
+    }
   }
 
   let siegeFlipped = false; // false = show sv, answer en (DEFAULT). true = show en, answer sv.
@@ -5713,6 +5792,7 @@
     grantWeekXp(1);
     state.coins += coinGain;
     addCorrectKey(state.currentWord);
+    siegeWordAnswered(true);
     if (bossFightEngine) {
       bossFightEngine.siegeTrackAnswer(true);
     }
@@ -5733,6 +5813,7 @@
 
   function onSiegeWrong() {
     state.streak = 0;
+    siegeWordAnswered(false);
     if (bossFightEngine) {
       bossFightEngine.siegeTrackAnswer(false);
       bossFightEngine.siegeSpawnEnemySoldier();
@@ -5982,6 +6063,7 @@
 
   function startSiegeGame(countdownSec = 0, countdownEndMs = 0) {
     siegeFlipped = false; // Always start SV→EN
+    siegeCompletedRounds = 0;
     // Try to get words, fall back to finding the week directly
     let words = currentWords();
     if (!words.length && appState.selectedWeekId) {
@@ -6039,6 +6121,7 @@
       if (elements.groupBattleFeed) elements.groupBattleFeed.style.display = "none";
       const gs = document.getElementById("gameShell");
       if (gs) gs.style.display = "none";
+      initSiegeWordQueue();
       // Countdown or immediate start
       if (countdownEndMs > 0) {
         bossFightEngine.setSiegeCountdownAbsolute(countdownEndMs);
