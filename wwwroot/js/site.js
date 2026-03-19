@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.3.0";
+  const GAME_VERSION = "1.4.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -434,6 +434,9 @@
       { id: "grumpy", name: "Grumpy Cat", icon: "😾", skulls: 3, accuracy: 0.60, spawnMs: 3500,
         theme: "zombie", army: ["grunt", "grunt", "knight", "grunt", "grunt", "archer", "grunt", "grunt", "knight", "boss"],
         colors: { armor: "#406030", armorLight: "#508040", helmet: "#305020", helmetLight: "#407030", shield: "#2a4018", shieldLight: "#386028", boots: "#1a2a0e", crest: "#60a040" } },
+      { id: "klara", name: "Klara G", icon: "🏥", skulls: 3, accuracy: 0.58, spawnMs: 3800,
+        theme: "nurse", army: ["grunt", "grunt", "ambulance", "grunt", "archer", "grunt", "ambulance", "grunt", "grunt", "boss"],
+        colors: { armor: "#ffffff", armorLight: "#e8f0ff", helmet: "#ff4060", helmetLight: "#ff6080", shield: "#f0f0f0", shieldLight: "#ffffff", boots: "#ffffff", crest: "#ff4060" } },
       { id: "nyan", name: "Nyan Cat", icon: "🌈", skulls: 4, accuracy: 0.70, spawnMs: 3000,
         theme: "skeleton", army: ["grunt", "knight", "grunt", "archer", "grunt", "knight", "archer", "grunt", "knight", "boss"],
         colors: { armor: "#606068", armorLight: "#808088", helmet: "#505058", helmetLight: "#707078", shield: "#404048", shieldLight: "#606068", boots: "#303038", crest: "#a0a0b0" } },
@@ -1697,10 +1700,150 @@
         siegePx(hx + (direction > 0 ? 1 : 0), gy + 3, 3, 1, "#434343");
         const hr = Math.max(0, hp / Math.max(1, maxHp)); siegePx(gx, gy - 2, 7, 1, "#1a1a1a");
         if (hr > 0) siegePx(gx, gy - 2, Math.max(1, Math.round(7 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
+      } else if (theme === "nurse") {
+        // Female nurse with white uniform and red cross cap
+        const ps = SIEGE_PS, isAtk = attackFrame > 0;
+        siegePx(gx, gy + 10, 6, 1, "rgba(0,0,0,0.2)"); // Shadow
+        const lp = Math.floor(walkFrame / 6) % 2;
+        // Legs (white stockings)
+        siegePx(gx + 1 + lp, gy + 8, 1, 2, "#f0f0f0");
+        siegePx(gx + 3 + (1 - lp), gy + 8, 1, 2, "#f0f0f0");
+        // White shoes
+        siegePx(gx + 1 + lp, gy + 9, 2, 1, "#e0e0e0");
+        siegePx(gx + 3 + (1 - lp), gy + 9, 2, 1, "#e0e0e0");
+        // White dress/uniform
+        siegePx(gx + 1, gy + 4, 4, 4, "#ffffff");
+        siegePx(gx + 2, gy + 5, 2, 1, "#e0e8f0"); // Apron fold
+        // Red cross on chest
+        siegePx(gx + 2, gy + 5, 2, 1, "#ff4060");
+        siegePx(gx + 2.5 > gx + 2 ? gx + 2 : gx + 2, gy + 4, 1, 3, "#ff4060");
+        // Arms
+        siegePx(gx, gy + 4, 1, 3, "#f5d0b0"); // Skin tone arms
+        siegePx(gx + 5, gy + 4, 1, 3, "#f5d0b0");
+        if (isAtk) { siegePx(direction > 0 ? gx + 6 : gx - 2, gy + 4, 2, 1, "#f5d0b0"); } // Syringe jab
+        // Head (skin)
+        siegePx(gx + 1, gy + 1, 4, 3, "#f5d0b0");
+        // Dark hair
+        siegePx(gx + 1, gy, 4, 1, "#2a1a0a"); // Top hair
+        siegePx(gx, gy + 1, 1, 2, "#2a1a0a"); // Side hair left
+        siegePx(gx + 5, gy + 1, 1, 2, "#2a1a0a"); // Side hair right
+        // Nurse cap (white with red cross)
+        siegePx(gx + 1, gy - 1, 4, 1, "#ffffff");
+        siegePx(gx + 2, gy - 1, 1, 1, "#ff4060"); // Red cross on cap
+        // Eyes
+        siegePx(gx + 2, gy + 2, 1, 1, "#1a1a1a");
+        siegePx(gx + 3, gy + 2, 1, 1, "#1a1a1a");
+        // Smile
+        siegePx(gx + 2, gy + 3, 2, 1, "#c08080");
+        // HP bar
+        const hr = Math.max(0, hp / Math.max(1, maxHp)); siegePx(gx, gy - 3, 6, 1, "#1a1a1a");
+        if (hr > 0) siegePx(gx, gy - 3, Math.max(1, Math.round(6 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
       } else {
         // Default cat theme — use soldier sprite with boss colors
         drawPixelSoldier(gx, gy, direction, walkFrame, attackFrame, colors, hp, maxHp);
       }
+    }
+
+    function drawAmbulance(gx, gy, direction, walkFrame, hp, maxHp) {
+      // Pixel ambulance — white van with red cross, flashing light, spinning wheels
+      const ps = SIEGE_PS;
+      siegePx(gx, gy + 9, 10, 1, "rgba(0,0,0,0.25)"); // Shadow
+      // Wheels (animated rotation)
+      const wf = Math.floor(walkFrame / 3) % 2;
+      siegePx(gx + 1, gy + 8, 2, 2, "#1a1a1a"); // Front wheel
+      siegePx(gx + 7, gy + 8, 2, 2, "#1a1a1a"); // Back wheel
+      siegePx(gx + 1 + wf, gy + 8 + wf, 1, 1, "#606060"); // Wheel spoke
+      siegePx(gx + 7 + wf, gy + 8 + wf, 1, 1, "#606060");
+      // Body — white van
+      siegePx(gx, gy + 3, 10, 5, "#ffffff");
+      siegePx(gx, gy + 3, 10, 1, "#e0e0e0"); // Roof
+      // Red stripe
+      siegePx(gx, gy + 7, 10, 1, "#ff4060");
+      // Windshield
+      const wx = direction > 0 ? gx + 8 : gx;
+      siegePx(wx, gy + 4, 2, 2, "#a0d0f0");
+      // Red cross on side
+      siegePx(gx + 4, gy + 4, 3, 1, "#ff4060"); // Horizontal
+      siegePx(gx + 5, gy + 3, 1, 3, "#ff4060"); // Vertical
+      // Flashing siren light (alternates red/blue)
+      const sirenColor = Math.floor(walkFrame / 4) % 2 === 0 ? "#ff2020" : "#2020ff";
+      siegePx(gx + 4, gy + 2, 2, 1, sirenColor);
+      // HP bar
+      const hr = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx, gy, 10, 1, "#1a1a1a");
+      if (hr > 0) siegePx(gx, gy, Math.max(1, Math.round(10 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
+    }
+
+    function drawNursePianoBoss(gx, gy, direction, walkFrame, attackFrame, hp, maxHp) {
+      // Girl with dark hair playing a black grand piano — larger boss sprite
+      // Piano is ~14px wide, girl sits at it
+      const ps = SIEGE_PS, isAtk = attackFrame > 0;
+      siegePx(gx, gy + 12, 16, 1, "rgba(0,0,0,0.3)"); // Shadow
+
+      // === Grand Piano (black) ===
+      // Piano body
+      siegePx(gx, gy + 6, 10, 5, "#1a1a1a"); // Main body
+      siegePx(gx, gy + 5, 8, 1, "#2a2a2a"); // Lid
+      siegePx(gx, gy + 4, 6, 1, "#1a1a1a"); // Raised lid
+      siegePx(gx, gy + 3, 4, 1, "#2a2a2a"); // Lid prop
+      // Piano legs
+      siegePx(gx + 1, gy + 11, 1, 1, "#1a1a1a");
+      siegePx(gx + 8, gy + 11, 1, 1, "#1a1a1a");
+      // Keys (white and black)
+      siegePx(gx + 1, gy + 6, 8, 1, "#f0f0f0"); // White keys
+      siegePx(gx + 2, gy + 6, 1, 1, "#1a1a1a"); // Black keys
+      siegePx(gx + 4, gy + 6, 1, 1, "#1a1a1a");
+      siegePx(gx + 6, gy + 6, 1, 1, "#1a1a1a");
+
+      // === Girl sitting at piano ===
+      const px = gx + 10; // Girl position (right of piano)
+      // Stool
+      siegePx(px, gy + 10, 4, 1, "#3a2a1a");
+      siegePx(px + 1, gy + 11, 2, 1, "#3a2a1a");
+      // Legs
+      siegePx(px + 1, gy + 10, 1, 2, "#f5d0b0");
+      siegePx(px + 2, gy + 10, 1, 2, "#f5d0b0");
+      // White dress
+      siegePx(px, gy + 6, 4, 4, "#ffffff");
+      siegePx(px + 1, gy + 7, 2, 1, "#e8e0f0"); // Dress detail
+      // Arms reaching to piano keys
+      siegePx(px - 1, gy + 7, 1, 1, "#f5d0b0"); // Left arm to keys
+      if (isAtk) {
+        // Playing animation — arms move on keys
+        siegePx(px - 1, gy + 6, 1, 1, "#f5d0b0");
+        siegePx(px - 2, gy + 6, 1, 1, "#f5d0b0");
+      } else {
+        siegePx(px - 1, gy + 7, 1, 1, "#f5d0b0");
+        siegePx(px - 2, gy + 7, 1, 1, "#f5d0b0");
+      }
+      // Head
+      siegePx(px, gy + 3, 4, 3, "#f5d0b0");
+      // Dark hair — long flowing hair
+      siegePx(px, gy + 1, 4, 2, "#1a0a05"); // Top
+      siegePx(px - 1, gy + 2, 1, 4, "#1a0a05"); // Left cascade
+      siegePx(px + 4, gy + 2, 1, 4, "#1a0a05"); // Right cascade
+      siegePx(px, gy + 1, 1, 1, "#1a0a05"); // Bangs
+      siegePx(px + 3, gy + 1, 1, 1, "#1a0a05");
+      // Eyes
+      siegePx(px + 1, gy + 4, 1, 1, "#1a1a1a");
+      siegePx(px + 2, gy + 4, 1, 1, "#1a1a1a");
+      // Mouth
+      siegePx(px + 1, gy + 5, 2, 1, "#d09090");
+
+      // === Floating musical notes (decorative, always visible) ===
+      const noteTime = walkFrame * 0.15;
+      for (let i = 0; i < 3; i++) {
+        const nx = gx + 2 + Math.sin(noteTime + i * 2.1) * 4;
+        const ny = gy - 1 - i * 2 - Math.sin(noteTime * 0.7 + i) * 1.5;
+        ctx.fillStyle = i % 2 === 0 ? "#ff60a0" : "#a040ff";
+        ctx.fillRect(nx * ps, ny * ps, 2 * ps, 1 * ps); // Note head
+        ctx.fillRect((nx + 2) * ps, (ny - 2) * ps, 1 * ps, 2 * ps); // Note stem
+      }
+
+      // HP bar (wider for boss)
+      const hr = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx, gy - 1, 16, 1, "#1a1a1a");
+      if (hr > 0) siegePx(gx, gy - 1, Math.max(1, Math.round(16 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
     }
 
     function spawnSiegeSoldier(team) {
@@ -1718,6 +1861,7 @@
         if (unitType === "knight") unitHp = SIEGE_SOLDIER_MAX_HP * 3;
         else if (unitType === "nyan") unitHp = SIEGE_SOLDIER_MAX_HP * 2;
         else if (unitType === "archer") unitHp = Math.floor(SIEGE_SOLDIER_MAX_HP * 0.6);
+        else if (unitType === "ambulance") unitHp = SIEGE_SOLDIER_MAX_HP * 2;
         else if (unitType === "boss") unitHp = SIEGE_SOLDIER_MAX_HP * 5;
       } else {
         // Player army — humans only
@@ -1751,6 +1895,7 @@
       const s = arena.siege;
       const now = performance.now();
       s.frameCount++;
+      const bossTheme = (SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).theme;
 
       // Auto-spawn for solo play only
       if (!s.isGroupFight) {
@@ -1796,10 +1941,45 @@
         }
       });
 
-      // Find encounters
+      // Ambulance charge — plows through enemies, knocks them back
+      const handleAmbulanceCharge = (ambulance, targets) => {
+        if (ambulance.unitType !== "ambulance" || ambulance.state === "dead") return;
+        if (!ambulance.chargeCooldown) ambulance.chargeCooldown = 0;
+        if (ambulance.chargeCooldown > 0) { ambulance.chargeCooldown--; return; }
+        for (const t of targets) {
+          if (t.state === "dead") continue;
+          if (Math.abs(ambulance.x - t.x) < 6) {
+            // Hit! Deal damage and knock back
+            t.hp -= SIEGE_SOLDIER_DMG * 2;
+            const knockDist = 35 + Math.random() * 15; // 35-50 px knockback
+            t.x += ambulance.direction > 0 ? -knockDist : knockDist;
+            // Clamp within battlefield
+            t.x = Math.max(SIEGE_SOLDIER_SPAWN_LEFT + 2, Math.min(SIEGE_SOLDIER_SPAWN_RIGHT - 2, t.x));
+            // Free from fight
+            if (t.target) {
+              const partner = t.target;
+              partner.target = null;
+              partner.state = "walk";
+              partner.attackFrame = 0;
+            }
+            t.target = null;
+            t.state = "walk";
+            t.attackFrame = 0;
+            addImpactParticles(t.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 20, "#ff4060", "#fde68a");
+            ambulance.chargeCooldown = 12; // Brief cooldown between hits
+            if (t.hp <= 0) t.state = "dead";
+            break; // One hit per frame
+          }
+        }
+      };
+      allEnemy.filter(e => e.unitType === "ambulance").forEach(a => handleAmbulanceCharge(a, allPlayer));
+      allPlayer.filter(p => p.unitType === "ambulance").forEach(a => handleAmbulanceCharge(a, allEnemy));
+
+      // Find encounters (ambulances charge through, nurse boss shoots from range)
+      const isRangedOnly = (u) => u.unitType === "ambulance" || (u.unitType === "boss" && bossTheme === "nurse" && u.team !== "player");
       allPlayer.forEach(p => {
-        if (p.state === "dead" || p.target) return;
-        const enemy = allEnemy.find(e => e.state !== "dead" && !e.target && Math.abs(p.x - e.x) < 8);
+        if (p.state === "dead" || p.target || isRangedOnly(p)) return;
+        const enemy = allEnemy.find(e => e.state !== "dead" && !e.target && !isRangedOnly(e) && Math.abs(p.x - e.x) < 8);
         if (enemy) {
           p.state = "fight";
           p.target = enemy;
@@ -1841,15 +2021,48 @@
       allPlayer.filter(p => p.unitType === "archer").forEach(p => shootArrow(p, allEnemy, "player"));
       allEnemy.filter(e => e.unitType === "archer").forEach(e => shootArrow(e, allPlayer, "enemy"));
 
+      // Nurse piano boss — shoots musical notes from range
+      if (!s.notes) s.notes = [];
+      const shootNote = (unit, targets, team) => {
+        if (unit.unitType !== "boss" || unit.state === "dead" || bossTheme !== "nurse") return;
+        unit.attackCooldown--;
+        const nearest = targets.filter(t => t.state !== "dead").sort((a, b) => Math.abs(a.x - unit.x) - Math.abs(b.x - unit.x))[0];
+        if (!nearest) return;
+        const dist = Math.abs(nearest.x - unit.x);
+        if (dist < 60 && dist > 4 && unit.attackCooldown <= 0) {
+          unit.state = "fight";
+          unit.attackCooldown = 40;
+          unit.attackFrame = 20;
+          const nx = unit.x * SIEGE_PS + 8 * SIEGE_PS;
+          const ny = (SIEGE_GROUND_Y - 9) * SIEGE_PS;
+          const tx = nearest.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ty = (SIEGE_GROUND_Y - 5) * SIEGE_PS;
+          const dx = tx - nx, dy = ty - ny;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          const speed = 3.5;
+          s.notes.push({
+            x: nx, y: ny,
+            vx: (dx / len) * speed,
+            vy: (dy / len) * speed,
+            team, life: 120,
+            wobble: Math.random() * Math.PI * 2,
+            color: ["#ff60a0", "#a040ff", "#40c0ff", "#ffc040"][Math.floor(Math.random() * 4)],
+          });
+        } else if (dist >= 60 || !nearest) {
+          if (unit.state === "fight" && !unit.target) unit.state = "walk";
+        }
+      };
+      allEnemy.filter(e => e.unitType === "boss").forEach(e => shootNote(e, allPlayer, "enemy"));
+
       // Move & fight — simultaneous combat (both deal damage before checking deaths)
       const pendingDamage = []; // { target, dmg, attacker }
       allPlayer.forEach(p => {
         if (p.state === "dead") return;
         p.walkFrame++;
         if (p.state === "walk") {
-          p.x += SIEGE_SOLDIER_SPEED;
+          p.x += p.unitType === "ambulance" ? SIEGE_SOLDIER_SPEED * 2.2 : SIEGE_SOLDIER_SPEED;
           if (p.x >= SIEGE_RIGHT_CASTLE_X - 2) {
-            s.enemyCastleHp = Math.max(0, s.enemyCastleHp - SIEGE_CASTLE_DMG);
+            s.enemyCastleHp = Math.max(0, s.enemyCastleHp - (p.unitType === "ambulance" ? SIEGE_CASTLE_DMG * 2 : SIEGE_CASTLE_DMG));
             addImpactParticles(
               (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
               (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
@@ -1874,9 +2087,9 @@
         if (e.state === "dead") return;
         e.walkFrame++;
         if (e.state === "walk") {
-          e.x -= SIEGE_SOLDIER_SPEED;
+          e.x -= e.unitType === "ambulance" ? SIEGE_SOLDIER_SPEED * 2.2 : SIEGE_SOLDIER_SPEED;
           if (e.x <= SIEGE_SOLDIER_SPAWN_LEFT + 2) {
-            s.playerCastleHp = Math.max(0, s.playerCastleHp - SIEGE_CASTLE_DMG);
+            s.playerCastleHp = Math.max(0, s.playerCastleHp - (e.unitType === "ambulance" ? SIEGE_CASTLE_DMG * 2 : SIEGE_CASTLE_DMG));
             addImpactParticles(
               (SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
               (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
@@ -1948,6 +2161,32 @@
         return a.life > 0;
       });
 
+      // Update musical notes (sine wave flight, collision)
+      if (s.notes) {
+        s.notes = s.notes.filter(n => {
+          n.wobble += 0.2;
+          n.x += n.vx;
+          n.y += n.vy + Math.sin(n.wobble) * 0.8; // Wavy float
+          n.life--;
+          // Hit ground?
+          if (n.y >= SIEGE_GROUND_Y * SIEGE_PS + 4) return false;
+          // Hit target soldier?
+          const targets = n.team === "player" ? s.enemySoldiers : s.playerSoldiers;
+          for (const t of targets) {
+            if (t.state === "dead") continue;
+            const tx = t.x * SIEGE_PS + 3 * SIEGE_PS;
+            const ty = SIEGE_GROUND_Y * SIEGE_PS - 5 * SIEGE_PS;
+            if (Math.abs(n.x - tx) < 12 && Math.abs(n.y - ty) < 15) {
+              t.hp -= SIEGE_SOLDIER_DMG * 1.5;
+              addImpactParticles(n.x, n.y, 10, n.color, "#ffffff");
+              if (t.hp <= 0) t.state = "dead";
+              return false;
+            }
+          }
+          return n.life > 0;
+        });
+      }
+
       // Remove dead soldiers
       s.playerSoldiers = s.playerSoldiers.filter(p => p.state !== "dead");
       s.enemySoldiers = s.enemySoldiers.filter(e => e.state !== "dead");
@@ -2018,7 +2257,11 @@
       ].sort((a, b) => a.x - b.x);
 
       allSoldiers.forEach(sol => {
-        if (sol.unitType === "nyan" || sol.unitType === "boss") {
+        if (sol.unitType === "boss" && sol.theme === "nurse") {
+          drawNursePianoBoss(sol.x, SIEGE_GROUND_Y - 13, sol.direction, sol.walkFrame, sol.attackFrame, sol.hp, sol.maxHp);
+        } else if (sol.unitType === "ambulance") {
+          drawAmbulance(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.hp, sol.maxHp);
+        } else if (sol.unitType === "nyan" || sol.unitType === "boss") {
           drawNyanCat(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.hp, sol.maxHp);
         } else if (sol.team !== "player" && sol.unitType === "grunt") {
           drawThemedGrunt(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.attackFrame, sol.colors, sol.hp, sol.maxHp, sol.theme || "cat");
@@ -2080,6 +2323,29 @@
           ctx.fillStyle = "#808080";
           ctx.fillRect(-3, -2, 3, 4);
           ctx.restore();
+        });
+      }
+
+      // Draw flying musical notes
+      if (s.notes) {
+        s.notes.forEach(n => {
+          ctx.fillStyle = n.color;
+          // Note head (filled oval)
+          ctx.beginPath();
+          ctx.ellipse(n.x, n.y, 4, 3, -0.3, 0, Math.PI * 2);
+          ctx.fill();
+          // Stem
+          ctx.strokeStyle = n.color;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(n.x + 3.5, n.y);
+          ctx.lineTo(n.x + 3.5, n.y - 10);
+          ctx.stroke();
+          // Flag
+          ctx.beginPath();
+          ctx.moveTo(n.x + 3.5, n.y - 10);
+          ctx.quadraticCurveTo(n.x + 8, n.y - 7, n.x + 3.5, n.y - 5);
+          ctx.stroke();
         });
       }
 
@@ -4237,6 +4503,7 @@
         s.victoryAnim = null;
         s.stuckArrows = [];
         s.arrows = [];
+        s.notes = [];
         s.playerCastleHp = Number(options.playerCastleHp || 200);
         s.playerCastleMaxHp = Number(options.playerCastleMaxHp || 200);
         s.enemyCastleHp = Number(options.enemyCastleHp || 200);
