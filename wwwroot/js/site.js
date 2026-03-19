@@ -1658,13 +1658,13 @@
       allPlayer.filter(p => p.unitType === "archer").forEach(p => shootArrow(p, allEnemy, "player"));
       allEnemy.filter(e => e.unitType === "archer").forEach(e => shootArrow(e, allPlayer, "enemy"));
 
-      // Move & fight
+      // Move & fight — simultaneous combat (both deal damage before checking deaths)
+      const pendingDamage = []; // { target, dmg, attacker }
       allPlayer.forEach(p => {
         if (p.state === "dead") return;
         p.walkFrame++;
         if (p.state === "walk") {
           p.x += SIEGE_SOLDIER_SPEED;
-          // Check if reached enemy castle
           if (p.x >= SIEGE_RIGHT_CASTLE_X - 2) {
             s.enemyCastleHp = Math.max(0, s.enemyCastleHp - SIEGE_CASTLE_DMG);
             addImpactParticles(
@@ -1678,18 +1678,10 @@
         } else if (p.state === "fight") {
           p.attackCooldown--;
           if (p.attackCooldown <= 0 && p.target && p.target.hp > 0) {
-            p.target.hp -= SIEGE_SOLDIER_DMG;
+            pendingDamage.push({ target: p.target, dmg: SIEGE_SOLDIER_DMG, attacker: p });
             p.attackCooldown = SIEGE_ATTACK_COOLDOWN;
             p.attackFrame = SIEGE_ATTACK_COOLDOWN;
-            // Hit particles
             addImpactParticles(p.target.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 8, "#fde68a", "#ef4444");
-            if (p.target.hp <= 0) {
-              p.target.state = "dead";
-              p.target = null;
-              p.state = "walk";
-              p.attackFrame = 0;
-              p.attackCooldown = 0;
-            }
           }
           if (p.attackFrame > 0) p.attackFrame--;
         }
@@ -1713,19 +1705,32 @@
         } else if (e.state === "fight") {
           e.attackCooldown--;
           if (e.attackCooldown <= 0 && e.target && e.target.hp > 0) {
-            e.target.hp -= SIEGE_SOLDIER_DMG;
+            pendingDamage.push({ target: e.target, dmg: SIEGE_SOLDIER_DMG, attacker: e });
             e.attackCooldown = SIEGE_ATTACK_COOLDOWN;
             e.attackFrame = SIEGE_ATTACK_COOLDOWN;
             addImpactParticles(e.target.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 8, "#fde68a", "#ef4444");
-            if (e.target.hp <= 0) {
-              e.target.state = "dead";
-              e.target = null;
-              e.state = "walk";
-              e.attackFrame = 0;
-              e.attackCooldown = 0;
-            }
           }
           if (e.attackFrame > 0) e.attackFrame--;
+        }
+      });
+
+      // Apply all damage simultaneously — both soldiers hit each other before dying
+      pendingDamage.forEach(({ target, dmg, attacker }) => {
+        target.hp -= dmg;
+      });
+      // Now check for deaths after ALL damage applied
+      [...allPlayer, ...allEnemy].forEach(u => {
+        if (u.state === "dead") return;
+        if (u.hp <= 0) {
+          u.state = "dead";
+          // Free the attacker
+          const freed = [...allPlayer, ...allEnemy].find(a => a.target === u && a.state === "fight");
+          if (freed) {
+            freed.target = null;
+            freed.state = "walk";
+            freed.attackFrame = 0;
+            freed.attackCooldown = 0;
+          }
         }
       });
 
@@ -4000,9 +4005,7 @@
         s.winner = null;
         s.onGameOver = typeof options.onGameOver === "function" ? options.onGameOver : null;
         s.frameCount = 0;
-        // Spawn initial soldiers
-        spawnSiegeSoldier("player");
-        spawnSiegeSoldier("enemy");
+        // No initial soldiers — they spawn from answers only
       },
       siegeSpawnPlayerSoldier() {
         if (arena.mode !== "siege" || arena.siege.gameOver) return;
@@ -4030,6 +4033,9 @@
       },
       setSiegeCountdown(seconds) {
         arena.siege.countdownEndsAt = Date.now() + seconds * 1000;
+      },
+      setSiegeCountdownAbsolute(unixMs) {
+        arena.siege.countdownEndsAt = unixMs;
       },
       triggerVictory() {
         const s = arena.siege;
@@ -5649,9 +5655,8 @@
             }
           }
           if (result.status === "Active") {
-            // All accepted — start siege with server-synced countdown
-            const serverCountdown = result.prepEndsUnixMs ? Math.max(1, Math.ceil((result.prepEndsUnixMs - Date.now()) / 1000)) : 10;
-            startSiegeGame(serverCountdown);
+            // All accepted — start siege with absolute server countdown
+            startSiegeGame(0, result.prepEndsUnixMs || (Date.now() + 10000));
           } else {
             // Still waiting for others — update display
             await pollChallengeInbox();
@@ -5708,7 +5713,7 @@
     }
   }
 
-  function startSiegeGame(countdownSec = 0) {
+  function startSiegeGame(countdownSec = 0, countdownEndMs = 0) {
     // Try to get words, fall back to finding the week directly
     let words = currentWords();
     if (!words.length && appState.selectedWeekId) {
@@ -5764,7 +5769,11 @@
       const gs = document.getElementById("gameShell");
       if (gs) gs.style.display = "none";
       // Countdown or immediate start
-      if (countdownSec > 0) {
+      if (countdownEndMs > 0) {
+        bossFightEngine.setSiegeCountdownAbsolute(countdownEndMs);
+        const delayMs = Math.max(100, countdownEndMs - Date.now());
+        setTimeout(() => showSiegeGlosa(), delayMs);
+      } else if (countdownSec > 0) {
         bossFightEngine.setSiegeCountdown(countdownSec);
         setTimeout(() => showSiegeGlosa(), countdownSec * 1000);
       } else {
@@ -7170,8 +7179,7 @@
           appState._lastHandledActiveInvite = invite.id;
           appState.selectedWeekId = invite.weekId;
           if (elements.weekSelect) elements.weekSelect.value = invite.weekId;
-          const serverCountdown = invite.prepEndsUnixMs ? Math.max(1, Math.ceil((invite.prepEndsUnixMs - Date.now()) / 1000)) : 10;
-          startSiegeGame(serverCountdown);
+          startSiegeGame(0, invite.prepEndsUnixMs || (Date.now() + 10000));
         }
         // Always poll events for siege sync
         await pollGroupFightEvents();
