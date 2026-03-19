@@ -264,9 +264,18 @@ button.ghost {
   display: block;
   width: 100%;
   height: auto;
+  max-height: 100vh;
+  object-fit: contain;
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
+}
+
+html, body {
+  overflow: hidden;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 .hp-card h2 {
