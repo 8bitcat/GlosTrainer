@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.1.0";
+  const GAME_VERSION = "1.1.1";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -422,19 +422,19 @@
 
     // Bosses ordered easy→hard. Each has unique army theme + colors.
     const SIEGE_BOSSES = [
-      { id: "oiia", name: "OIIA Cat", icon: "🐱", skulls: 1, accuracy: 0.3, spawnMs: 7000,
+      { id: "oiia", name: "OIIA Cat", icon: "🐱", skulls: 1, accuracy: 0.50, spawnMs: 4000,
         theme: "cat", army: ["grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "boss"],
         colors: { armor: "#c08040", armorLight: "#d0a060", helmet: "#a07030", helmetLight: "#c09050", shield: "#906020", shieldLight: "#b08040", boots: "#5a3a1a", crest: "#e0a040" } },
-      { id: "keyboard", name: "Keyboard Cat", icon: "🎹", skulls: 2, accuracy: 0.45, spawnMs: 6000,
+      { id: "keyboard", name: "Keyboard Cat", icon: "🎹", skulls: 2, accuracy: 0.60, spawnMs: 3500,
         theme: "wolf", army: ["grunt", "grunt", "grunt", "archer", "grunt", "grunt", "grunt", "archer", "grunt", "boss"],
         colors: { armor: "#505060", armorLight: "#707080", helmet: "#404050", helmetLight: "#606070", shield: "#383848", shieldLight: "#505060", boots: "#2a2a30", crest: "#8080a0" } },
-      { id: "grumpy", name: "Grumpy Cat", icon: "😾", skulls: 3, accuracy: 0.55, spawnMs: 5000,
+      { id: "grumpy", name: "Grumpy Cat", icon: "😾", skulls: 3, accuracy: 0.70, spawnMs: 3000,
         theme: "zombie", army: ["grunt", "grunt", "knight", "grunt", "grunt", "archer", "grunt", "grunt", "knight", "boss"],
         colors: { armor: "#406030", armorLight: "#508040", helmet: "#305020", helmetLight: "#407030", shield: "#2a4018", shieldLight: "#386028", boots: "#1a2a0e", crest: "#60a040" } },
-      { id: "nyan", name: "Nyan Cat", icon: "🌈", skulls: 4, accuracy: 0.65, spawnMs: 4500,
+      { id: "nyan", name: "Nyan Cat", icon: "🌈", skulls: 4, accuracy: 0.80, spawnMs: 2500,
         theme: "skeleton", army: ["grunt", "knight", "grunt", "archer", "grunt", "knight", "archer", "grunt", "knight", "boss"],
         colors: { armor: "#606068", armorLight: "#808088", helmet: "#505058", helmetLight: "#707078", shield: "#404048", shieldLight: "#606068", boots: "#303038", crest: "#a0a0b0" } },
-      { id: "dino", name: "Chrome Dino", icon: "🦕", skulls: 5, accuracy: 0.75, spawnMs: 4000,
+      { id: "dino", name: "Chrome Dino", icon: "🦕", skulls: 5, accuracy: 0.90, spawnMs: 2000,
         theme: "dino", army: ["grunt", "knight", "archer", "knight", "grunt", "knight", "archer", "knight", "knight", "boss"],
         colors: { armor: "#3a3a3a", armorLight: "#5a5a5a", helmet: "#2a2a2a", helmetLight: "#4a4a4a", shield: "#1a1a1a", shieldLight: "#3a3a3a", boots: "#1a1a1a", crest: "#808080" } },
     ];
