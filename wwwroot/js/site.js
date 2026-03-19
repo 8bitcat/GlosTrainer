@@ -1,4 +1,6 @@
 (function () {
+  const GAME_VERSION = "1.1.0";
+
   const elements = {
     levelValue: document.getElementById("levelValue"),
     xpValue: document.getElementById("xpValue"),
@@ -661,7 +663,7 @@
       ctx.fillText("GLOSTRAINER", 20, 32);
       ctx.fillStyle = "#4080c0";
       ctx.font = "bold 10px monospace";
-      ctx.fillText("SIEGE EDITION", 20, 46);
+      ctx.fillText(`SIEGE EDITION  Ver. ${GAME_VERSION}`, 20, 46);
       // Stats
       ctx.textAlign = "right";
       ctx.fillStyle = "#80c0e0";

@@ -19,6 +19,14 @@ Full pipeline: pre-flight checks → review → commit → push → build → de
    - No Swedish character issues (å, ä, ö must be correct)
 3. If issues found: **STOP** — report issues and ask user before continuing
 
+## Step 1.5: Version Bump
+
+1. Increment `GAME_VERSION` in `wwwroot/js/site.js` (line 2: `const GAME_VERSION = "X.Y.Z"`)
+   - **Patch** (Z): bug fixes, small tweaks
+   - **Minor** (Y): new features, UI changes
+   - **Major** (X): breaking changes, full rewrites
+2. The version is displayed in the menu header: "SIEGE EDITION Ver. X.Y.Z"
+
 ## Step 2: Commit
 
 1. Stage appropriate files (never stage secrets)
