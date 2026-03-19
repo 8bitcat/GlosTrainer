@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.4.0";
+  const GAME_VERSION = "1.5.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -787,8 +787,42 @@
         ctx.fillRect(bossX, by, bossW, 30);
         if (sel) { ctx.strokeStyle = "#a040c0"; ctx.lineWidth = 2; ctx.strokeRect(bossX, by, bossW, 30); }
         // Icon
-        ctx.font = "20px sans-serif"; ctx.textAlign = "left";
-        ctx.fillText(boss.icon, bossX + 6, by + 22);
+        if (boss.id === "klara") {
+          // Pixel art nurse face — light skin, dark long hair, nurse cap with red cross
+          const ix = bossX + 6, iy = by + 4, ps = 2;
+          const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ix + x * ps, iy + y * ps, w * ps, h * ps); };
+          // Hair background (long dark hair behind face)
+          px(0, 1, 1, 8, "#1a0a05"); px(10, 1, 1, 8, "#1a0a05");
+          px(1, 0, 9, 1, "#1a0a05"); // Top hair
+          px(1, 1, 2, 2, "#1a0a05"); px(8, 1, 2, 2, "#1a0a05"); // Side hair
+          // Long hair strands
+          px(0, 9, 2, 2, "#2a1208"); px(9, 9, 2, 2, "#2a1208");
+          // Face (light skin)
+          px(2, 2, 7, 6, "#f5d0b0");
+          px(3, 1, 5, 1, "#f5d0b0"); // Forehead
+          // Bangs (dark hair over forehead)
+          px(2, 1, 2, 1, "#1a0a05"); px(7, 1, 2, 1, "#1a0a05");
+          // Eyes
+          px(3, 4, 1, 1, "#1a1a1a"); px(7, 4, 1, 1, "#1a1a1a");
+          px(3, 3, 1, 1, "#4060a0"); px(7, 3, 1, 1, "#4060a0"); // Eyelids hint
+          // Eyebrows
+          px(3, 3, 2, 1, "#3a2010"); px(6, 3, 2, 1, "#3a2010");
+          // Nose
+          px(5, 5, 1, 1, "#e0b898");
+          // Mouth (gentle smile)
+          px(4, 6, 3, 1, "#d08888");
+          // Cheeks (blush)
+          px(2, 5, 1, 1, "#f0a0a0"); px(8, 5, 1, 1, "#f0a0a0");
+          // Nurse cap (white with red cross)
+          px(2, 0, 7, 1, "#ffffff");
+          px(1, -1, 9, 1, "#ffffff"); // Cap brim
+          px(5, -1, 1, 1, "#ff4060"); // Red cross vertical
+          px(4, 0, 3, 1, "#ff4060"); // Red cross horizontal (on cap)
+          px(5, -1, 1, 1, "#ff4060"); // Cross top
+        } else {
+          ctx.font = "20px sans-serif"; ctx.textAlign = "left";
+          ctx.fillText(boss.icon, bossX + 6, by + 22);
+        }
         // Name
         ctx.fillStyle = sel ? "#e0c0f0" : "#a0a0b0";
         ctx.font = sel ? "bold 12px monospace" : "11px monospace";
@@ -810,6 +844,30 @@
       ctx.fillStyle = "#90c0f0"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
       ctx.fillText("BYT NAMN", nameBtnX + nameBtnW / 2, nameBtnY + 10);
       m.buttons.push({ type: "changeName", x: nameBtnX, y: nameBtnY, w: nameBtnW, h: nameBtnH });
+
+      // Music toggle button
+      const musBtnW = 30, musBtnH = 14, musBtnX = nameBtnX + nameBtnW + 8, musBtnY = nameBtnY;
+      const musOn = siegeAudio.musicEnabled && appState.settings.soundEnabled;
+      ctx.fillStyle = musOn ? "#1a3a1a" : "#3a1a1a";
+      ctx.fillRect(musBtnX, musBtnY, musBtnW, musBtnH);
+      ctx.strokeStyle = musOn ? "#40a040" : "#a04040"; ctx.lineWidth = 1;
+      ctx.strokeRect(musBtnX, musBtnY, musBtnW, musBtnH);
+      ctx.fillStyle = musOn ? "#80f080" : "#f08080";
+      ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(musOn ? "🎵" : "🔇", musBtnX + musBtnW / 2, musBtnY + 11);
+      m.buttons.push({ type: "toggleMusic", x: musBtnX, y: musBtnY, w: musBtnW, h: musBtnH });
+
+      // Sound FX toggle button
+      const sfxBtnX = musBtnX + musBtnW + 4;
+      const sfxOn = appState.settings.soundEnabled;
+      ctx.fillStyle = sfxOn ? "#1a2a3a" : "#3a1a1a";
+      ctx.fillRect(sfxBtnX, musBtnY, musBtnW, musBtnH);
+      ctx.strokeStyle = sfxOn ? "#4080c0" : "#a04040"; ctx.lineWidth = 1;
+      ctx.strokeRect(sfxBtnX, musBtnY, musBtnW, musBtnH);
+      ctx.fillStyle = sfxOn ? "#80c0f0" : "#f08080";
+      ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(sfxOn ? "🔊" : "🔈", sfxBtnX + musBtnW / 2, musBtnY + 11);
+      m.buttons.push({ type: "toggleSound", x: sfxBtnX, y: musBtnY, w: musBtnW, h: musBtnH });
 
       // Start button
       const btnW = 280, btnH = 32, btnX = w / 2 - btnW / 2, btnY = canvas.height - 38;
@@ -1241,6 +1299,12 @@
           if (btn.type === "scrollDown") { m.scrollOffset += 1; return null; }
           if (btn.type === "selectBoss") { m.selectedBossId = btn.bossId; return null; }
           if (btn.type === "changeName") return { action: "startNameEdit" };
+          if (btn.type === "toggleMusic") { siegeAudio.toggleMusic(); return null; }
+          if (btn.type === "toggleSound") {
+            appState.settings.soundEnabled = !appState.settings.soundEnabled;
+            if (!appState.settings.soundEnabled) siegeAudio.stopMusic();
+            saveSettings(); renderSoundToggle(); return null;
+          }
           if (btn.type === "addBotA") return { action: "addBotA" };
           if (btn.type === "addBotB") return { action: "addBotB" };
           if (btn.type === "playerToA") return { action: "playerToA", player: btn.player };
@@ -1897,6 +1961,13 @@
       s.frameCount++;
       const bossTheme = (SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).theme;
 
+      // Periodic ambient sounds
+      const totalSoldiers = s.playerSoldiers.length + s.enemySoldiers.length;
+      if (totalSoldiers > 0 && s.frameCount % 20 === 0) siegeAudio.playSfx("walk");
+      // Ambulance sirens
+      const ambulances = [...s.playerSoldiers, ...s.enemySoldiers].filter(u => u.unitType === "ambulance" && u.state === "walk");
+      if (ambulances.length > 0 && s.frameCount % 40 === 0) siegeAudio.playSfx("ambulanceSiren");
+
       // Auto-spawn for solo play only
       if (!s.isGroupFight) {
         if (now - s.lastPlayerSpawnMs >= s.spawnIntervalMs && s.playerSoldiers.length < 25) {
@@ -1941,20 +2012,17 @@
         }
       });
 
-      // Ambulance charge — plows through enemies, knocks them back
-      const handleAmbulanceCharge = (ambulance, targets) => {
-        if (ambulance.unitType !== "ambulance" || ambulance.state === "dead") return;
-        if (!ambulance.chargeCooldown) ambulance.chargeCooldown = 0;
-        if (ambulance.chargeCooldown > 0) { ambulance.chargeCooldown--; return; }
+      // Ambulance charge — on hit: ambulance crashes & smokes, victim flies in arc
+      if (!s.ragdolls) s.ragdolls = [];
+      if (!s.crashedAmbulances) s.crashedAmbulances = [];
+      if (!s.corpses) s.corpses = [];
+      const handleAmbulanceCharge = (ambulance, targets, targetArr) => {
+        if (ambulance.unitType !== "ambulance" || ambulance.state === "dead" || ambulance.state === "crashed") return;
         for (const t of targets) {
-          if (t.state === "dead") continue;
+          if (t.state === "dead" || t.state === "ragdoll") continue;
           if (Math.abs(ambulance.x - t.x) < 6) {
-            // Hit! Deal damage and knock back
-            t.hp -= SIEGE_SOLDIER_DMG * 2;
-            const knockDist = 35 + Math.random() * 15; // 35-50 px knockback
-            t.x += ambulance.direction > 0 ? -knockDist : knockDist;
-            // Clamp within battlefield
-            t.x = Math.max(SIEGE_SOLDIER_SPAWN_LEFT + 2, Math.min(SIEGE_SOLDIER_SPAWN_RIGHT - 2, t.x));
+            // === Victim: launch as ragdoll flying in arc ===
+            t.hp -= SIEGE_SOLDIER_DMG * 3;
             // Free from fight
             if (t.target) {
               const partner = t.target;
@@ -1962,18 +2030,49 @@
               partner.state = "walk";
               partner.attackFrame = 0;
             }
-            t.target = null;
-            t.state = "walk";
-            t.attackFrame = 0;
-            addImpactParticles(t.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 20, "#ff4060", "#fde68a");
-            ambulance.chargeCooldown = 12; // Brief cooldown between hits
-            if (t.hp <= 0) t.state = "dead";
-            break; // One hit per frame
+            // Random arc trajectory — different every hit
+            const launchAngle = -(0.6 + Math.random() * 0.8); // -0.6 to -1.4 rad (upward)
+            const launchSpeed = 1.8 + Math.random() * 1.2; // 1.8-3.0
+            const flyDir = ambulance.direction; // victim flies in ambulance travel direction
+            s.ragdolls.push({
+              x: t.x * SIEGE_PS,
+              y: SIEGE_GROUND_Y * SIEGE_PS - 5 * SIEGE_PS,
+              vx: flyDir * launchSpeed * Math.cos(launchAngle) * SIEGE_PS,
+              vy: launchSpeed * Math.sin(launchAngle) * SIEGE_PS,
+              hp: t.hp,
+              maxHp: t.maxHp,
+              team: t.team,
+              direction: t.direction,
+              unitType: t.unitType,
+              colors: t.team === "player" ? PLAYER_COLORS : (SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).colors,
+              theme: t.team === "player" ? null : bossTheme,
+              rotation: 0,
+              rotSpeed: (0.05 + Math.random() * 0.1) * (Math.random() > 0.5 ? 1 : -1),
+              landed: false,
+            });
+            // Impact particles at collision point
+            addImpactParticles(t.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 25, "#ff4060", "#fde68a");
+            // Remove victim from active soldiers
+            t.state = "dead";
+
+            // === Ambulance: crash, smoke, and stop ===
+            const crashTime = (8 + Math.random() * 4) * 60; // 8-12 sec at 60fps
+            s.crashedAmbulances.push({
+              x: ambulance.x,
+              direction: ambulance.direction,
+              walkFrame: ambulance.walkFrame,
+              timer: crashTime,
+              maxTimer: crashTime,
+              smokeTimer: 0,
+            });
+            siegeAudio.playSfx("ambulanceCrash");
+            ambulance.state = "dead"; // Remove from active
+            break;
           }
         }
       };
-      allEnemy.filter(e => e.unitType === "ambulance").forEach(a => handleAmbulanceCharge(a, allPlayer));
-      allPlayer.filter(p => p.unitType === "ambulance").forEach(a => handleAmbulanceCharge(a, allEnemy));
+      allEnemy.filter(e => e.unitType === "ambulance").forEach(a => handleAmbulanceCharge(a, allPlayer, s.playerSoldiers));
+      allPlayer.filter(p => p.unitType === "ambulance").forEach(a => handleAmbulanceCharge(a, allEnemy, s.enemySoldiers));
 
       // Find encounters (ambulances charge through, nurse boss shoots from range)
       const isRangedOnly = (u) => u.unitType === "ambulance" || (u.unitType === "boss" && bossTheme === "nurse" && u.team !== "player");
@@ -2014,6 +2113,7 @@
             vy: (dy / len) * speed - 2,
             team, life: 120,
           });
+          siegeAudio.playSfx("arrowShoot");
         } else if (dist >= 40 || !nearest) {
           if (archer.state === "fight" && !archer.target) archer.state = "walk";
         }
@@ -2048,6 +2148,7 @@
             wobble: Math.random() * Math.PI * 2,
             color: ["#ff60a0", "#a040ff", "#40c0ff", "#ffc040"][Math.floor(Math.random() * 4)],
           });
+          siegeAudio.playBossPianoNote();
         } else if (dist >= 60 || !nearest) {
           if (unit.state === "fight" && !unit.target) unit.state = "walk";
         }
@@ -2063,6 +2164,7 @@
           p.x += p.unitType === "ambulance" ? SIEGE_SOLDIER_SPEED * 2.2 : SIEGE_SOLDIER_SPEED;
           if (p.x >= SIEGE_RIGHT_CASTLE_X - 2) {
             s.enemyCastleHp = Math.max(0, s.enemyCastleHp - (p.unitType === "ambulance" ? SIEGE_CASTLE_DMG * 2 : SIEGE_CASTLE_DMG));
+            siegeAudio.playSfx("castleHit");
             addImpactParticles(
               (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
               (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
@@ -2077,6 +2179,7 @@
             pendingDamage.push({ target: p.target, dmg: SIEGE_SOLDIER_DMG, attacker: p });
             p.attackCooldown = SIEGE_ATTACK_COOLDOWN;
             p.attackFrame = SIEGE_ATTACK_COOLDOWN;
+            siegeAudio.playSfx("swordHit");
             addImpactParticles(p.target.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 8, "#fde68a", "#ef4444");
           }
           if (p.attackFrame > 0) p.attackFrame--;
@@ -2090,6 +2193,7 @@
           e.x -= e.unitType === "ambulance" ? SIEGE_SOLDIER_SPEED * 2.2 : SIEGE_SOLDIER_SPEED;
           if (e.x <= SIEGE_SOLDIER_SPAWN_LEFT + 2) {
             s.playerCastleHp = Math.max(0, s.playerCastleHp - (e.unitType === "ambulance" ? SIEGE_CASTLE_DMG * 2 : SIEGE_CASTLE_DMG));
+            siegeAudio.playSfx("castleHit");
             addImpactParticles(
               (SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
               (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
@@ -2104,6 +2208,7 @@
             pendingDamage.push({ target: e.target, dmg: SIEGE_SOLDIER_DMG, attacker: e });
             e.attackCooldown = SIEGE_ATTACK_COOLDOWN;
             e.attackFrame = SIEGE_ATTACK_COOLDOWN;
+            siegeAudio.playSfx("swordHit");
             addImpactParticles(e.target.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 8, "#fde68a", "#ef4444");
           }
           if (e.attackFrame > 0) e.attackFrame--;
@@ -2119,6 +2224,7 @@
         if (u.state === "dead") return;
         if (u.hp <= 0) {
           u.state = "dead";
+          siegeAudio.playSfx("death");
           // Free the attacker
           const freed = [...allPlayer, ...allEnemy].find(a => a.target === u && a.state === "fight");
           if (freed) {
@@ -2153,6 +2259,7 @@
           const ty = SIEGE_GROUND_Y * SIEGE_PS - 5 * SIEGE_PS;
           if (Math.abs(a.x - tx) < 10 && Math.abs(a.y - ty) < 15) {
             t.hp -= SIEGE_SOLDIER_DMG;
+            siegeAudio.playSfx("arrowHit");
             addImpactParticles(a.x, a.y, 6, "#fde68a", "#ef4444");
             if (t.hp <= 0) t.state = "dead";
             return false;
@@ -2178,6 +2285,7 @@
             const ty = SIEGE_GROUND_Y * SIEGE_PS - 5 * SIEGE_PS;
             if (Math.abs(n.x - tx) < 12 && Math.abs(n.y - ty) < 15) {
               t.hp -= SIEGE_SOLDIER_DMG * 1.5;
+              siegeAudio.playSfx("noteHit");
               addImpactParticles(n.x, n.y, 10, n.color, "#ffffff");
               if (t.hp <= 0) t.state = "dead";
               return false;
@@ -2187,6 +2295,97 @@
         });
       }
 
+      // Update ragdolls — flying soldiers hit by ambulance
+      const groundPxY = SIEGE_GROUND_Y * SIEGE_PS + 2 * SIEGE_PS;
+      s.ragdolls = s.ragdolls.filter(r => {
+        if (r.landed) return false; // Already converted to corpse
+        r.x += r.vx;
+        r.y += r.vy;
+        r.vy += 0.35; // Gravity
+        r.rotation += r.rotSpeed;
+        // Check landing
+        if (r.y >= groundPxY) {
+          r.y = groundPxY;
+          // Blood splash on landing
+          addImpactParticles(r.x, r.y, 15, "#c02020", "#800000");
+          addImpactParticles(r.x, r.y, 8, "#ff4040", "#a01010");
+          // Convert to corpse lying on ground
+          const offRoadY = 3 + Math.random() * 3; // 3-6 px below road
+          const lyingTime = r.hp > 0 ? (10 + Math.random() * 5) * 60 : Infinity; // 10-15s or forever
+          s.corpses.push({
+            x: r.x / SIEGE_PS,
+            y: SIEGE_GROUND_Y + offRoadY,
+            direction: r.direction,
+            hp: r.hp,
+            maxHp: r.maxHp,
+            team: r.team,
+            colors: r.colors,
+            theme: r.theme,
+            unitType: r.unitType,
+            timer: lyingTime,
+            bleedTimer: 0,
+            bloodDrops: [],
+          });
+          return false;
+        }
+        return true;
+      });
+
+      // Update crashed ambulances — smoking wrecks
+      s.crashedAmbulances = s.crashedAmbulances.filter(ca => {
+        ca.timer--;
+        ca.smokeTimer++;
+        // Emit smoke particles every few frames
+        if (ca.smokeTimer % 4 === 0) {
+          const sx = ca.x * SIEGE_PS + (3 + Math.random() * 4) * SIEGE_PS;
+          const sy = (SIEGE_GROUND_Y - 9) * SIEGE_PS;
+          addImpactParticles(sx, sy, 2, "#808080", "#b0b0b0");
+        }
+        return ca.timer > 0;
+      });
+
+      // Update corpses — lying soldiers
+      s.corpses = s.corpses.filter(c => {
+        if (c.hp > 0) {
+          c.timer--;
+          if (c.timer <= 0) {
+            // Get back up — respawn as soldier
+            const soldier = {
+              x: c.x,
+              hp: c.hp,
+              maxHp: c.maxHp,
+              state: "walk",
+              walkFrame: Math.floor(Math.random() * 24),
+              attackFrame: 0,
+              attackCooldown: 0,
+              target: null,
+              direction: c.direction,
+              team: c.team,
+              unitType: c.unitType || "soldier",
+              isOiia: false,
+            };
+            if (c.team === "player") s.playerSoldiers.push(soldier);
+            else s.enemySoldiers.push(soldier);
+            return false;
+          }
+        } else {
+          // Dead — bleed on ground
+          c.bleedTimer++;
+          if (c.bleedTimer % 30 === 0 && c.bloodDrops.length < 8) {
+            c.bloodDrops.push({
+              dx: (Math.random() - 0.5) * 4,
+              dy: Math.random() * 2,
+              size: 1 + Math.random(),
+            });
+          }
+          // Fade out after 20 seconds
+          c.timer--;
+          if (c.timer === Infinity) c.timer = 20 * 60;
+          if (c.timer <= 0) return false;
+        }
+        return true;
+      });
+
       // Remove dead soldiers
       s.playerSoldiers = s.playerSoldiers.filter(p => p.state !== "dead");
       s.enemySoldiers = s.enemySoldiers.filter(e => e.state !== "dead");
@@ -2195,6 +2394,8 @@
       if (s.playerCastleHp <= 0) {
         s.gameOver = true;
         s.winner = "enemy";
+        siegeAudio.stopMusic();
+        playBossExplosionSound();
         addImpactParticles(
           (SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
           (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
@@ -2204,6 +2405,8 @@
       } else if (s.enemyCastleHp <= 0) {
         s.gameOver = true;
         s.winner = "player";
+        siegeAudio.stopMusic();
+        playBossExplosionSound();
         addImpactParticles(
           (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
           (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
@@ -2285,6 +2488,91 @@
           );
         }
       });
+
+      // Draw crashed ambulances (smoking wrecks)
+      if (s.crashedAmbulances) {
+        s.crashedAmbulances.forEach(ca => {
+          drawAmbulance(ca.x, SIEGE_GROUND_Y - 11, ca.direction, ca.walkFrame, ca.maxTimer, ca.maxTimer);
+          // Smoke rising from wreck
+          const smokePhase = ca.smokeTimer * 0.06;
+          for (let i = 0; i < 4; i++) {
+            const sx = ca.x * SIEGE_PS + (3 + i * 2) * SIEGE_PS;
+            const sy = (SIEGE_GROUND_Y - 12) * SIEGE_PS - Math.sin(smokePhase + i) * 8 - i * 6;
+            const alpha = Math.max(0.1, 0.5 - i * 0.1);
+            const radius = (3 + i * 1.5 + Math.sin(smokePhase * 0.5 + i * 0.7) * 1.5);
+            ctx.fillStyle = `rgba(100,100,100,${alpha})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // Darker smoke puffs
+          for (let i = 0; i < 2; i++) {
+            const sx = ca.x * SIEGE_PS + (4 + Math.sin(smokePhase * 1.3 + i * 3) * 2) * SIEGE_PS;
+            const sy = (SIEGE_GROUND_Y - 14) * SIEGE_PS - i * 12 - Math.abs(Math.sin(smokePhase * 0.8 + i)) * 10;
+            ctx.fillStyle = `rgba(60,60,60,${0.3 + Math.sin(smokePhase + i) * 0.1})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 4 + Math.sin(smokePhase * 0.4 + i * 2) * 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+      }
+
+      // Draw corpses (soldiers lying on ground)
+      if (s.corpses) {
+        s.corpses.forEach(c => {
+          const cx = c.x * SIEGE_PS;
+          const cy = c.y * SIEGE_PS;
+          // Draw lying-down soldier (horizontal body)
+          const ps = SIEGE_PS;
+          // Body (horizontal)
+          ctx.fillStyle = c.colors ? c.colors.armor : "#808080";
+          ctx.fillRect(cx - 3 * ps, cy, 8 * ps, 2 * ps);
+          // Head
+          ctx.fillStyle = "#f5d0b0";
+          ctx.fillRect(cx + (c.direction > 0 ? -4 : 5) * ps, cy - 1 * ps, 2 * ps, 2 * ps);
+          // Legs
+          ctx.fillStyle = c.colors ? c.colors.boots : "#5a3a0e";
+          ctx.fillRect(cx + (c.direction > 0 ? 5 : -5) * ps, cy, 3 * ps, 2 * ps);
+          if (c.hp <= 0) {
+            // Blood pool — grows slowly
+            const poolSize = Math.min(6, c.bleedTimer * 0.02);
+            ctx.fillStyle = "rgba(160,20,20,0.6)";
+            ctx.beginPath();
+            ctx.ellipse(cx + 2 * ps, cy + 2 * ps, poolSize * ps, poolSize * 0.4 * ps, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Blood drops
+            c.bloodDrops.forEach(bd => {
+              ctx.fillStyle = "rgba(140,15,15,0.8)";
+              ctx.beginPath();
+              ctx.arc(cx + bd.dx * ps, cy + bd.dy * ps, bd.size * ps * 0.4, 0, Math.PI * 2);
+              ctx.fill();
+            });
+          }
+        });
+      }
+
+      // Draw ragdolls (soldiers flying through air)
+      if (s.ragdolls) {
+        s.ragdolls.forEach(r => {
+          ctx.save();
+          ctx.translate(r.x, r.y);
+          ctx.rotate(r.rotation);
+          const ps = SIEGE_PS;
+          // Body
+          ctx.fillStyle = r.colors ? r.colors.armor : "#808080";
+          ctx.fillRect(-3 * ps, -2 * ps, 6 * ps, 4 * ps);
+          // Head
+          ctx.fillStyle = "#f5d0b0";
+          ctx.fillRect(-4 * ps, -3 * ps, 2 * ps, 2 * ps);
+          // Limbs flailing
+          ctx.fillStyle = r.colors ? r.colors.boots : "#5a3a0e";
+          const flail = Math.sin(r.rotation * 3) * 2;
+          ctx.fillRect(3 * ps, (-1 + flail) * ps, 2 * ps, 1 * ps);
+          ctx.fillRect(3 * ps, (1 - flail) * ps, 2 * ps, 1 * ps);
+          ctx.fillRect(-3 * ps, (-1 - flail) * ps, 1 * ps, 2 * ps);
+          ctx.restore();
+        });
+      }
 
       // Draw flying arrows
       if (s.arrows) {
@@ -4495,6 +4783,8 @@
       // ─── SIEGE MODE API ──────────────────────────────────────────
       startSiegeMode(options = {}) {
         arena.mode = "siege";
+        siegeAudio.startMusic();
+        siegeAudio.bossNoteIndex = 0;
         enemySpawnCount = 0;
         playerSpawnCount = 0;
         const s = arena.siege;
@@ -4504,6 +4794,9 @@
         s.stuckArrows = [];
         s.arrows = [];
         s.notes = [];
+        s.ragdolls = [];
+        s.crashedAmbulances = [];
+        s.corpses = [];
         s.playerCastleHp = Number(options.playerCastleHp || 200);
         s.playerCastleMaxHp = Number(options.playerCastleMaxHp || 200);
         s.enemyCastleHp = Number(options.enemyCastleHp || 200);
@@ -4676,6 +4969,7 @@
       showMenu() {
         arena.mode = "menu";
         arena.siege.active = false;
+        siegeAudio.stopMusic();
       },
       isMenuMode() {
         return arena.mode === "menu";
@@ -5155,6 +5449,468 @@
     osc.start(now);
     osc.stop(now + 0.5);
   }
+
+  // ─── SIEGE AUDIO ENGINE ────────────────────────────────────────────
+  // Chiptune background music + SFX via Web Audio API
+  const siegeAudio = {
+    musicPlaying: false,
+    musicNodes: null,
+    musicEnabled: true,
+    sfxCooldowns: {},
+    bossNoteIndex: 0,
+    bossNoteTimer: 0,
+
+    // === BACKGROUND MUSIC — Geometry Dash style chiptune ===
+    startMusic() {
+      if (!appState.settings.soundEnabled || !this.musicEnabled) return;
+      if (this.musicPlaying) return;
+      const ac = getAudioContext();
+      if (!ac) return;
+      if (ac.state === "suspended") ac.resume();
+      this.musicPlaying = true;
+
+      const masterGain = ac.createGain();
+      masterGain.gain.value = 0.12;
+      masterGain.connect(ac.destination);
+
+      // Note name → frequency converter (supports sharps: Fs = F#, Bf = Bb/A#)
+      const noteFreq = (name) => {
+        const map = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+        let n = map[name[0]];
+        let octIdx = 1;
+        if (name[1] === "s") { n++; octIdx = 2; } // sharp
+        else if (name[1] === "f") { n--; octIdx = 2; } // flat
+        const oct = parseInt(name[octIdx]);
+        return 440 * Math.pow(2, (n - 9) / 12 + (oct - 4));
+      };
+
+      // === GEOMETRY DASH MEDLEY — transcribed from piano sheet ===
+      // === STEREO MADNESS — Geometry Dash Level 1 (Symphoniac piano arrangement) ===
+      // Key: C major, ♩=160, 4/4 time. Transcribed from sheet music.
+
+      const sections = [
+        // ─── Section 1: Intro riff (m5-12) — melody only, no bass ───
+        { bpm: 160, sub: 0.5,
+          melody: [
+            // m5: Running 8th notes — parallel voices, upper line
+            "C5","D5","E5","F5","E5","D5","C5","D5",
+            // m6: Ascending sequence
+            "E5","F5","G5","A5","G5","F5","E5","F5",
+            // m7: Return to opening
+            "C5","D5","E5","F5","E5","D5","C5","B4",
+            // m8: Wider range
+            "C5","D5","E5","F5","G5","F5","E5","D5",
+            // m9: Descending then ascending
+            "E5","D5","C5","D5","E5","F5","G5","A5",
+            // m10: Peak phrase
+            "G5","F5","E5","D5","E5","F5","G5","F5",
+            // m11: Winding down
+            "E5","D5","C5","D5","E5","F5","E5","D5",
+            // m12: Resolving
+            "C5","D5","E5","D5","C5","B4","A4","B4",
+          ],
+          bass: [
+            // m5-12: Light sustained C pedal
+            "C3","C3","C3","C3","C3","C3","C3","C3",
+            "C3","C3","C3","C3","C3","C3","C3","C3",
+            "A2","A2","A2","A2","A2","A2","A2","A2",
+            "G2","G2","G2","G2","G2","G2","G2","G2",
+            "C3","C3","C3","C3","C3","C3","C3","C3",
+            "F2","F2","F2","F2","F2","F2","F2","F2",
+            "G2","G2","G2","G2","G2","G2","G2","G2",
+            "C3","C3","C3","C3","G2","G2","G2","G2",
+          ],
+        },
+        // ─── Section 2: Main theme with bass chords (m13-20) ───
+        { bpm: 160, sub: 0.5,
+          melody: [
+            // m13: Melody restates with bass support
+            "C5","D5","E5","F5","E5","D5","C5","D5",
+            // m14
+            "E5","F5","G5","A5","G5","F5","E5","F5",
+            // m15: Variation
+            "C5","D5","E5","F5","E5","D5","C5","B4",
+            // m16: Building
+            "C5","D5","E5","F5","G5","F5","E5","D5",
+            // m17: Climbing higher
+            "C5","D5","E5","F5","G5","A5","G5","F5",
+            // m18: Intensity
+            "E5","D5","C5","D5","E5","F5","G5","A5",
+            // m19: Block chord section — quarter notes
+            "G5","A5","G5","F5","E5","F5","E5","D5",
+            // m20: Resolution — whole note C5
+            "C5","C5","C5","C5","C5","C5","C5","C5",
+          ],
+          bass: [
+            // m13-14: Whole note chords (root notes)
+            "C2","C2","C2","C2","C2","C2","C2","C2",
+            "C2","C2","C2","C2","C2","C2","C2","C2",
+            // m15-16
+            "A2","A2","A2","A2","A2","A2","A2","A2",
+            "F2","F2","F2","F2","F2","F2","F2","F2",
+            // m17
+            "G2","G2","G2","G2","G2","G2","G2","G2",
+            // m18: Building bass
+            "C2","C2","C2","C2","C2","C2","C2","C2",
+            // m19: Half note chords
+            "G2","G2","G2","G2","F2","F2","F2","F2",
+            // m20: Whole note C
+            "C2","C2","C2","C2","C2","C2","C2","C2",
+          ],
+        },
+        // ─── Section 3: Dotted rhythm section (m21-26) with walking bass ───
+        { bpm: 160, sub: 0.5,
+          melody: [
+            // m21: New rhythmic pattern — dotted 8th feel
+            "E5","E5","E5","D5","E5","F5","E5","D5",
+            // m22
+            "E5","E5","E5","D5","E5","F5","E5","D5",
+            // m23: Lower register dotted pattern
+            "C5","C5","C5","B4","C5","D5","C5","B4",
+            // m24
+            "C5","C5","C5","B4","C5","D5","C5","B4",
+            // m25: Back up
+            "E5","E5","E5","D5","E5","F5","E5","D5",
+            // m26: Final ascending push
+            "E5","E5","E5","D5","E5","F5","G5","A5",
+          ],
+          bass: [
+            // m21-26: Walking bass in octaves (quarter notes = 2 per 8th)
+            "C3","C2","E3","E2","C3","C2","E3","E2",
+            "F3","F2","A3","A2","F3","F2","A3","A2",
+            "C3","C2","E3","E2","C3","C2","E3","E2",
+            "G3","G2","B2","B2","G3","G2","B2","B2",
+            "C3","C2","E3","E2","C3","C2","E3","E2",
+            "F3","F2","G3","G2","C3","C2","G2","G2",
+          ],
+        },
+      ];
+
+      // Calculate total medley duration
+      let totalDuration = 0;
+      sections.forEach(s => { totalDuration += s.melody.length * (60 / s.bpm) * s.sub; });
+
+      // Schedule the full medley
+      const scheduleMedley = (startTime) => {
+        let offset = 0;
+        sections.forEach(sec => {
+          const beatSec = (60 / sec.bpm) * sec.sub;
+
+          // Melody — square wave (chiptune lead)
+          sec.melody.forEach((note, i) => {
+            const t = startTime + offset + i * beatSec;
+            const osc = ac.createOscillator();
+            const g = ac.createGain();
+            osc.type = "square";
+            osc.frequency.value = noteFreq(note);
+            g.gain.setValueAtTime(0.001, t);
+            g.gain.linearRampToValueAtTime(0.15, t + 0.015);
+            g.gain.setValueAtTime(0.15, t + beatSec * 0.65);
+            g.gain.linearRampToValueAtTime(0.001, t + beatSec * 0.9);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(t); osc.stop(t + beatSec);
+          });
+
+          // Bass — triangle wave
+          sec.bass.forEach((note, i) => {
+            const t = startTime + offset + i * beatSec;
+            const osc = ac.createOscillator();
+            const g = ac.createGain();
+            osc.type = "triangle";
+            osc.frequency.value = noteFreq(note);
+            g.gain.setValueAtTime(0.2, t);
+            g.gain.setValueAtTime(0.2, t + beatSec * 0.75);
+            g.gain.linearRampToValueAtTime(0.001, t + beatSec * 0.9);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(t); osc.stop(t + beatSec);
+          });
+
+          // Drums
+          const numBeats = sec.melody.length;
+          for (let i = 0; i < numBeats; i++) {
+            const t = startTime + offset + i * beatSec;
+            // Kick on 1 and 3 (every 4 8th-notes = beats 1,3 in 4/4)
+            if (i % 4 === 0 || i % 4 === 2) {
+              const osc = ac.createOscillator();
+              const g = ac.createGain();
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(150, t);
+              osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+              g.gain.setValueAtTime(0.3, t);
+              g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+              osc.connect(g); g.connect(masterGain);
+              osc.start(t); osc.stop(t + 0.1);
+            }
+            // Snare on 2 and 4
+            if (i % 4 === 1 || i % 4 === 3) {
+              const bufSize = ac.sampleRate * 0.05;
+              const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+              const d = buf.getChannelData(0);
+              for (let j = 0; j < bufSize; j++) d[j] = (Math.random() * 2 - 1);
+              const src = ac.createBufferSource(); src.buffer = buf;
+              const ng = ac.createGain();
+              const flt = ac.createBiquadFilter();
+              flt.type = "highpass"; flt.frequency.value = 1000;
+              ng.gain.setValueAtTime(0.08, t);
+              ng.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+              src.connect(flt); flt.connect(ng); ng.connect(masterGain);
+              src.start(t); src.stop(t + 0.05);
+            }
+            // Hi-hat on every 8th
+            const bufSize = ac.sampleRate * 0.02;
+            const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+            const d = buf.getChannelData(0);
+            for (let j = 0; j < bufSize; j++) d[j] = (Math.random() * 2 - 1) * 0.2;
+            const noise = ac.createBufferSource(); noise.buffer = buf;
+            const ng = ac.createGain();
+            ng.gain.setValueAtTime(i % 2 === 0 ? 0.06 : 0.03, t);
+            ng.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+            noise.connect(ng); ng.connect(masterGain);
+            noise.start(t); noise.stop(t + 0.02);
+          }
+
+          offset += numBeats * beatSec;
+        });
+      };
+
+      // Schedule loops continuously
+      let nextLoopTime = ac.currentTime + 0.05;
+      scheduleMedley(nextLoopTime);
+
+      const loopInterval = setInterval(() => {
+        if (!this.musicPlaying) { clearInterval(loopInterval); return; }
+        nextLoopTime += totalDuration;
+        if (nextLoopTime - ac.currentTime < totalDuration * 0.3) {
+          nextLoopTime = ac.currentTime + 0.05;
+        }
+        scheduleMedley(nextLoopTime);
+      }, (totalDuration - 1) * 1000);
+
+      this.musicNodes = { masterGain, loopInterval };
+    },
+
+    stopMusic() {
+      this.musicPlaying = false;
+      if (this.musicNodes) {
+        if (this.musicNodes.loopInterval) clearInterval(this.musicNodes.loopInterval);
+        if (this.musicNodes.masterGain) {
+          try { this.musicNodes.masterGain.gain.linearRampToValueAtTime(0, getAudioContext().currentTime + 0.3); } catch(e) {}
+        }
+        this.musicNodes = null;
+      }
+    },
+
+    toggleMusic() {
+      this.musicEnabled = !this.musicEnabled;
+      if (this.musicEnabled) this.startMusic();
+      else this.stopMusic();
+    },
+
+    // === SOUND EFFECTS ===
+    playSfx(name, vol = 0.1) {
+      if (!appState.settings.soundEnabled) return;
+      // Cooldown to prevent audio spam
+      const now = performance.now();
+      if (this.sfxCooldowns[name] && now - this.sfxCooldowns[name] < 80) return;
+      this.sfxCooldowns[name] = now;
+      const ac = getAudioContext();
+      if (!ac || ac.state === "suspended") return;
+      const t = ac.currentTime;
+
+      if (name === "walk") {
+        // Soft footstep — short noise burst
+        const bufSize = ac.sampleRate * 0.04;
+        const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1);
+        const src = ac.createBufferSource(); src.buffer = buf;
+        const g = ac.createGain();
+        const flt = ac.createBiquadFilter();
+        flt.type = "lowpass"; flt.frequency.value = 400;
+        g.gain.setValueAtTime(vol * 0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        src.connect(flt); flt.connect(g); g.connect(ac.destination);
+        src.start(t); src.stop(t + 0.04);
+
+      } else if (name === "swordHit") {
+        // Metallic clash
+        const osc = ac.createOscillator();
+        const g = ac.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(800 + Math.random() * 400, t);
+        osc.frequency.exponentialRampToValueAtTime(200, t + 0.06);
+        g.gain.setValueAtTime(vol * 0.5, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t); osc.stop(t + 0.08);
+
+      } else if (name === "arrowShoot") {
+        // Whoosh
+        const bufSize = ac.sampleRate * 0.08;
+        const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1);
+        const src = ac.createBufferSource(); src.buffer = buf;
+        const g = ac.createGain();
+        const flt = ac.createBiquadFilter();
+        flt.type = "bandpass"; flt.frequency.setValueAtTime(2000, t);
+        flt.frequency.exponentialRampToValueAtTime(500, t + 0.08);
+        g.gain.setValueAtTime(vol * 0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        src.connect(flt); flt.connect(g); g.connect(ac.destination);
+        src.start(t); src.stop(t + 0.08);
+
+      } else if (name === "arrowHit") {
+        // Thunk
+        const osc = ac.createOscillator();
+        const g = ac.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(300, t);
+        osc.frequency.exponentialRampToValueAtTime(80, t + 0.05);
+        g.gain.setValueAtTime(vol * 0.4, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t); osc.stop(t + 0.06);
+
+      } else if (name === "ambulanceSiren") {
+        // Two-tone siren wail
+        const osc = ac.createOscillator();
+        const g = ac.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(700, t);
+        osc.frequency.linearRampToValueAtTime(900, t + 0.15);
+        osc.frequency.linearRampToValueAtTime(700, t + 0.3);
+        g.gain.setValueAtTime(vol * 0.2, t);
+        g.gain.setValueAtTime(vol * 0.2, t + 0.25);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t); osc.stop(t + 0.3);
+
+      } else if (name === "ambulanceCrash") {
+        // Big crash — metallic + explosion
+        const osc = ac.createOscillator();
+        const g = ac.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(400, t);
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.3);
+        g.gain.setValueAtTime(vol * 1.2, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t); osc.stop(t + 0.35);
+        // Glass shatter (noise)
+        const bufSize = ac.sampleRate * 0.15;
+        const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1);
+        const src = ac.createBufferSource(); src.buffer = buf;
+        const ng = ac.createGain();
+        ng.gain.setValueAtTime(vol * 0.6, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        src.connect(ng); ng.connect(ac.destination);
+        src.start(t); src.stop(t + 0.15);
+
+      } else if (name === "death") {
+        // Low thud
+        const osc = ac.createOscillator();
+        const g = ac.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(120, t);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+        g.gain.setValueAtTime(vol * 0.5, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t); osc.stop(t + 0.18);
+
+      } else if (name === "noteHit") {
+        // Musical note impact — bright chime
+        const osc = ac.createOscillator();
+        const g = ac.createGain();
+        osc.type = "sine";
+        const freq = [523, 659, 784, 880, 1047][Math.floor(Math.random() * 5)];
+        osc.frequency.value = freq;
+        g.gain.setValueAtTime(vol * 0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t); osc.stop(t + 0.2);
+
+      } else if (name === "castleHit") {
+        // Heavy impact on castle
+        const osc = ac.createOscillator();
+        const g = ac.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(200, t);
+        osc.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+        g.gain.setValueAtTime(vol * 0.8, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t); osc.stop(t + 0.25);
+      }
+    },
+
+    // === KLARA BOSS PIANO — plays snippets of famous melodies ===
+    pianoMelodies: [
+      // Für Elise (Beethoven) — opening bars
+      [659,622,659,622,659,494,587,523,440],
+      // Ode to Joy (Beethoven)
+      [330,330,349,392,392,349,330,294,262,262,294,330,330,294,294],
+      // Twinkle Twinkle Little Star
+      [262,262,392,392,440,440,392,349,349,330,330,294,294,262],
+      // Canon in D (Pachelbel) — simplified
+      [587,523,494,440,392,349,392,440],
+      // Turkish March (Mozart) — snippet
+      [494,440,415,440,523,494,440,415,440,523,587],
+    ],
+
+    playBossPianoNote() {
+      if (!appState.settings.soundEnabled) return;
+      const ac = getAudioContext();
+      if (!ac || ac.state === "suspended") return;
+      const t = ac.currentTime;
+
+      // Pick current melody and note — cycles through all melodies
+      const melodyIdx = Math.floor(this.bossNoteIndex / 50) % this.pianoMelodies.length;
+      const melody = this.pianoMelodies[melodyIdx];
+      const noteIdx = this.bossNoteIndex % melody.length;
+      const freq = melody[noteIdx];
+      this.bossNoteIndex++;
+
+      // Piano-like tone (sine + harmonics)
+      const masterG = ac.createGain();
+      masterG.gain.value = 0.08;
+      masterG.connect(ac.destination);
+
+      // Fundamental
+      const osc1 = ac.createOscillator();
+      const g1 = ac.createGain();
+      osc1.type = "sine";
+      osc1.frequency.value = freq;
+      g1.gain.setValueAtTime(0.5, t);
+      g1.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+      osc1.connect(g1); g1.connect(masterG);
+      osc1.start(t); osc1.stop(t + 0.6);
+
+      // 2nd harmonic (softer)
+      const osc2 = ac.createOscillator();
+      const g2 = ac.createGain();
+      osc2.type = "sine";
+      osc2.frequency.value = freq * 2;
+      g2.gain.setValueAtTime(0.15, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      osc2.connect(g2); g2.connect(masterG);
+      osc2.start(t); osc2.stop(t + 0.3);
+
+      // 3rd harmonic (even softer)
+      const osc3 = ac.createOscillator();
+      const g3 = ac.createGain();
+      osc3.type = "sine";
+      osc3.frequency.value = freq * 3;
+      g3.gain.setValueAtTime(0.05, t);
+      g3.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      osc3.connect(g3); g3.connect(masterG);
+      osc3.start(t); osc3.stop(t + 0.15);
+    },
+  };
+  // ─── END SIEGE AUDIO ENGINE ───────────────────────────────────────
 
   function pushLog(text) {
     const item = document.createElement("li");
@@ -6314,8 +7070,10 @@
       appState.groupFight._lastInviteId = null;
       appState._lastHandledActiveInvite = null;
       // Wait for animation then go to menu
-      setTimeout(() => showCanvasMenu(), 3000);
+      appState._giveUpMenuTimer = setTimeout(() => showCanvasMenu(), 3000);
     } else if (hit.action === "playAgain") {
+      // Cancel any pending give-up→menu redirect
+      if (appState._giveUpMenuTimer) { clearTimeout(appState._giveUpMenuTimer); appState._giveUpMenuTimer = null; }
       appState._lastHandledActiveInvite = null;
       appState.groupFight._lastInviteId = null;
       startSiegeGame();
