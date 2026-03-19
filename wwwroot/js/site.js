@@ -1758,12 +1758,13 @@
       if (!s.isGroupFight && now - s.bossLastAnswerMs >= s.bossSpawnMs) {
         s.bossLastAnswerMs = now;
         const isCorrect = Math.random() < s.bossAccuracy;
+        const bossName = (SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).name;
         if (isCorrect) {
           spawnSiegeSoldier("enemy");
-          s.enemyFeed.unshift({ text: `${(SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).name} svarade RÄTT!`, good: true, time: Date.now(), duration: 3000 });
+          s.enemyFeed.unshift({ text: `${bossName} svarade RÄTT!`, good: true, time: Date.now(), duration: 3000 });
         } else {
-          spawnSiegeSoldier("player"); // Boss mistake = player gets a soldier
-          s.enemyFeed.unshift({ text: `${(SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).name} svarade FEL!`, good: false, time: Date.now(), duration: 3000 });
+          // Bot miss = no spawn, just a message
+          s.enemyFeed.unshift({ text: `${bossName} svarade FEL!`, good: false, time: Date.now(), duration: 3000 });
         }
         if (s.enemyFeed.length > 5) s.enemyFeed.length = 5;
       }
@@ -4191,7 +4192,7 @@
         s.bossArmy = boss.army || ["grunt"];
         s.bossAccuracy = boss.accuracy || 0.5;
         s.bossSpawnMs = boss.spawnMs || 5000;
-        s.bossLastAnswerMs = 0;
+        s.bossLastAnswerMs = performance.now(); // Start timer from now, not 0
         s.glosaText = null;
         s.glosaFeedback = null;
         s.gameOver = false;
@@ -4359,7 +4360,6 @@
           return handleMenuClick(cx, cy);
         }
         if (arena.mode === "siege") {
-          console.log("[SIEGE CLICK]", Math.round(cx), Math.round(cy), "menu:", JSON.stringify(arena.siege.menuBtnBounds), "giveup:", JSON.stringify(arena.siege.giveUpBtnBounds));
           // Menu button
           if (arena.siege.menuBtnBounds) {
             const mb = arena.siege.menuBtnBounds;
@@ -5629,7 +5629,7 @@
     return words[Math.floor(Math.random() * words.length)];
   }
 
-  let siegeFlipped = false; // false = show sv, answer en. true = show en, answer sv.
+  let siegeFlipped = false; // false = show sv, answer en (DEFAULT). true = show en, answer sv.
 
   function showSiegeGlosa() {
     const word = pickSiegeWord();
@@ -5918,6 +5918,7 @@
   }
 
   function startSiegeGame(countdownSec = 0, countdownEndMs = 0) {
+    siegeFlipped = false; // Always start SV→EN
     // Try to get words, fall back to finding the week directly
     let words = currentWords();
     if (!words.length && appState.selectedWeekId) {
@@ -7382,10 +7383,15 @@
       if (invite && invite.status === "Active") {
         // Auto-start siege when invite becomes Active (only once, only from menu)
         if (bossFightEngine.isMenuMode && bossFightEngine.isMenuMode() && appState._lastHandledActiveInvite !== invite.id) {
-          appState._lastHandledActiveInvite = invite.id;
-          appState.selectedWeekId = invite.weekId;
-          if (elements.weekSelect) elements.weekSelect.value = invite.weekId;
-          startSiegeGame(0, invite.prepEndsUnixMs || (Date.now() + 10000));
+          // Only auto-start if the fight prep hasn't expired (< 60s old)
+          const prepMs = invite.prepEndsUnixMs || 0;
+          const isFresh = prepMs > Date.now() - 60000;
+          if (isFresh) {
+            appState._lastHandledActiveInvite = invite.id;
+            appState.selectedWeekId = invite.weekId;
+            if (elements.weekSelect) elements.weekSelect.value = invite.weekId;
+            startSiegeGame(0, invite.prepEndsUnixMs || (Date.now() + 10000));
+          }
         }
         // Always poll events for siege sync
         await pollGroupFightEvents();
