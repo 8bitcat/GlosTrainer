@@ -28,9 +28,10 @@ main {
 
 .game-shell {
   max-width: 980px;
-  margin: 1.25rem auto 2rem;
+  margin: 0 auto 2rem;
   display: grid;
   gap: 1rem;
+  padding-top: 0;
 }
 
 .hero-panel,
@@ -249,19 +250,23 @@ button.ghost {
 }
 
 .battle-canvas-shell {
-  grid-column: 1 / -1;
   position: relative;
-  background: linear-gradient(180deg, #d8edff, #f0f7ff 55%, #dae8cb 56%, #c5d9b4);
-  border: 1px solid #bfd5ea;
-  border-radius: 12px;
+  background: #0f0f1a;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
 }
 
 #bossFightCanvas {
   display: block;
   width: 100%;
   height: auto;
-  image-rendering: auto;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
 }
 
 .hp-card h2 {

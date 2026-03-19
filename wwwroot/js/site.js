@@ -37,6 +37,10 @@
     answerInput: document.getElementById("answerInput"),
     specialCharsRow: document.getElementById("specialCharsRow"),
     feedbackText: document.getElementById("feedbackText"),
+    siegeCanvasInput: document.getElementById("siegeCanvasInput"),
+    siegeAnswerForm: document.getElementById("siegeAnswerForm"),
+    siegeAnswerInput: document.getElementById("siegeAnswerInput"),
+    siegeSpecialCharsRow: document.getElementById("siegeSpecialCharsRow"),
     trainProgressWrap: document.getElementById("trainProgressWrap"),
     trainProgressBar: document.getElementById("trainProgressBar"),
     trainProgressText: document.getElementById("trainProgressText"),
@@ -90,7 +94,16 @@
     groupBattleProgressText: document.getElementById("groupBattleProgressText"),
     groupBattlePlayers: document.getElementById("groupBattlePlayers"),
     resetSessionButton: document.getElementById("resetSessionButton"),
+    startSiegeButton: document.getElementById("startSiegeButton"),
     combatPanel: document.getElementById("combatPanel"),
+    heroPanel: document.getElementById("heroPanel"),
+    controlsPanel: document.getElementById("controlsPanel"),
+    questionPanel: document.getElementById("questionPanel"),
+    mainCanvasShell: document.getElementById("mainCanvasShell"),
+    teacherCodeInput: document.getElementById("teacherCodeInput"),
+    teacherCodeForm: document.getElementById("teacherCodeForm"),
+    teacherCodeField: document.getElementById("teacherCodeField"),
+    teacherCodeError: document.getElementById("teacherCodeError"),
   };
 
   const defaultState = {
@@ -277,8 +290,11 @@
     }
 
     const ctx = canvas.getContext("2d");
+    // Start with black screen immediately
+    ctx.fillStyle = "#0a0a0a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     const arena = {
-      mode: "idle",
+      mode: "boot",
       phase: 0,
       textFlash: null,
       flashes: [],
@@ -332,7 +348,72 @@
         rightBroadcast: { text: "", color: "#ef4444", untilMs: 0 },
         victoryFx: null,
       },
+      siege: {
+        active: false,
+        playerCastleHp: 200,
+        playerCastleMaxHp: 200,
+        enemyCastleHp: 200,
+        enemyCastleMaxHp: 200,
+        playerSoldiers: [],
+        enemySoldiers: [],
+        lastPlayerSpawnMs: 0,
+        lastEnemySpawnMs: 0,
+        spawnIntervalMs: 5000,
+        glosaText: null,
+        glosaFeedback: null,
+        enemyFeed: [],
+        gameOver: false,
+        winner: null,
+        onGameOver: null,
+        frameCount: 0,
+        gameOverButtons: null,
+        answerText: "",
+        answerActive: false,
+        countdownEndsAt: 0,
+        defeatAnim: null,
+        victoryAnim: null,
+        stuckArrows: [],
+        arrows: [],
+        isGroupFight: false,
+      },
+      bootStartMs: performance.now(),
+      bootDone: false,
+      menu: {
+        weeks: [],
+        languages: [],
+        selectedLanguage: "english",
+        selectedWeekId: null,
+        selectedTab: "play",
+        stats: { level: 1, xp: 0, xpNext: 100, coins: 0, streak: 0 },
+        scrollOffset: 0,
+        hoveredItem: null,
+        guestName: "",
+        buttons: [],
+        leaderboard: [],
+        weekStats: [],
+        teacherCode: "",
+        teacherMsg: "",
+        teacherMsgColor: "#00aa00",
+        teacherTyping: false,
+        nameEditing: false,
+        nameBuffer: "",
+        pendingChallenges: [],
+      },
     };
+
+    const SIEGE_PS = 3;
+    const SIEGE_GROUND_Y = 120;
+    const SIEGE_CASTLE_W = 28;
+    const SIEGE_CASTLE_H = 22;
+    const SIEGE_LEFT_CASTLE_X = 4;
+    const SIEGE_RIGHT_CASTLE_X = 300 - 4 - SIEGE_CASTLE_W;
+    const SIEGE_SOLDIER_SPAWN_LEFT = SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W + 2;
+    const SIEGE_SOLDIER_SPAWN_RIGHT = SIEGE_RIGHT_CASTLE_X - 2;
+    const SIEGE_SOLDIER_SPEED = 0.35;
+    const SIEGE_SOLDIER_MAX_HP = 20;
+    const SIEGE_SOLDIER_DMG = 4;
+    const SIEGE_CASTLE_DMG = 15;
+    const SIEGE_ATTACK_COOLDOWN = 36;
 
     bossRoster.forEach((boss) => {
       if (!boss.imageUrl) {
@@ -425,6 +506,1720 @@
       ctx.lineTo(w, groundY);
       ctx.stroke();
     }
+
+    // ─── BOOT SEQUENCE ────────────────────────────────────────────────
+    const bootCatOiia = new Image();
+    bootCatOiia.src = "/images/bosses/spinning-oiia.gif";
+
+    const bootLines = [
+      { text: "GLOSTRAINER BIOS v4.2.0", delay: 0 },
+      { text: "Copyright (C) 2024-2026 8bitcat Systems", delay: 200 },
+      { text: "", delay: 300 },
+      { text: "Detecting vocabulary modules...", delay: 500 },
+      { text: "RAM: 640K OK", delay: 700 },
+      { text: "Loading siege engine.......... OK", delay: 900 },
+      { text: "Loading pixel renderer........ OK", delay: 1100 },
+      { text: "Loading castle sprites........ OK", delay: 1300 },
+      { text: "Loading soldier AI............ OK", delay: 1500 },
+      { text: "Connecting to GlosTrainer network...", delay: 1800 },
+      { text: "", delay: 2000 },
+      { text: "ALL SYSTEMS OPERATIONAL", delay: 2200 },
+      { text: "", delay: 2400 },
+      { text: "Starting GLOSTRAINER...", delay: 2600 },
+    ];
+    const BOOT_DURATION = 3200;
+
+    function drawBootMode() {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.fillStyle = "#0a0a0a";
+      ctx.fillRect(0, 0, w, h);
+
+      const elapsed = performance.now() - arena.bootStartMs;
+      const lineH = 16;
+      const startY = 30;
+
+      ctx.save();
+      ctx.font = "bold 12px monospace";
+      ctx.textAlign = "left";
+
+      let visibleLines = 0;
+      bootLines.forEach((line, i) => {
+        if (elapsed >= line.delay) {
+          visibleLines++;
+          const flicker = elapsed - line.delay < 80 ? 0.5 + Math.random() * 0.5 : 1;
+          ctx.globalAlpha = flicker;
+          if (line.text === "ALL SYSTEMS OPERATIONAL") {
+            ctx.fillStyle = "#00ff00";
+          } else if (line.text.includes("OK")) {
+            ctx.fillStyle = "#00cc00";
+          } else if (line.text === "") {
+            return;
+          } else {
+            ctx.fillStyle = "#00aa00";
+          }
+          ctx.fillText(line.text, 24, startY + i * lineH);
+        }
+      });
+
+      // Progress bar
+      if (elapsed > 400) {
+        const barX = 24;
+        const barY = startY + bootLines.length * lineH + 16;
+        const barW = w - 48;
+        const barH = 14;
+        const progress = Math.min(1, (elapsed - 400) / (BOOT_DURATION - 600));
+
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#003300";
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.strokeStyle = "#00aa00";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barW, barH);
+        ctx.fillStyle = "#00cc00";
+        ctx.fillRect(barX + 2, barY + 2, (barW - 4) * progress, barH - 4);
+
+        ctx.fillStyle = "#00aa00";
+        ctx.font = "bold 10px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(`[${Math.floor(progress * 100)}%]`, w / 2, barY + barH + 16);
+      }
+
+      // Blinking cursor
+      if (Math.floor(elapsed / 500) % 2 === 0) {
+        ctx.fillStyle = "#00ff00";
+        ctx.fillRect(24, startY + visibleLines * lineH + 2, 8, 12);
+      }
+
+
+      ctx.restore();
+    }
+
+    // ─── CANVAS MENU MODE ─────────────────────────────────────────────
+    const MENU_TABS = [
+      { id: "play", label: "SPELA" },
+      { id: "fight", label: "FIGHT" },
+      { id: "challenges", label: "UTMANA" },
+      { id: "leaderboard", label: "TOPP" },
+      { id: "stats", label: "STATS" },
+      { id: "levels", label: "NIVÅ" },
+      { id: "teacher", label: "LÄRARE" },
+    ];
+
+    function drawMenuBackground() {
+      const w = canvas.width, h = canvas.height;
+      ctx.fillStyle = "#0a0e18";
+      ctx.fillRect(0, 0, w, h);
+      // Pixel grid overlay
+      ctx.strokeStyle = "rgba(30,60,100,0.12)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+      for (let y = 0; y < h; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+      // Stars
+      for (let i = 0; i < 40; i++) {
+        const sx = (i * 137 + 23) % w, sy = (i * 89 + 11) % (h * 0.7);
+        const bright = 0.2 + Math.abs(Math.sin(arena.phase * 2 + i)) * 0.6;
+        ctx.fillStyle = `rgba(100,160,255,${bright})`;
+        ctx.fillRect(sx, sy, 2, 2);
+      }
+    }
+
+    function drawMenuHeader(m) {
+      const w = canvas.width;
+      // Title bar
+      ctx.fillStyle = "#0f1428";
+      ctx.fillRect(0, 0, w, 68);
+      ctx.strokeStyle = "#1a3060";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, 68); ctx.lineTo(w, 68); ctx.stroke();
+      // Title
+      ctx.fillStyle = "#f0e040";
+      ctx.font = "bold 26px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("GLOSTRAINER", 20, 32);
+      ctx.fillStyle = "#4080c0";
+      ctx.font = "bold 10px monospace";
+      ctx.fillText("SIEGE EDITION", 20, 46);
+      // Stats
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#80c0e0";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(`LVL ${m.stats.level}  |  XP ${m.stats.xp}/${m.stats.xpNext}  |  COINS ${m.stats.coins}  |  STREAK ${m.stats.streak}`, w - 20, 28);
+      if (m.guestName) {
+        ctx.fillStyle = "#6090b0";
+        ctx.font = "bold 9px monospace";
+        ctx.fillText(`SPELARE: ${m.guestName}`, w - 20, 44);
+      }
+      // Tabs
+      const tabW = Math.floor((w - 40) / MENU_TABS.length);
+      MENU_TABS.forEach((tab, i) => {
+        const tx = 20 + i * tabW;
+        const sel = tab.id === m.selectedTab;
+        ctx.fillStyle = sel ? "#1a3060" : "#0a0e18";
+        ctx.fillRect(tx, 50, tabW - 4, 18);
+        ctx.strokeStyle = sel ? "#4080f0" : "#1a2a40";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(tx, 50, tabW - 4, 18);
+        ctx.fillStyle = sel ? "#f0f0f0" : "#506070";
+        ctx.font = sel ? "bold 10px monospace" : "10px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(tab.label, tx + (tabW - 4) / 2, 63);
+        // Notification badge for challenges
+        if (tab.id === "challenges") {
+          const challengeCount = (m.pendingChallenges || []).length;
+          if (challengeCount > 0) {
+            const badgeX = tx + tabW - 10, badgeY = 48;
+            ctx.fillStyle = "#e02020";
+            ctx.beginPath(); ctx.arc(badgeX, badgeY, 7, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#ffffff"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+            ctx.fillText(String(challengeCount), badgeX, badgeY + 3);
+          }
+        }
+        m.buttons.push({ type: "tab", tabId: tab.id, x: tx, y: 50, w: tabW - 4, h: 18 });
+      });
+    }
+
+    function drawPlayTab(m) {
+      const w = canvas.width, contentY = 90;
+      // Language selector
+      const langs = m.languages.length ? m.languages : ["english"];
+      const langTabW = 80, langTabH = 20;
+      const langStartX = 30;
+      langs.forEach((lang, i) => {
+        const tx = langStartX + i * (langTabW + 4);
+        const sel = lang === m.selectedLanguage;
+        ctx.fillStyle = sel ? "#2050c0" : "#0f1a2a";
+        ctx.fillRect(tx, contentY, langTabW, langTabH);
+        ctx.strokeStyle = sel ? "#4080f0" : "#1a2a40";
+        ctx.lineWidth = 1; ctx.strokeRect(tx, contentY, langTabW, langTabH);
+        ctx.fillStyle = sel ? "#f0f0f0" : "#607080";
+        ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+        const dn = lang === "english" ? "ENGELSKA" : lang === "spanish" ? "SPANSKA" : lang === "french" ? "FRANSKA" : lang === "german" ? "TYSKA" : lang.toUpperCase();
+        ctx.fillText(dn, tx + langTabW / 2, contentY + 14);
+        m.buttons.push({ type: "lang", lang, x: tx, y: contentY, w: langTabW, h: langTabH });
+      });
+
+      // Week list
+      const listX = 30, listY = contentY + 30, listW = w - 60, itemH = 22;
+      const maxVis = Math.min(10, Math.floor((canvas.height - listY - 100) / itemH));
+      const filtered = m.weeks.filter(wk => (wk.language || "english").toLowerCase() === m.selectedLanguage);
+
+      ctx.fillStyle = "rgba(10,16,32,0.8)";
+      ctx.fillRect(listX, listY, listW, maxVis * itemH + 4);
+      ctx.strokeStyle = "#1a3050"; ctx.lineWidth = 1;
+      ctx.strokeRect(listX, listY, listW, maxVis * itemH + 4);
+
+      if (!filtered.length) {
+        ctx.fillStyle = "#405060"; ctx.font = "12px monospace"; ctx.textAlign = "center";
+        ctx.fillText("Inga veckor", w / 2, listY + 40);
+      } else {
+        const si = Math.max(0, Math.min(m.scrollOffset, filtered.length - maxVis));
+        const ei = Math.min(filtered.length, si + maxVis);
+        for (let i = si; i < ei; i++) {
+          const wk = filtered[i], iy = listY + 2 + (i - si) * itemH;
+          const sel = wk.id === m.selectedWeekId;
+          const hov = m.hoveredItem && m.hoveredItem.type === "week" && m.hoveredItem.weekId === wk.id;
+          ctx.fillStyle = sel ? "#1a3870" : hov ? "#101830" : "transparent";
+          if (sel || hov) ctx.fillRect(listX + 2, iy, listW - 4, itemH - 2);
+          if (sel) { ctx.strokeStyle = "#4080f0"; ctx.lineWidth = 1; ctx.strokeRect(listX + 2, iy, listW - 4, itemH - 2); }
+          ctx.fillStyle = sel ? "#f0f0f0" : "#b0c0d0";
+          ctx.font = sel ? "bold 11px monospace" : "11px monospace"; ctx.textAlign = "left";
+          const wc = Array.isArray(wk.words) ? wk.words.length : "?";
+          ctx.fillText(`${wk.weekName || wk.name || "Vecka"} (${wc} ord)`, listX + 10, iy + 14);
+          m.buttons.push({ type: "week", weekId: wk.id, x: listX, y: iy, w: listW, h: itemH - 2 });
+        }
+        if (si > 0) m.buttons.push({ type: "scrollUp", x: listX, y: listY - 16, w: listW, h: 14 });
+        if (ei < filtered.length) m.buttons.push({ type: "scrollDown", x: listX, y: listY + maxVis * itemH + 6, w: listW, h: 14 });
+      }
+
+      // Player name + change button (left-aligned, stacked)
+      const nameY = listY + maxVis * itemH + 20;
+      const nameDisplay = m.guestName || "GÄST";
+      ctx.fillStyle = "#90b0d0"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
+      ctx.fillText(`SPELARE: ${nameDisplay}`, listX, nameY);
+      const nameBtnW = 72, nameBtnH = 16, nameBtnX = listX, nameBtnY = nameY + 6;
+      ctx.fillStyle = "#1a2a40"; ctx.fillRect(nameBtnX, nameBtnY, nameBtnW, nameBtnH);
+      ctx.strokeStyle = "#4070a0"; ctx.lineWidth = 1; ctx.strokeRect(nameBtnX, nameBtnY, nameBtnW, nameBtnH);
+      ctx.fillStyle = "#90c0f0"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("BYT NAMN", nameBtnX + nameBtnW / 2, nameBtnY + 12);
+      m.buttons.push({ type: "changeName", x: nameBtnX, y: nameBtnY, w: nameBtnW, h: nameBtnH });
+
+      // Start button
+      const btnW = 300, btnH = 36, btnX = w / 2 - btnW / 2, btnY = nameY + 32;
+      const canStart = !!m.selectedWeekId;
+      ctx.fillStyle = "#0f0f1a"; ctx.fillRect(btnX - 2, btnY - 2, btnW + 4, btnH + 4);
+      ctx.fillStyle = canStart ? "#1a5a1a" : "#1a1a2a";
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      if (canStart) { ctx.strokeStyle = "#30c030"; ctx.lineWidth = 2; ctx.strokeRect(btnX, btnY, btnW, btnH); }
+      ctx.fillStyle = canStart ? "#f0f0f0" : "#404050";
+      ctx.font = "bold 16px monospace"; ctx.textAlign = "center";
+      ctx.fillText("⚔  STARTA SIEGE  ⚔", w / 2, btnY + 24);
+      m.buttons.push({ type: "start", x: btnX, y: btnY, w: btnW, h: btnH });
+    }
+
+    function drawLeaderboardTab(m) {
+      const w = canvas.width, contentY = 90;
+      ctx.fillStyle = "#80c0e0"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+      ctx.fillText("TOPPLISTA", w / 2, contentY);
+      const lb = m.leaderboard || [];
+      const itemH = 20, listY = contentY + 14;
+      const maxVis = Math.floor((canvas.height - listY - 20) / itemH);
+      const trophies = ["🥇", "🥈", "🥉"];
+      lb.slice(0, maxVis).forEach((entry, i) => {
+        const iy = listY + i * itemH;
+        ctx.fillStyle = i < 3 ? "#1a2a40" : "transparent";
+        if (i < 3) ctx.fillRect(30, iy, w - 60, itemH - 2);
+        ctx.fillStyle = i === 0 ? "#f0d040" : i === 1 ? "#c0c0d0" : i === 2 ? "#c08040" : "#8090a0";
+        ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
+        const trophy = i < 3 ? trophies[i] + " " : `${i + 1}. `;
+        ctx.fillText(`${trophy}${entry.name || "???"}`, 40, iy + 14);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#60a0d0";
+        ctx.fillText(`${entry.score || 0} XP`, w - 40, iy + 14);
+      });
+      if (!lb.length) {
+        ctx.fillStyle = "#405060"; ctx.font = "12px monospace"; ctx.textAlign = "center";
+        ctx.fillText("Ingen data tillgänglig", w / 2, listY + 40);
+      }
+    }
+
+    function drawStatsTab(m) {
+      const w = canvas.width, contentY = 90;
+      ctx.fillStyle = "#80c0e0"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+      ctx.fillText("VECKOSTATISTIK", w / 2, contentY);
+      const ws = m.weekStats || [];
+      const itemH = 28, listY = contentY + 14;
+      const maxVis = Math.floor((canvas.height - listY - 20) / itemH);
+      const trophyColors = { gold: "#f0d040", silver: "#c0c0d0", bronze: "#c08040" };
+      ws.slice(0, maxVis).forEach((stat, i) => {
+        const iy = listY + i * itemH;
+        ctx.fillStyle = i % 2 === 0 ? "rgba(20,30,50,0.5)" : "transparent";
+        if (i % 2 === 0) ctx.fillRect(30, iy, w - 60, itemH - 2);
+        ctx.fillStyle = "#b0c0d0"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
+        ctx.fillText(stat.weekName || `Vecka ${i + 1}`, 40, iy + 12);
+        // Trophy
+        if (stat.trophy) {
+          ctx.fillStyle = trophyColors[stat.trophy] || "#808080";
+          ctx.font = "bold 11px monospace";
+          ctx.fillText(stat.trophy === "gold" ? "🏆" : stat.trophy === "silver" ? "🥈" : "🥉", 40, iy + 24);
+        }
+        ctx.textAlign = "right"; ctx.fillStyle = "#60a0d0"; ctx.font = "10px monospace";
+        ctx.fillText(`${stat.correct || 0}/${stat.total || 0} rätt  |  ${stat.xp || 0} XP`, w - 40, iy + 14);
+        // Progress bar
+        const pct = stat.total > 0 ? stat.correct / stat.total : 0;
+        ctx.fillStyle = "#0a1020"; ctx.fillRect(w - 200, iy + 18, 100, 6);
+        ctx.fillStyle = pct >= 1 ? "#f0d040" : pct > 0.7 ? "#30c030" : pct > 0.4 ? "#e0a020" : "#c03030";
+        ctx.fillRect(w - 200, iy + 18, 100 * pct, 6);
+      });
+      if (!ws.length) {
+        ctx.fillStyle = "#405060"; ctx.font = "12px monospace"; ctx.textAlign = "center";
+        ctx.fillText("Ingen statistik ännu", w / 2, listY + 40);
+      }
+    }
+
+    function drawLevelsTab(m) {
+      const w = canvas.width, contentY = 90;
+      ctx.fillStyle = "#80c0e0"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+      ctx.fillText("NIVÅER & FRAMSTEG", w / 2, contentY);
+      const s = m.stats;
+      const centerX = w / 2, ly = contentY + 30;
+      // Big level display
+      ctx.fillStyle = "#0f1428"; ctx.fillRect(centerX - 60, ly, 120, 60);
+      ctx.strokeStyle = "#4080f0"; ctx.lineWidth = 2; ctx.strokeRect(centerX - 60, ly, 120, 60);
+      ctx.fillStyle = "#f0e040"; ctx.font = "bold 36px monospace"; ctx.textAlign = "center";
+      ctx.fillText(String(s.level), centerX, ly + 44);
+      ctx.fillStyle = "#80a0c0"; ctx.font = "bold 10px monospace";
+      ctx.fillText("LEVEL", centerX, ly + 56);
+      // XP bar
+      const barX = centerX - 140, barY = ly + 76, barW = 280, barH = 16;
+      const xpPct = Math.min(1, s.xp / Math.max(1, s.xpNext));
+      ctx.fillStyle = "#0a1020"; ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = "#2060c0"; ctx.fillRect(barX, barY, barW * xpPct, barH);
+      ctx.strokeStyle = "#3060a0"; ctx.lineWidth = 1; ctx.strokeRect(barX, barY, barW, barH);
+      ctx.fillStyle = "#f0f0f0"; ctx.font = "bold 10px monospace";
+      ctx.fillText(`${s.xp} / ${s.xpNext} XP`, centerX, barY + 12);
+      // Coins & streak
+      ctx.fillStyle = "#e0c020"; ctx.font = "bold 14px monospace";
+      ctx.fillText(`COINS: ${s.coins}`, centerX - 80, barY + 40);
+      ctx.fillStyle = "#e06020";
+      ctx.fillText(`STREAK: ${s.streak}`, centerX + 80, barY + 40);
+    }
+
+    function drawTeacherTab(m) {
+      const w = canvas.width, contentY = 90;
+      m.teacherTyping = true;
+
+      // Terminal-style frame
+      const frameX = w / 2 - 220, frameY = contentY, frameW = 440, frameH = 300;
+      ctx.fillStyle = "#0a0a0a";
+      ctx.fillRect(frameX, frameY, frameW, frameH);
+      ctx.strokeStyle = "#00aa00"; ctx.lineWidth = 2;
+      ctx.strokeRect(frameX, frameY, frameW, frameH);
+      // Scanlines
+      for (let sy = frameY; sy < frameY + frameH; sy += 3) {
+        ctx.fillStyle = "rgba(0,0,0,0.15)";
+        ctx.fillRect(frameX, sy, frameW, 1);
+      }
+
+      ctx.fillStyle = "#00cc00"; ctx.font = "bold 13px monospace"; ctx.textAlign = "left";
+      ctx.fillText("root@glostrainer:~$ teacher-login", frameX + 14, frameY + 26);
+      ctx.fillStyle = "#00aa00"; ctx.font = "12px monospace";
+      ctx.fillText("Ange lärarkod för åtkomst till", frameX + 14, frameY + 52);
+      ctx.fillText("veckohantering och elevresultat.", frameX + 14, frameY + 70);
+
+      // Code input line - DOS style with typed characters
+      ctx.fillStyle = "#00cc00"; ctx.font = "bold 13px monospace";
+      ctx.fillText("KOD: ", frameX + 14, frameY + 100);
+      // Show masked code as asterisks
+      const masked = "*".repeat(m.teacherCode.length);
+      ctx.fillStyle = "#00ff00";
+      ctx.fillText(masked, frameX + 70, frameY + 100);
+      // Blinking cursor after typed text
+      if (Math.floor(Date.now() / 500) % 2 === 0) {
+        const cursorX = frameX + 70 + ctx.measureText(masked).width;
+        ctx.fillRect(cursorX + 2, frameY + 89, 9, 14);
+      }
+
+      // Status message
+      if (m.teacherMsg) {
+        ctx.fillStyle = m.teacherMsgColor;
+        ctx.font = "bold 12px monospace";
+        ctx.fillText("> " + m.teacherMsg, frameX + 14, frameY + 130);
+      }
+
+      // Instructions
+      ctx.fillStyle = "#006600"; ctx.font = "10px monospace";
+      ctx.fillText("Skriv koden och tryck ENTER", frameX + 14, frameY + 158);
+
+      // Separator
+      ctx.fillStyle = "#004400";
+      ctx.fillText("─".repeat(46), frameX + 14, frameY + 180);
+
+      // Elev login section
+      ctx.fillStyle = "#4080c0"; ctx.font = "bold 12px monospace";
+      ctx.fillText("Elev? Logga in eller registrera:", frameX + 14, frameY + 206);
+
+      const authBtnW = 240, authBtnH = 30;
+      const authBtnX = frameX + frameW / 2 - authBtnW / 2, authBtnY = frameY + 218;
+      ctx.fillStyle = "#0a1428"; ctx.fillRect(authBtnX, authBtnY, authBtnW, authBtnH);
+      ctx.strokeStyle = "#3060a0"; ctx.lineWidth = 1; ctx.strokeRect(authBtnX, authBtnY, authBtnW, authBtnH);
+      ctx.fillStyle = "#80c0f0"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+      ctx.fillText("LOGGA IN / REGISTRERA", frameX + frameW / 2, authBtnY + 20);
+      m.buttons.push({ type: "authLogin", x: authBtnX, y: authBtnY, w: authBtnW, h: authBtnH });
+      ctx.textAlign = "left";
+    }
+
+    function drawChallengesTab(m) {
+      const w = canvas.width, contentY = 90;
+      ctx.fillStyle = "#e0a040"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+      ctx.fillText("UTMANINGAR", w / 2, contentY);
+
+      const challenges = m.pendingChallenges || [];
+      if (!challenges.length) {
+        ctx.fillStyle = "#506070"; ctx.font = "12px monospace"; ctx.textAlign = "center";
+        ctx.fillText("Inga utmaningar just nu", w / 2, contentY + 50);
+        ctx.fillStyle = "#404050"; ctx.font = "10px monospace";
+        ctx.fillText("Utmana spelare från FIGHT-fliken", w / 2, contentY + 72);
+        return;
+      }
+
+      challenges.forEach((ch, i) => {
+        const iy = contentY + 20 + i * 60;
+        const cardW = w - 60;
+
+        if (ch.isCreator) {
+          // OUTGOING - you sent this challenge
+          ctx.fillStyle = "rgba(20,40,60,0.6)";
+          ctx.fillRect(30, iy, cardW, 52);
+          ctx.strokeStyle = "#4080c0"; ctx.lineWidth = 1;
+          ctx.strokeRect(30, iy, cardW, 52);
+          ctx.fillStyle = "#80c0f0"; ctx.font = "bold 12px monospace"; ctx.textAlign = "left";
+          ctx.fillText("SKICKAD UTMANING", 40, iy + 16);
+          ctx.fillStyle = "#a0b0c0"; ctx.font = "11px monospace";
+          ctx.fillText(`Vecka: ${ch.weekName}  |  Accepterat: ${ch.accepted}/${ch.total}`, 40, iy + 34);
+          // Status indicator
+          ctx.fillStyle = "#506880"; ctx.font = "bold 10px monospace"; ctx.textAlign = "right";
+          ctx.fillText("VÄNTAR...", w - 40, iy + 16);
+          // Waiting animation dots
+          const dots = ".".repeat(1 + Math.floor(Date.now() / 500) % 3);
+          ctx.fillText(dots, w - 40, iy + 32);
+        } else {
+          // INCOMING - someone challenges you
+          ctx.fillStyle = "rgba(50,30,10,0.6)";
+          ctx.fillRect(30, iy, cardW, 52);
+          ctx.strokeStyle = "#e0a040"; ctx.lineWidth = 1;
+          ctx.strokeRect(30, iy, cardW, 52);
+          ctx.fillStyle = "#e0c080"; ctx.font = "bold 12px monospace"; ctx.textAlign = "left";
+          ctx.fillText(`⚔ ${ch.challengerName} utmanar dig!`, 40, iy + 16);
+          ctx.fillStyle = "#a09070"; ctx.font = "11px monospace";
+          ctx.fillText(`Vecka: ${ch.weekName}`, 40, iy + 34);
+
+          // ACCEPTERA button
+          const abW = 100, abH = 24;
+          const accX = w - 60 - abW * 2 - 10, accY = iy + 14;
+          ctx.fillStyle = "#1a5a1a"; ctx.fillRect(accX, accY, abW, abH);
+          ctx.strokeStyle = "#30c030"; ctx.lineWidth = 2; ctx.strokeRect(accX, accY, abW, abH);
+          ctx.fillStyle = "#40ff40"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+          ctx.fillText("ACCEPTERA", accX + abW / 2, accY + 17);
+          m.buttons.push({ type: "acceptChallenge", challengeId: ch.id, x: accX, y: accY, w: abW, h: abH });
+
+          // NEKA button
+          const decX = w - 60 - abW, decY = iy + 14;
+          ctx.fillStyle = "#5a1a1a"; ctx.fillRect(decX, decY, abW, abH);
+          ctx.strokeStyle = "#e04040"; ctx.lineWidth = 2; ctx.strokeRect(decX, decY, abW, abH);
+          ctx.fillStyle = "#ff6060"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+          ctx.fillText("NEKA", decX + abW / 2, decY + 17);
+          m.buttons.push({ type: "declineChallenge", challengeId: ch.id, x: decX, y: decY, w: abW, h: abH });
+        }
+      });
+    }
+
+    function ensureFightState() {
+      if (!appState.groupFight) appState.groupFight = { teamA: [], teamB: [], open: false };
+      if (!appState.groupFight.teamA) appState.groupFight.teamA = [];
+      if (!appState.groupFight.teamB) appState.groupFight.teamB = [];
+      // Auto-add self to Lag A if not in any team
+      const selfInA = appState.groupFight.teamA.some(p => isCurrentActorPlayer(p));
+      const selfInB = appState.groupFight.teamB.some(p => isCurrentActorPlayer(p));
+      if (!selfInA && !selfInB) {
+        const selfUser = (appState.onlineUsers || []).find(u => isCurrentActorPlayer(u));
+        if (selfUser) appState.groupFight.teamA.unshift({ ...selfUser });
+      }
+    }
+
+    function isInAnyTeam(player) {
+      const id = player.profileId || player.sessionId || player.id;
+      const inA = (appState.groupFight?.teamA || []).some(p => (p.profileId || p.sessionId || p.id) === id);
+      const inB = (appState.groupFight?.teamB || []).some(p => (p.profileId || p.sessionId || p.id) === id);
+      return inA || inB;
+    }
+
+    function drawTeamMember(p, i, colX, colW, listTop, team, m) {
+      const iy = listTop + 22 + i * 22;
+      const isSelf = !p.isBot && isCurrentActorPlayer(p);
+      ctx.fillStyle = team === "A" ? "rgba(20,40,60,0.5)" : "rgba(60,20,20,0.5)";
+      ctx.fillRect(colX, iy, colW, 20);
+      ctx.fillStyle = isSelf ? "#60c0f0" : (team === "A" ? "#b0d0e0" : "#e0b0b0");
+      ctx.font = "10px monospace"; ctx.textAlign = "left";
+      const label = (p.name || p.displayName || "???") + (p.isBot ? " 🤖" : "") + (isSelf ? " (DU)" : "");
+      ctx.fillText(label, colX + 4, iy + 14);
+      // BYT LAG button
+      const bw = 54, bh = 16;
+      const swX = colX + colW - bw * 2 - 6, swY = iy + 2;
+      ctx.fillStyle = "#1a2a3a"; ctx.fillRect(swX, swY, bw, bh);
+      ctx.strokeStyle = "#4080b0"; ctx.lineWidth = 1; ctx.strokeRect(swX, swY, bw, bh);
+      ctx.fillStyle = "#90c0f0"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+      ctx.fillText("BYT LAG", swX + bw / 2, swY + 12);
+      m.buttons.push({ type: "swapTeam", team, index: i, x: swX, y: swY, w: bw, h: bh });
+      // TA BORT button (not for self)
+      if (!isSelf) {
+        const rmX = colX + colW - bw - 2, rmY = iy + 2;
+        ctx.fillStyle = "#3a1a1a"; ctx.fillRect(rmX, rmY, bw, bh);
+        ctx.strokeStyle = "#c04040"; ctx.lineWidth = 1; ctx.strokeRect(rmX, rmY, bw, bh);
+        ctx.fillStyle = "#ff8080"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+        ctx.fillText("TA BORT", rmX + bw / 2, rmY + 12);
+        m.buttons.push({ type: "removeFromTeam", team, index: i, x: rmX, y: rmY, w: bw, h: bh });
+      }
+    }
+
+    function drawFightTab(m) {
+      ensureFightState();
+      const w = canvas.width, contentY = 90;
+      const half = Math.floor(w / 2);
+      const teamA = appState.groupFight.teamA;
+      const teamB = appState.groupFight.teamB;
+
+      ctx.fillStyle = "#80c0e0"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+      ctx.fillText("SKAPA FIGHT", w / 2, contentY);
+
+      // Team columns
+      const colX = 20, colW = half - 30, listTop = contentY + 16;
+      const colX2 = half + 10, colW2 = half - 30;
+
+      // Lag A header
+      ctx.fillStyle = "#1a2a40"; ctx.fillRect(colX, listTop, colW, 18);
+      ctx.fillStyle = "#60a0e0"; ctx.font = "bold 10px monospace"; ctx.textAlign = "center";
+      ctx.fillText(`DITT LAG (${teamA.length})`, colX + colW / 2, listTop + 13);
+
+      teamA.forEach((p, i) => drawTeamMember(p, i, colX, colW, listTop, "A", m));
+
+      // Lag B header
+      ctx.fillStyle = "#401a1a"; ctx.fillRect(colX2, listTop, colW2, 18);
+      ctx.fillStyle = "#e06060"; ctx.font = "bold 10px monospace"; ctx.textAlign = "center";
+      ctx.fillText(`MOTSTÅNDARLAG (${teamB.length})`, colX2 + colW2 / 2, listTop + 13);
+
+      teamB.forEach((p, i) => drawTeamMember(p, i, colX2, colW2, listTop, "B", m));
+
+      // Bot buttons
+      const maxTeam = Math.max(teamA.length, teamB.length);
+      const botY = listTop + 22 + Math.max(2, maxTeam) * 22 + 8;
+      const abW = 100, abH = 18;
+
+      ctx.fillStyle = "#1a3050"; ctx.fillRect(colX, botY, abW, abH);
+      ctx.strokeStyle = "#3060a0"; ctx.lineWidth = 1; ctx.strokeRect(colX, botY, abW, abH);
+      ctx.fillStyle = "#80c0f0"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("+ BOT → LAG A", colX + abW / 2, botY + 13);
+      m.buttons.push({ type: "addBotA", x: colX, y: botY, w: abW, h: abH });
+
+      ctx.fillStyle = "#3a1a1a"; ctx.fillRect(colX2, botY, abW, abH);
+      ctx.strokeStyle = "#a03030"; ctx.lineWidth = 1; ctx.strokeRect(colX2, botY, abW, abH);
+      ctx.fillStyle = "#f08080"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("+ BOT → LAG B", colX2 + abW / 2, botY + 13);
+      m.buttons.push({ type: "addBotB", x: colX2, y: botY, w: abW, h: abH });
+
+      // Available players (only those NOT in any team)
+      const playersY = botY + 28;
+      ctx.fillStyle = "#506880"; ctx.font = "bold 9px monospace"; ctx.textAlign = "left";
+      ctx.fillText("TILLGÄNGLIGA SPELARE:", colX, playersY);
+
+      const availPlayers = (appState.onlineUsers || []).filter(p => !isInAnyTeam(p));
+      const maxShow = Math.min(4, Math.floor((canvas.height - playersY - 60) / 18));
+      availPlayers.slice(0, maxShow).forEach((player, i) => {
+        const iy = playersY + 12 + i * 18;
+        ctx.fillStyle = i % 2 === 0 ? "rgba(20,30,50,0.4)" : "transparent";
+        if (i % 2 === 0) ctx.fillRect(colX, iy - 2, w - 40, 16);
+        const name = player.name || player.displayName || "???";
+        ctx.fillStyle = "#b0c0d0"; ctx.font = "10px monospace"; ctx.textAlign = "left";
+        ctx.fillText(name, colX + 4, iy + 10);
+        // Add to team buttons
+        const bw = 44, bh = 12;
+        const b1x = w - 40 - bw * 2 - 6, b1y = iy;
+        ctx.fillStyle = "#1a3050"; ctx.fillRect(b1x, b1y, bw, bh);
+        ctx.fillStyle = "#80c0f0"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+        ctx.fillText("LAG A", b1x + bw / 2, b1y + 9);
+        m.buttons.push({ type: "playerToA", player, x: b1x, y: b1y, w: bw, h: bh });
+        const b2x = w - 40 - bw, b2y = iy;
+        ctx.fillStyle = "#3a1a1a"; ctx.fillRect(b2x, b2y, bw, bh);
+        ctx.fillStyle = "#f08080"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+        ctx.fillText("LAG B", b2x + bw / 2, b2y + 9);
+        m.buttons.push({ type: "playerToB", player, x: b2x, y: b2y, w: bw, h: bh });
+      });
+      if (!availPlayers.length) {
+        ctx.fillStyle = "#405060"; ctx.font = "9px monospace"; ctx.textAlign = "left";
+        ctx.fillText("Alla spelare är i lag", colX + 4, playersY + 22);
+      }
+
+      // STARTA FIGHT button
+      const sfW = 240, sfH = 28, sfX = w / 2 - sfW / 2, sfY = canvas.height - 46;
+      const canFight = teamA.length > 0 && teamB.length > 0;
+      ctx.fillStyle = "#0f0f1a"; ctx.fillRect(sfX - 2, sfY - 2, sfW + 4, sfH + 4);
+      ctx.fillStyle = canFight ? "#1a5a1a" : "#1a1a2a";
+      ctx.fillRect(sfX, sfY, sfW, sfH);
+      if (canFight) { ctx.strokeStyle = "#30c030"; ctx.lineWidth = 2; ctx.strokeRect(sfX, sfY, sfW, sfH); }
+      ctx.fillStyle = canFight ? "#f0f0f0" : "#404050";
+      ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+      ctx.fillText("STARTA FIGHT", w / 2, sfY + 19);
+      m.buttons.push({ type: "startFight", x: sfX, y: sfY, w: sfW, h: sfH });
+    }
+
+    function drawNameEditOverlay(m) {
+      if (!m.nameEditing) return;
+      const w = canvas.width, h = canvas.height;
+      ctx.save();
+      ctx.fillStyle = "rgba(10,16,32,0.85)";
+      ctx.fillRect(0, 0, w, h);
+      // Terminal frame
+      const fx = w / 2 - 180, fy = h / 2 - 60, fw = 360, fh = 120;
+      ctx.fillStyle = "#0a0a0a"; ctx.fillRect(fx, fy, fw, fh);
+      ctx.strokeStyle = "#00aa00"; ctx.lineWidth = 2; ctx.strokeRect(fx, fy, fw, fh);
+      ctx.fillStyle = "#00cc00"; ctx.font = "bold 12px monospace"; ctx.textAlign = "left";
+      ctx.fillText("root@glostrainer:~$ set-name", fx + 12, fy + 22);
+      ctx.fillStyle = "#00aa00"; ctx.font = "11px monospace";
+      ctx.fillText("Ange ditt namn:", fx + 12, fy + 46);
+      ctx.fillStyle = "#00ff00"; ctx.font = "bold 14px monospace";
+      ctx.fillText(m.nameBuffer, fx + 12, fy + 70);
+      if (Math.floor(Date.now() / 500) % 2 === 0) {
+        const cx = fx + 12 + ctx.measureText(m.nameBuffer).width + 2;
+        ctx.fillRect(cx, fy + 58, 9, 14);
+      }
+      ctx.fillStyle = "#006600"; ctx.font = "9px monospace";
+      ctx.fillText("ENTER för att spara, ESC för att avbryta", fx + 12, fy + 96);
+      ctx.restore();
+    }
+
+    function drawMenuMode() {
+      ctx.imageSmoothingEnabled = false;
+      const m = arena.menu;
+      m.buttons = [];
+      drawMenuBackground();
+      drawMenuHeader(m);
+      if (m.selectedTab === "play") drawPlayTab(m);
+      else if (m.selectedTab === "fight") drawFightTab(m);
+      else if (m.selectedTab === "challenges") drawChallengesTab(m);
+      else if (m.selectedTab === "leaderboard") drawLeaderboardTab(m);
+      else if (m.selectedTab === "stats") drawStatsTab(m);
+      else if (m.selectedTab === "levels") drawLevelsTab(m);
+      else if (m.selectedTab === "teacher") {
+        drawTeacherTab(m);
+      } else {
+        m.teacherTyping = false;
+      }
+      // Name edit overlay on top
+      drawNameEditOverlay(m);
+    }
+
+    function handleMenuClick(cx, cy) {
+      const m = arena.menu;
+      for (const btn of m.buttons) {
+        if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+          if (btn.type === "tab") {
+            m.selectedTab = btn.tabId; m.scrollOffset = 0;
+            if (arena.menu.teacherInputVisible) { arena.menu.teacherInputVisible = false; }
+            return { action: "hideTeacherInput" };
+          }
+          if (btn.type === "week") return { action: "selectWeek", weekId: btn.weekId };
+          if (btn.type === "start" && m.selectedWeekId) return { action: "startSiege" };
+          if (btn.type === "lang") return { action: "changeLanguage", lang: btn.lang };
+          if (btn.type === "scrollUp") { m.scrollOffset = Math.max(0, m.scrollOffset - 1); return null; }
+          if (btn.type === "scrollDown") { m.scrollOffset += 1; return null; }
+          if (btn.type === "changeName") return { action: "startNameEdit" };
+          if (btn.type === "addBotA") return { action: "addBotA" };
+          if (btn.type === "addBotB") return { action: "addBotB" };
+          if (btn.type === "playerToA") return { action: "playerToA", player: btn.player };
+          if (btn.type === "playerToB") return { action: "playerToB", player: btn.player };
+          if (btn.type === "swapTeam") return { action: "swapTeam", team: btn.team, index: btn.index };
+          if (btn.type === "removeFromTeam") return { action: "removeFromTeam", team: btn.team, index: btn.index };
+          if (btn.type === "startFight") return { action: "startFight" };
+          if (btn.type === "acceptChallenge") return { action: "acceptChallenge", challengeId: btn.challengeId };
+          if (btn.type === "declineChallenge") return { action: "declineChallenge", challengeId: btn.challengeId };
+          if (btn.type === "authLogin") return { action: "navigate", url: "/Auth/Login" };
+        }
+      }
+      return null;
+    }
+
+    function handleMenuHover(cx, cy) {
+      const m = arena.menu;
+      m.hoveredItem = null;
+      for (const btn of m.buttons) {
+        if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+          m.hoveredItem = btn;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // ─── END CANVAS MENU MODE ───────────────────────────────────────────
+
+    // ─── SNES PIXEL SIEGE MODE ─────────────────────────────────────────
+    function siegePx(gx, gy, w, h, color) {
+      if (!color) return;
+      ctx.fillStyle = color;
+      ctx.fillRect(gx * SIEGE_PS, gy * SIEGE_PS, w * SIEGE_PS, h * SIEGE_PS);
+    }
+
+    function drawSiegeBackground() {
+      const w = Math.floor(canvas.width / SIEGE_PS), h = Math.floor(canvas.height / SIEGE_PS);
+      const skyH = SIEGE_GROUND_Y - 30;
+      // Sky
+      siegePx(0, 0, w, skyH, "#5080c0");
+      // Clouds (pixel style)
+      siegePx(40, 8, 12, 3, "#8ab0e0");
+      siegePx(42, 7, 8, 1, "#8ab0e0");
+      siegePx(130, 12, 10, 3, "#8ab0e0");
+      siegePx(132, 11, 6, 1, "#8ab0e0");
+      siegePx(220, 6, 14, 3, "#8ab0e0");
+      siegePx(222, 5, 10, 1, "#8ab0e0");
+      // Sun
+      siegePx(260, 5, 6, 6, "#f0e040");
+      siegePx(261, 4, 4, 1, "#f0e040");
+      siegePx(261, 11, 4, 1, "#f0e040");
+      siegePx(259, 6, 1, 4, "#f0e040");
+      siegePx(266, 6, 1, 4, "#f0e040");
+      // Distant mountains
+      for (let i = 0; i < 6; i++) {
+        const mx = i * 55 - 10;
+        const mh = 10 + (i % 3) * 5;
+        for (let row = 0; row < mh; row++) {
+          const spread = Math.floor((mh - row) * 1.4);
+          siegePx(mx + mh - spread, skyH - row, spread * 2, 1, row < mh / 2 ? "#607848" : "#708858");
+        }
+      }
+      // Ground
+      siegePx(0, skyH, w, h - skyH, "#80a050");
+      siegePx(0, skyH, w, 2, "#90b060");
+      // Grass details
+      for (let i = 0; i < 40; i++) {
+        const gx = (i * 23 + 7) % w;
+        siegePx(gx, skyH + 2 + (i % 5), 1, 2, "#70903e");
+      }
+      // Path/road in the middle
+      siegePx(SIEGE_SOLDIER_SPAWN_LEFT - 2, SIEGE_GROUND_Y - 2, SIEGE_SOLDIER_SPAWN_RIGHT - SIEGE_SOLDIER_SPAWN_LEFT + 6, 5, "#a09060");
+      siegePx(SIEGE_SOLDIER_SPAWN_LEFT - 1, SIEGE_GROUND_Y - 1, SIEGE_SOLDIER_SPAWN_RIGHT - SIEGE_SOLDIER_SPAWN_LEFT + 4, 3, "#b0a070");
+    }
+
+    function drawSiegeCastle(gx, gy, side, hpRatio) {
+      const stone = "#a0a0b0";
+      const stoneDark = "#707880";
+      const stoneLight = "#c0c8d0";
+      const gate = "#302820";
+      const flag = side === "left" ? "#2060d0" : "#d03030";
+      const flagDark = side === "left" ? "#1040a0" : "#a02020";
+
+      // Main wall
+      siegePx(gx + 4, gy + 8, 20, 14, stone);
+      siegePx(gx + 4, gy + 8, 20, 1, stoneLight);
+      siegePx(gx + 4, gy + 21, 20, 1, stoneDark);
+
+      // Left tower
+      siegePx(gx, gy + 4, 6, 18, stone);
+      siegePx(gx, gy + 4, 6, 1, stoneLight);
+      siegePx(gx, gy + 3, 2, 1, stone); siegePx(gx + 4, gy + 3, 2, 1, stone); // battlements
+      siegePx(gx, gy + 2, 1, 1, stone); siegePx(gx + 5, gy + 2, 1, 1, stone);
+
+      // Right tower
+      siegePx(gx + 22, gy + 4, 6, 18, stone);
+      siegePx(gx + 22, gy + 4, 6, 1, stoneLight);
+      siegePx(gx + 22, gy + 3, 2, 1, stone); siegePx(gx + 26, gy + 3, 2, 1, stone);
+      siegePx(gx + 22, gy + 2, 1, 1, stone); siegePx(gx + 27, gy + 2, 1, 1, stone);
+
+      // Center tower (tallest)
+      siegePx(gx + 10, gy + 2, 8, 6, stone);
+      siegePx(gx + 10, gy + 2, 8, 1, stoneLight);
+      siegePx(gx + 10, gy + 1, 2, 1, stone); siegePx(gx + 16, gy + 1, 2, 1, stone);
+      siegePx(gx + 10, gy, 1, 1, stone); siegePx(gx + 17, gy, 1, 1, stone);
+
+      // Flag pole on center tower
+      const flagSide = side === "left" ? gx + 14 : gx + 13;
+      siegePx(flagSide, gy - 5, 1, 5, "#3a2a0e");
+      siegePx(flagSide + (side === "left" ? 1 : -3), gy - 5, 3, 2, flag);
+      siegePx(flagSide + (side === "left" ? 1 : -3), gy - 5, 3, 1, flagDark);
+
+      // Gate
+      siegePx(gx + 11, gy + 16, 6, 6, gate);
+      siegePx(gx + 12, gy + 16, 4, 1, "#4a3830");
+      // Gate arch
+      siegePx(gx + 11, gy + 15, 1, 1, stone);
+      siegePx(gx + 16, gy + 15, 1, 1, stone);
+      siegePx(gx + 12, gy + 15, 4, 1, "#4a3830");
+
+      // Windows
+      siegePx(gx + 6, gy + 10, 2, 2, "#1a1a2a");
+      siegePx(gx + 20, gy + 10, 2, 2, "#1a1a2a");
+      siegePx(gx + 13, gy + 4, 2, 2, "#1a1a2a");
+
+      // Stone brick lines (removed — cleaner look)
+      if (false) {
+      }
+
+      // Damage cracks (based on HP)
+      const cracks = Math.floor((1 - hpRatio) * 12);
+      ctx.strokeStyle = "#2a2a2a";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < cracks; i++) {
+        const cx = (gx + 4 + ((i * 7) % 20)) * SIEGE_PS;
+        const cy = (gy + 6 + ((i * 11) % 14)) * SIEGE_PS;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + ((i % 3) - 1) * 8, cy + 10);
+        ctx.stroke();
+      }
+      // Rubble for heavy damage
+      if (hpRatio < 0.5) {
+        const rubbleCount = Math.floor((1 - hpRatio) * 8);
+        for (let i = 0; i < rubbleCount; i++) {
+          siegePx(gx + 2 + ((i * 5) % 24), gy + 20 + (i % 3), 2, 1, stoneDark);
+        }
+      }
+    }
+
+    function drawPixelSoldier(gx, gy, direction, walkFrame, attackFrame, teamColors, hp, maxHp) {
+      const isAttacking = attackFrame > 0;
+
+      // Shadow
+      siegePx(gx, gy + 10, 6, 1, "rgba(0,0,0,0.2)");
+
+      // Legs (animated walk)
+      const legPhase = Math.floor(walkFrame / 6) % 4;
+      if (isAttacking) {
+        siegePx(gx + 1, gy + 8, 2, 2, teamColors.boots);
+        siegePx(gx + 3, gy + 8, 2, 2, teamColors.boots);
+      } else if (legPhase === 0) {
+        siegePx(gx + 1, gy + 8, 1, 2, teamColors.boots);
+        siegePx(gx + 4, gy + 8, 1, 2, teamColors.boots);
+      } else if (legPhase === 1) {
+        siegePx(gx + 1, gy + 8, 1, 2, teamColors.boots);
+        siegePx(gx + 3, gy + 8, 1, 2, teamColors.boots);
+      } else if (legPhase === 2) {
+        siegePx(gx + 2, gy + 8, 1, 2, teamColors.boots);
+        siegePx(gx + 4, gy + 8, 1, 2, teamColors.boots);
+      } else {
+        siegePx(gx + 2, gy + 8, 1, 2, teamColors.boots);
+        siegePx(gx + 3, gy + 8, 1, 2, teamColors.boots);
+      }
+
+      // Body / armor
+      siegePx(gx + 1, gy + 4, 4, 4, teamColors.armor);
+      siegePx(gx + 1, gy + 4, 4, 1, teamColors.armorLight);
+
+      // Arms
+      siegePx(gx, gy + 4, 1, 3, teamColors.armor);
+      siegePx(gx + 5, gy + 4, 1, 3, teamColors.armor);
+
+      // Shield (front side)
+      const shieldX = direction > 0 ? gx + 5 : gx - 1;
+      siegePx(shieldX, gy + 3, 2, 4, teamColors.shield);
+      siegePx(shieldX, gy + 4, 2, 2, teamColors.shieldLight);
+
+      // Sword
+      const swordBaseX = direction > 0 ? gx + 6 : gx - 2;
+      if (isAttacking && attackFrame > SIEGE_ATTACK_COOLDOWN / 2) {
+        // Sword thrust forward
+        const swordExtend = direction > 0 ? swordBaseX + 1 : swordBaseX - 1;
+        siegePx(swordExtend, gy + 3, 1, 1, "#e0e0e0");
+        siegePx(swordExtend + direction, gy + 3, 1, 1, "#f0f0f0");
+        siegePx(swordExtend + direction * 2, gy + 3, 1, 1, "#f8f8f8");
+      } else {
+        // Sword at rest
+        siegePx(swordBaseX, gy + 2, 1, 4, "#c0c0c0");
+        siegePx(swordBaseX, gy + 2, 1, 1, "#e0e0e0");
+      }
+
+      // Belt
+      siegePx(gx + 1, gy + 7, 4, 1, "#5b3a0e");
+      siegePx(gx + 2, gy + 7, 1, 1, "#e0c020"); // buckle
+
+      // Head / helmet
+      siegePx(gx + 1, gy + 1, 4, 3, teamColors.helmet);
+      siegePx(gx + 1, gy + 1, 4, 1, teamColors.helmetLight);
+      // Visor slit
+      siegePx(gx + 2, gy + 2, 2, 1, "#1a1a1a");
+      // Face peek
+      siegePx(direction > 0 ? gx + 4 : gx + 1, gy + 3, 1, 1, "#f0c0a0");
+
+      // Helmet crest
+      siegePx(gx + 2, gy, 2, 1, teamColors.crest);
+
+      // HP bar above head
+      const hpRatio = Math.max(0, hp / Math.max(1, maxHp));
+      const barW = 6;
+      siegePx(gx, gy - 2, barW, 1, "#1a1a1a");
+      if (hpRatio > 0) {
+        const fillW = Math.max(1, Math.round(barW * hpRatio));
+        const barColor = hpRatio > 0.5 ? "#20c020" : hpRatio > 0.25 ? "#e0c020" : "#e02020";
+        siegePx(gx, gy - 2, fillW, 1, barColor);
+      }
+    }
+
+    // Nyan Cat — pop-tart body, cat face, rainbow trail
+    function drawNyanCat(gx, gy, direction, walkFrame, hp, maxHp) {
+      const ps = SIEGE_PS;
+      const sx = gx * ps, sy = gy * ps;
+      const bob = Math.sin(walkFrame / 3) * ps;
+
+      // Rainbow trail (behind the cat)
+      const rainbowColors = ["#ff0000", "#ff8800", "#ffff00", "#00ff00", "#0088ff", "#8800ff"];
+      const trailLen = 12;
+      const trailX = direction > 0 ? sx - trailLen * ps : sx + 8 * ps;
+      rainbowColors.forEach((c, i) => {
+        const ry = sy + (1 + i) * ps + bob;
+        ctx.fillStyle = c;
+        ctx.fillRect(trailX, ry, trailLen * ps, ps);
+      });
+
+      // Pop-tart body (pink rectangle with sprinkles)
+      ctx.fillStyle = "#e8a0b0";
+      ctx.fillRect(sx, sy + ps + bob, 7 * ps, 5 * ps);
+      ctx.fillStyle = "#d08898";
+      ctx.fillRect(sx + ps, sy + 2 * ps + bob, 5 * ps, 3 * ps);
+      // Sprinkles
+      ctx.fillStyle = "#ff4060"; ctx.fillRect(sx + 2 * ps, sy + 2 * ps + bob, ps * 0.5, ps * 0.5);
+      ctx.fillStyle = "#40ff60"; ctx.fillRect(sx + 4 * ps, sy + 3 * ps + bob, ps * 0.5, ps * 0.5);
+      ctx.fillStyle = "#4060ff"; ctx.fillRect(sx + 3 * ps, sy + 4 * ps + bob, ps * 0.5, ps * 0.5);
+      ctx.fillStyle = "#ffff40"; ctx.fillRect(sx + 5 * ps, sy + 2 * ps + bob, ps * 0.5, ps * 0.5);
+
+      // Cat face (gray, peeking from right/left)
+      const faceX = direction > 0 ? sx + 5 * ps : sx - 2 * ps;
+      ctx.fillStyle = "#808080";
+      ctx.fillRect(faceX, sy + ps + bob, 4 * ps, 4 * ps);
+      // Ears
+      ctx.fillRect(faceX, sy + bob, ps, ps);
+      ctx.fillRect(faceX + 3 * ps, sy + bob, ps, ps);
+      ctx.fillStyle = "#d0a0a0";
+      ctx.fillRect(faceX + ps * 0.3, sy + bob + ps * 0.3, ps * 0.5, ps * 0.5);
+      ctx.fillRect(faceX + 3 * ps + ps * 0.3, sy + bob + ps * 0.3, ps * 0.5, ps * 0.5);
+      // Eyes
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(faceX + ps, sy + 2 * ps + bob, ps, ps);
+      ctx.fillRect(faceX + 2 * ps, sy + 2 * ps + bob, ps, ps);
+      // Mouth
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(faceX + ps, sy + 3.5 * ps + bob, 2 * ps, ps * 0.4);
+
+      // Legs (stubby, animated)
+      ctx.fillStyle = "#808080";
+      const legOff = Math.floor(walkFrame / 4) % 2;
+      ctx.fillRect(sx + (1 + legOff) * ps, sy + 6 * ps + bob, ps, ps);
+      ctx.fillRect(sx + (4 - legOff) * ps, sy + 6 * ps + bob, ps, ps);
+
+      // Tail
+      ctx.fillStyle = "#808080";
+      const tw = Math.sin(walkFrame / 2) * ps;
+      const tailBaseX = direction > 0 ? sx - ps : sx + 7 * ps;
+      ctx.fillRect(tailBaseX, sy + 2 * ps + bob + tw, ps, 2 * ps);
+
+      // HP bar
+      const hpRatio = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx, gy - 2, 8, 1, "#1a1a1a");
+      if (hpRatio > 0) siegePx(gx, gy - 2, Math.max(1, Math.round(8 * hpRatio)), 1, hpRatio > 0.5 ? "#e0c020" : "#e02020");
+    }
+
+    // Knight on horse — lance, more HP
+    function drawPixelKnight(gx, gy, direction, walkFrame, attackFrame, teamColors, hp, maxHp) {
+      const ps = SIEGE_PS;
+      const isAttacking = attackFrame > 0;
+      const gallop = Math.sin(walkFrame / 3) * ps;
+
+      // Shadow
+      siegePx(gx - 1, gy + 10, 10, 1, "rgba(0,0,0,0.2)");
+
+      // Horse body
+      ctx.fillStyle = "#6a4a2a";
+      ctx.fillRect((gx + 1) * ps, (gy + 5) * ps + gallop, 6 * ps, 4 * ps);
+      ctx.fillStyle = "#7a5a3a";
+      ctx.fillRect((gx + 2) * ps, (gy + 5) * ps + gallop, 4 * ps, 3 * ps);
+      // Horse head
+      const headX = direction > 0 ? gx + 6 : gx - 1;
+      ctx.fillStyle = "#6a4a2a";
+      ctx.fillRect(headX * ps, (gy + 3) * ps + gallop, 2 * ps, 3 * ps);
+      ctx.fillRect((headX + (direction > 0 ? 1 : -1)) * ps, (gy + 3) * ps + gallop, ps, 2 * ps);
+      // Horse eye
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect((headX + (direction > 0 ? 1 : 0)) * ps, (gy + 4) * ps + gallop, ps * 0.5, ps * 0.5);
+      // Horse legs (animated gallop)
+      ctx.fillStyle = "#5a3a1a";
+      const legP = Math.floor(walkFrame / 4) % 4;
+      const legs = [[1,0], [2,1], [5,1], [6,0]];
+      legs.forEach(([lx, phase], i) => {
+        const extend = (legP + phase + i) % 2 === 0 ? 0 : ps;
+        ctx.fillRect((gx + lx) * ps, (gy + 9) * ps + gallop - extend, ps, 2 * ps + extend);
+      });
+      // Tail
+      ctx.fillStyle = "#4a3020";
+      const tw = Math.sin(walkFrame / 2) * ps;
+      const tailX = direction > 0 ? gx : gx + 7;
+      ctx.fillRect(tailX * ps, (gy + 5) * ps + gallop + tw, ps, 3 * ps);
+
+      // Rider body (on top of horse)
+      ctx.fillStyle = teamColors.armor;
+      ctx.fillRect((gx + 2) * ps, (gy + 1) * ps + gallop, 4 * ps, 4 * ps);
+      ctx.fillStyle = teamColors.armorLight;
+      ctx.fillRect((gx + 2) * ps, (gy + 1) * ps + gallop, 4 * ps, ps);
+      // Helmet
+      ctx.fillStyle = teamColors.helmet;
+      ctx.fillRect((gx + 3) * ps, (gy - 1) * ps + gallop, 2 * ps, 2 * ps);
+      ctx.fillStyle = teamColors.helmetLight;
+      ctx.fillRect((gx + 3) * ps, (gy - 1) * ps + gallop, 2 * ps, ps);
+      // Visor
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect((gx + 3) * ps, gy * ps + gallop, 2 * ps, ps * 0.5);
+      // Plume
+      ctx.fillStyle = teamColors.crest;
+      ctx.fillRect((gx + 3) * ps, (gy - 2) * ps + gallop, 2 * ps, ps);
+
+      // Lance
+      const lanceDir = direction;
+      const lanceBaseX = direction > 0 ? gx + 6 : gx - 3;
+      const lanceLen = isAttacking ? 6 : 4;
+      ctx.fillStyle = "#b0a080";
+      ctx.fillRect((lanceBaseX) * ps, (gy + 1) * ps + gallop, lanceLen * ps * (direction > 0 ? 1 : -1) || ps, ps);
+      // Lance tip
+      ctx.fillStyle = "#e0e0e0";
+      const tipX = direction > 0 ? lanceBaseX + lanceLen : lanceBaseX - lanceLen;
+      ctx.fillRect(tipX * ps, (gy + 1) * ps + gallop - ps * 0.3, ps, ps * 1.6);
+
+      // Shield
+      ctx.fillStyle = teamColors.shield;
+      const shX = direction > 0 ? gx + 1 : gx + 5;
+      ctx.fillRect(shX * ps, (gy + 2) * ps + gallop, ps, 3 * ps);
+
+      // HP bar
+      const hpRatio = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx, gy - 3, 8, 1, "#1a1a1a");
+      if (hpRatio > 0) siegePx(gx, gy - 3, Math.max(1, Math.round(8 * hpRatio)), 1, hpRatio > 0.5 ? "#20c020" : hpRatio > 0.25 ? "#e0c020" : "#e02020");
+    }
+
+    let enemySpawnCount = 0;
+    let playerSpawnCount = 0;
+
+    function spawnSiegeSoldier(team) {
+      const s = arena.siege;
+      const isEnemy = team !== "player";
+      const count = isEnemy ? ++enemySpawnCount : ++playerSpawnCount;
+      // Unit type: every 10th = knight, every 7th = archer, every 5th = nyan
+      let unitType = "soldier";
+      let unitHp = SIEGE_SOLDIER_MAX_HP;
+      if (count % 10 === 0) { unitType = "knight"; unitHp = SIEGE_SOLDIER_MAX_HP * 4; }
+      else if (count % 7 === 0) { unitType = "archer"; unitHp = SIEGE_SOLDIER_MAX_HP; }
+      else if (count % 5 === 0) { unitType = "nyan"; unitHp = SIEGE_SOLDIER_MAX_HP * 2; }
+      const soldier = {
+        x: team === "player" ? SIEGE_SOLDIER_SPAWN_LEFT : SIEGE_SOLDIER_SPAWN_RIGHT,
+        hp: unitHp,
+        maxHp: unitHp,
+        state: "walk",
+        walkFrame: Math.floor(Math.random() * 24),
+        attackFrame: 0,
+        attackCooldown: 0,
+        target: null,
+        direction: team === "player" ? 1 : -1,
+        team,
+        unitType,
+        isOiia: unitType === "nyan",
+      };
+      if (team === "player") {
+        s.playerSoldiers.push(soldier);
+      } else {
+        s.enemySoldiers.push(soldier);
+      }
+    }
+
+    function updateSiege() {
+      if (arena.mode !== "siege" || arena.siege.gameOver) return;
+      if (arena.siege.countdownEndsAt > Date.now()) return; // Freeze during countdown
+      const s = arena.siege;
+      const now = performance.now();
+      s.frameCount++;
+
+      // Auto-spawn soldiers every interval
+      if (now - s.lastPlayerSpawnMs >= s.spawnIntervalMs && s.playerSoldiers.length < 25) {
+        spawnSiegeSoldier("player");
+        s.lastPlayerSpawnMs = now;
+      }
+      if (now - s.lastEnemySpawnMs >= s.spawnIntervalMs && s.enemySoldiers.length < 25) {
+        spawnSiegeSoldier("enemy");
+        s.lastEnemySpawnMs = now;
+      }
+
+      // Update all soldiers
+      const allPlayer = s.playerSoldiers;
+      const allEnemy = s.enemySoldiers;
+
+      // Reset targets — if target died (killed by someone else), go back to walking
+      allPlayer.forEach(p => {
+        if (p.target && (p.target.hp <= 0 || p.target.state === "dead")) {
+          p.target = null;
+          p.state = "walk";
+          p.attackFrame = 0;
+          p.attackCooldown = 0;
+        }
+      });
+      allEnemy.forEach(e => {
+        if (e.target && (e.target.hp <= 0 || e.target.state === "dead")) {
+          e.target = null;
+          e.state = "walk";
+          e.attackFrame = 0;
+          e.attackCooldown = 0;
+        }
+      });
+
+      // Find encounters
+      allPlayer.forEach(p => {
+        if (p.state === "dead" || p.target) return;
+        const enemy = allEnemy.find(e => e.state !== "dead" && !e.target && Math.abs(p.x - e.x) < 8);
+        if (enemy) {
+          p.state = "fight";
+          p.target = enemy;
+          enemy.state = "fight";
+          enemy.target = p;
+        }
+      });
+
+      // Archers shoot from range
+      const shootArrow = (archer, targets, team) => {
+        if (archer.unitType !== "archer" || archer.state === "dead") return;
+        archer.attackCooldown--;
+        // Find nearest enemy
+        const nearest = targets.filter(t => t.state !== "dead").sort((a, b) => Math.abs(a.x - archer.x) - Math.abs(b.x - archer.x))[0];
+        if (!nearest) return;
+        const dist = Math.abs(nearest.x - archer.x);
+        if (dist < 40 && dist > 6 && archer.attackCooldown <= 0) {
+          // Stop and shoot
+          archer.state = "fight";
+          archer.attackCooldown = 50;
+          archer.attackFrame = 20;
+          const ax = archer.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ay = (SIEGE_GROUND_Y - 7) * SIEGE_PS;
+          const tx = nearest.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ty = (SIEGE_GROUND_Y - 5) * SIEGE_PS;
+          const dx = tx - ax, dy = ty - ay;
+          const speed = 5;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          s.arrows.push({
+            x: ax, y: ay,
+            vx: (dx / len) * speed,
+            vy: (dy / len) * speed - 2,
+            team, life: 120,
+          });
+        } else if (dist >= 40 || !nearest) {
+          if (archer.state === "fight" && !archer.target) archer.state = "walk";
+        }
+      };
+      allPlayer.filter(p => p.unitType === "archer").forEach(p => shootArrow(p, allEnemy, "player"));
+      allEnemy.filter(e => e.unitType === "archer").forEach(e => shootArrow(e, allPlayer, "enemy"));
+
+      // Move & fight
+      allPlayer.forEach(p => {
+        if (p.state === "dead") return;
+        p.walkFrame++;
+        if (p.state === "walk") {
+          p.x += SIEGE_SOLDIER_SPEED;
+          // Check if reached enemy castle
+          if (p.x >= SIEGE_RIGHT_CASTLE_X - 2) {
+            s.enemyCastleHp = Math.max(0, s.enemyCastleHp - SIEGE_CASTLE_DMG);
+            addImpactParticles(
+              (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
+              (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
+              60, "#fca5a5", "#fde68a"
+            );
+            p.state = "dead";
+            p.hp = 0;
+          }
+        } else if (p.state === "fight") {
+          p.attackCooldown--;
+          if (p.attackCooldown <= 0 && p.target && p.target.hp > 0) {
+            p.target.hp -= SIEGE_SOLDIER_DMG;
+            p.attackCooldown = SIEGE_ATTACK_COOLDOWN;
+            p.attackFrame = SIEGE_ATTACK_COOLDOWN;
+            // Hit particles
+            addImpactParticles(p.target.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 8, "#fde68a", "#ef4444");
+            if (p.target.hp <= 0) {
+              p.target.state = "dead";
+              p.target = null;
+              p.state = "walk";
+              p.attackFrame = 0;
+              p.attackCooldown = 0;
+            }
+          }
+          if (p.attackFrame > 0) p.attackFrame--;
+        }
+      });
+
+      allEnemy.forEach(e => {
+        if (e.state === "dead") return;
+        e.walkFrame++;
+        if (e.state === "walk") {
+          e.x -= SIEGE_SOLDIER_SPEED;
+          if (e.x <= SIEGE_SOLDIER_SPAWN_LEFT + 2) {
+            s.playerCastleHp = Math.max(0, s.playerCastleHp - SIEGE_CASTLE_DMG);
+            addImpactParticles(
+              (SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
+              (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
+              60, "#fca5a5", "#fde68a"
+            );
+            e.state = "dead";
+            e.hp = 0;
+          }
+        } else if (e.state === "fight") {
+          e.attackCooldown--;
+          if (e.attackCooldown <= 0 && e.target && e.target.hp > 0) {
+            e.target.hp -= SIEGE_SOLDIER_DMG;
+            e.attackCooldown = SIEGE_ATTACK_COOLDOWN;
+            e.attackFrame = SIEGE_ATTACK_COOLDOWN;
+            addImpactParticles(e.target.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 8, "#fde68a", "#ef4444");
+            if (e.target.hp <= 0) {
+              e.target.state = "dead";
+              e.target = null;
+              e.state = "walk";
+              e.attackFrame = 0;
+              e.attackCooldown = 0;
+            }
+          }
+          if (e.attackFrame > 0) e.attackFrame--;
+        }
+      });
+
+      // Update arrows (real physics — gravity, collision, stick in ground)
+      if (!s.arrows) s.arrows = [];
+      if (!s.stuckArrows) s.stuckArrows = [];
+      s.arrows = s.arrows.filter(a => {
+        a.x += a.vx;
+        a.y += a.vy;
+        a.vy += 0.15; // gravity
+        a.life--;
+        // Hit ground?
+        const groundPx = SIEGE_GROUND_Y * SIEGE_PS + 4;
+        if (a.y >= groundPx) {
+          s.stuckArrows.push({ x: a.x, y: groundPx, angle: Math.atan2(a.vy, a.vx) });
+          if (s.stuckArrows.length > 30) s.stuckArrows.shift();
+          return false;
+        }
+        // Hit enemy soldier?
+        const targets = a.team === "player" ? s.enemySoldiers : s.playerSoldiers;
+        for (const t of targets) {
+          if (t.state === "dead") continue;
+          const tx = t.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ty = SIEGE_GROUND_Y * SIEGE_PS - 5 * SIEGE_PS;
+          if (Math.abs(a.x - tx) < 10 && Math.abs(a.y - ty) < 15) {
+            t.hp -= SIEGE_SOLDIER_DMG;
+            addImpactParticles(a.x, a.y, 6, "#fde68a", "#ef4444");
+            if (t.hp <= 0) t.state = "dead";
+            return false;
+          }
+        }
+        return a.life > 0;
+      });
+
+      // Remove dead soldiers
+      s.playerSoldiers = s.playerSoldiers.filter(p => p.state !== "dead");
+      s.enemySoldiers = s.enemySoldiers.filter(e => e.state !== "dead");
+
+      // Check game over
+      if (s.playerCastleHp <= 0) {
+        s.gameOver = true;
+        s.winner = "enemy";
+        addImpactParticles(
+          (SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
+          (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
+          400, "#ef4444", "#fde68a"
+        );
+        if (typeof s.onGameOver === "function") s.onGameOver("enemy");
+      } else if (s.enemyCastleHp <= 0) {
+        s.gameOver = true;
+        s.winner = "player";
+        addImpactParticles(
+          (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
+          (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS,
+          400, "#fde68a", "#22c55e"
+        );
+        if (typeof s.onGameOver === "function") s.onGameOver("player");
+      }
+    }
+
+    const PLAYER_COLORS = {
+      armor: "#2050c0",
+      armorLight: "#3070e0",
+      helmet: "#808890",
+      helmetLight: "#a0a8b0",
+      shield: "#1848a0",
+      shieldLight: "#3068c0",
+      boots: "#5b3a0e",
+      crest: "#2060e0",
+    };
+    const ENEMY_COLORS = {
+      armor: "#c03030",
+      armorLight: "#e04040",
+      helmet: "#606068",
+      helmetLight: "#808088",
+      shield: "#901818",
+      shieldLight: "#b03030",
+      boots: "#3a2a0e",
+      crest: "#e02020",
+    };
+
+    function drawSiegeMode() {
+      const s = arena.siege;
+      const prevSmoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+
+      drawSiegeBackground();
+
+      // Draw castles
+      const playerHpR = Math.max(0, s.playerCastleHp / Math.max(1, s.playerCastleMaxHp));
+      const enemyHpR = Math.max(0, s.enemyCastleHp / Math.max(1, s.enemyCastleMaxHp));
+      drawSiegeCastle(SIEGE_LEFT_CASTLE_X, SIEGE_GROUND_Y - SIEGE_CASTLE_H, "left", playerHpR);
+      drawSiegeCastle(SIEGE_RIGHT_CASTLE_X, SIEGE_GROUND_Y - SIEGE_CASTLE_H, "right", enemyHpR);
+
+      // Draw all soldiers sorted by x for proper layering
+      const allSoldiers = [
+        ...s.playerSoldiers.map(s => ({ ...s, colors: PLAYER_COLORS })),
+        ...s.enemySoldiers.map(s => ({ ...s, colors: ENEMY_COLORS })),
+      ].sort((a, b) => a.x - b.x);
+
+      allSoldiers.forEach(sol => {
+        if (sol.unitType === "nyan") {
+          drawNyanCat(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.hp, sol.maxHp);
+        } else if (sol.unitType === "archer") {
+          drawPixelSoldier(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.attackFrame, sol.colors, sol.hp, sol.maxHp);
+          // Bow on top
+          const bx = (sol.direction > 0 ? sol.x + 5 : sol.x - 1) * SIEGE_PS;
+          const by = (SIEGE_GROUND_Y - 7) * SIEGE_PS;
+          ctx.strokeStyle = "#8a6030"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(bx, by, 6, -0.8, 0.8); ctx.stroke();
+          ctx.strokeStyle = "#c0a060"; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(bx + 5 * Math.cos(-0.8), by + 5 * Math.sin(-0.8));
+          ctx.lineTo(bx + 5 * Math.cos(0.8), by + 5 * Math.sin(0.8)); ctx.stroke();
+        } else if (sol.unitType === "knight") {
+          drawPixelKnight(sol.x, SIEGE_GROUND_Y - 13, sol.direction, sol.walkFrame, sol.attackFrame, sol.colors, sol.hp, sol.maxHp);
+        } else {
+          drawPixelSoldier(
+            sol.x, SIEGE_GROUND_Y - 11,
+            sol.direction, sol.walkFrame, sol.attackFrame,
+            sol.colors, sol.hp, sol.maxHp
+          );
+        }
+      });
+
+      // Draw flying arrows
+      if (s.arrows) {
+        s.arrows.forEach(a => {
+          ctx.save();
+          ctx.translate(a.x, a.y);
+          ctx.rotate(Math.atan2(a.vy, a.vx));
+          // Shaft
+          ctx.fillStyle = "#6a4a2a";
+          ctx.fillRect(-8, -1, 16, 2);
+          // Tip
+          ctx.fillStyle = "#c0c0c0";
+          ctx.beginPath();
+          ctx.moveTo(-11, 0); ctx.lineTo(-8, -3); ctx.lineTo(-8, 3); ctx.closePath(); ctx.fill();
+          // Fletching
+          ctx.fillStyle = "#e0e0e0";
+          ctx.fillRect(6, -3, 3, 2);
+          ctx.fillRect(6, 1, 3, 2);
+          ctx.restore();
+        });
+      }
+
+      // Draw stuck arrows
+      if (s.stuckArrows) {
+        ctx.fillStyle = "#5a3a1a";
+        s.stuckArrows.forEach(a => {
+          ctx.save();
+          ctx.translate(a.x, a.y);
+          ctx.rotate(a.angle);
+          ctx.fillRect(0, -1, 12, 2);
+          // Fletching
+          ctx.fillStyle = "#c0c0c0";
+          ctx.fillRect(8, -3, 4, 2);
+          ctx.fillRect(8, 1, 4, 2);
+          // Tip
+          ctx.fillStyle = "#808080";
+          ctx.fillRect(-3, -2, 3, 4);
+          ctx.restore();
+        });
+      }
+
+      // Castle HP bars at top of canvas
+      ctx.save();
+      // Player castle HP
+      const barY = 6;
+      const barH = 10;
+      const barW = 120;
+      ctx.fillStyle = "#1a1a2a";
+      ctx.fillRect(12, barY, barW + 4, barH + 4);
+      ctx.fillStyle = "#0f0f1a";
+      ctx.fillRect(14, barY + 2, barW, barH);
+      const pFill = Math.max(0, barW * playerHpR);
+      ctx.fillStyle = playerHpR > 0.5 ? "#22c55e" : playerHpR > 0.25 ? "#eab308" : "#ef4444";
+      ctx.fillRect(14, barY + 2, pFill, barH);
+      ctx.fillStyle = "#f0f0f0";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(`DITT SLOTT ${Math.round(s.playerCastleHp)}/${s.playerCastleMaxHp}`, 14, barY + barH + 14);
+
+      // Enemy castle HP
+      const eBarX = canvas.width - barW - 16;
+      ctx.fillStyle = "#1a1a2a";
+      ctx.fillRect(eBarX, barY, barW + 4, barH + 4);
+      ctx.fillStyle = "#0f0f1a";
+      ctx.fillRect(eBarX + 2, barY + 2, barW, barH);
+      const eFill = Math.max(0, barW * enemyHpR);
+      ctx.fillStyle = enemyHpR > 0.5 ? "#ef4444" : enemyHpR > 0.25 ? "#eab308" : "#22c55e";
+      ctx.fillRect(eBarX + 2 + barW - eFill, barY + 2, eFill, barH);
+      ctx.fillStyle = "#f0f0f0";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(`FIENDE ${Math.round(s.enemyCastleHp)}/${s.enemyCastleMaxHp}`, canvas.width - 14, barY + barH + 14);
+
+      // Soldier count indicators
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#c0d0f0";
+      ctx.font = "bold 9px monospace";
+      ctx.fillText(`⚔ ${s.playerSoldiers.length}`, 14, barY + barH + 26);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#f0c0c0";
+      ctx.fillText(`${s.enemySoldiers.length} ⚔`, canvas.width - 14, barY + barH + 26);
+
+      // MENY + GE UPP buttons (top center)
+      const btnH = 14, btnW = 56;
+      const menuBtnX = canvas.width / 2 - btnW - 2, menuBtnY = barY;
+      const giveUpX = canvas.width / 2 + 2, giveUpY = barY;
+      // MENY
+      ctx.fillStyle = "rgba(15,23,42,0.7)";
+      ctx.fillRect(menuBtnX, menuBtnY, btnW, btnH);
+      ctx.strokeStyle = "#3060a0"; ctx.lineWidth = 1;
+      ctx.strokeRect(menuBtnX, menuBtnY, btnW, btnH);
+      ctx.fillStyle = "#80a0c0"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("MENY", menuBtnX + btnW / 2, menuBtnY + 10);
+      s.menuBtnBounds = { x: menuBtnX, y: menuBtnY, w: btnW, h: btnH };
+      // GE UPP
+      ctx.fillStyle = "rgba(80,15,15,0.7)";
+      ctx.fillRect(giveUpX, giveUpY, btnW, btnH);
+      ctx.strokeStyle = "#c03030"; ctx.lineWidth = 1;
+      ctx.strokeRect(giveUpX, giveUpY, btnW, btnH);
+      ctx.fillStyle = "#ff6060"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("GE UPP", giveUpX + btnW / 2, giveUpY + 10);
+      s.giveUpBtnBounds = { x: giveUpX, y: giveUpY, w: btnW, h: btnH };
+      ctx.restore();
+
+      // Countdown or Glosa display
+      if (s.countdownEndsAt > Date.now()) {
+        // Countdown overlay
+        const remain = Math.ceil((s.countdownEndsAt - Date.now()) / 1000);
+        ctx.save();
+        ctx.fillStyle = "rgba(15,23,42,0.6)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#f0e040";
+        ctx.font = "bold 60px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(String(remain), canvas.width / 2, canvas.height / 2 - 10);
+        ctx.fillStyle = "#80c0f0";
+        ctx.font = "bold 16px monospace";
+        ctx.fillText("GÖR DIG REDO", canvas.width / 2, canvas.height / 2 + 30);
+        ctx.restore();
+      } else if (s.glosaText) {
+        ctx.save();
+        const textW = 320;
+        const textH = 38;
+        const textX = (canvas.width - textW) / 2;
+        const textY = 42;
+        ctx.fillStyle = "#0f0f1a";
+        ctx.fillRect(textX - 3, textY - 3, textW + 6, textH + 6);
+        ctx.fillStyle = "#2a3a5a";
+        ctx.fillRect(textX - 1, textY - 1, textW + 2, textH + 2);
+        ctx.fillStyle = "rgba(10,16,32,0.88)";
+        ctx.fillRect(textX, textY, textW, textH);
+        ctx.fillStyle = "#60a0e0";
+        ctx.font = "bold 9px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("ÖVERSÄTT:", canvas.width / 2, textY + 11);
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "bold 16px monospace";
+        ctx.fillText(s.glosaText, canvas.width / 2, textY + 30);
+        ctx.restore();
+      }
+
+      // Left box — Answer input
+      {
+        ctx.save();
+        const boxX = 12;
+        const boxY = canvas.height - 96;
+        const boxW = 300;
+        const boxH = 50;
+        // Frame
+        ctx.fillStyle = "#0f0f1a";
+        ctx.fillRect(boxX - 3, boxY - 3, boxW + 6, boxH + 6);
+        ctx.fillStyle = "#1a2a4a";
+        ctx.fillRect(boxX - 1, boxY - 1, boxW + 2, boxH + 2);
+        ctx.fillStyle = "rgba(10,16,32,0.95)";
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+
+        // "SVAR:" label
+        ctx.fillStyle = "#4080c0";
+        ctx.font = "bold 11px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("SVAR:", boxX + 8, boxY + 16);
+
+        // Typed text
+        ctx.fillStyle = "#f0f0f0";
+        ctx.font = "bold 16px monospace";
+        const typed = s.answerText || "";
+        ctx.fillText(typed, boxX + 58, boxY + 18);
+
+        // Blinking cursor
+        if (!s.gameOver && Math.floor(Date.now() / 500) % 2 === 0) {
+          const cursorX = boxX + 58 + ctx.measureText(typed).width + 2;
+          ctx.fillStyle = "#60a0e0";
+          ctx.fillRect(cursorX, boxY + 5, 10, 16);
+        }
+        ctx.restore();
+      }
+
+      // Right box — Feedback (RÄTT/FEL)
+      {
+        ctx.save();
+        const rBoxW = 300;
+        const rBoxX = canvas.width - rBoxW - 12;
+        const rBoxY = canvas.height - 96;
+        const rBoxH = 50;
+        // Frame
+        ctx.fillStyle = "#0f0f1a";
+        ctx.fillRect(rBoxX - 3, rBoxY - 3, rBoxW + 6, rBoxH + 6);
+        ctx.fillStyle = "#1a2a4a";
+        ctx.fillRect(rBoxX - 1, rBoxY - 1, rBoxW + 2, rBoxH + 2);
+        ctx.fillStyle = "rgba(10,16,32,0.95)";
+        ctx.fillRect(rBoxX, rBoxY, rBoxW, rBoxH);
+
+        if (s.glosaFeedback && Date.now() < s.glosaFeedback.expiresAt) {
+          const fb = s.glosaFeedback;
+          const age = Date.now() - fb.startedAt;
+          const alpha = age < fb.duration - 500 ? 1 : Math.max(0.15, 1 - (age - (fb.duration - 500)) / 500);
+          ctx.globalAlpha = alpha;
+
+          // RÄTT / FEL in big bold text
+          ctx.fillStyle = fb.color;
+          ctx.font = "bold 18px monospace";
+          ctx.textAlign = "left";
+          ctx.fillText(fb.text, rBoxX + 10, rBoxY + 20);
+
+          // Sub-text (correct answer or XP) on second line
+          if (fb.sub) {
+            ctx.fillStyle = "#e0e0e0";
+            ctx.font = "bold 12px monospace";
+            let subText = fb.sub;
+            if (ctx.measureText(subText).width > rBoxW - 20) {
+              while (ctx.measureText(subText + "...").width > rBoxW - 20 && subText.length > 0) {
+                subText = subText.slice(0, -1);
+              }
+              subText += "...";
+            }
+            ctx.fillText(subText, rBoxX + 10, rBoxY + 40);
+          }
+          ctx.globalAlpha = 1;
+        }
+        ctx.restore();
+      }
+
+      // Enemy feed — pixel text above right box
+      if (s.enemyFeed.length > 0) {
+        ctx.save();
+        const feedX = canvas.width - 14;
+        const feedBaseY = canvas.height - 72;
+        const maxLines = Math.min(3, s.enemyFeed.length);
+        for (let i = 0; i < maxLines; i++) {
+          const entry = s.enemyFeed[i];
+          const age = Date.now() - entry.time;
+          const alpha = Math.max(0, 1 - age / entry.duration);
+          if (alpha <= 0) continue;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = entry.good ? "#60e060" : "#f06060";
+          ctx.font = "bold 9px monospace";
+          ctx.textAlign = "right";
+          ctx.fillText(entry.text, feedX, feedBaseY + i * 11);
+        }
+        s.enemyFeed = s.enemyFeed.filter(e => Date.now() - e.time < e.duration);
+        ctx.restore();
+      }
+
+      // Defeat animation — castle crumble debris
+      if (s.defeatAnim) {
+        const da = s.defeatAnim;
+        ctx.save();
+        da.debris = da.debris.filter(d => {
+          d.x += d.vx;
+          d.y += d.vy;
+          d.vy += 0.12;
+          d.rot += d.vr;
+          d.life--;
+          if (d.life <= 0) return false;
+          ctx.save();
+          ctx.translate(d.x, d.y);
+          ctx.rotate(d.rot);
+          ctx.fillStyle = d.color;
+          ctx.globalAlpha = Math.min(1, d.life / 20);
+          ctx.fillRect(-d.size / 2, -d.size / 2, d.size, d.size);
+          ctx.restore();
+          return true;
+        });
+        ctx.restore();
+      }
+
+      // Victory animation — flag hoisting on enemy castle
+      if (s.victoryAnim) {
+        const va = s.victoryAnim;
+        const elapsed = Date.now() - va.startMs;
+        const fx = va.flagX;
+        const baseY = va.flagBaseY;
+        ctx.save();
+        // Phase 1 (0-800ms): small flag lowers
+        // Phase 2 (800-1600ms): pole grows upward
+        // Phase 3 (1600-3000ms): big flag hoists up
+        if (elapsed < 800) {
+          // Small flag slides down
+          const drop = Math.min(1, elapsed / 800) * 15;
+          ctx.strokeStyle = "#3a2a0e"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(fx, baseY); ctx.lineTo(fx, baseY + drop); ctx.stroke();
+        } else if (elapsed < 1600) {
+          // Pole grows upward
+          const growPct = Math.min(1, (elapsed - 800) / 800);
+          const poleH = 50 * growPct;
+          ctx.strokeStyle = "#c0a060"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(fx, baseY); ctx.lineTo(fx, baseY - poleH); ctx.stroke();
+          // Gold ball on top
+          if (growPct > 0.8) {
+            ctx.fillStyle = "#f0d040";
+            ctx.beginPath(); ctx.arc(fx, baseY - poleH, 3, 0, Math.PI * 2); ctx.fill();
+          }
+        } else {
+          // Full pole
+          const poleH = 50;
+          ctx.strokeStyle = "#c0a060"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(fx, baseY); ctx.lineTo(fx, baseY - poleH); ctx.stroke();
+          ctx.fillStyle = "#f0d040";
+          ctx.beginPath(); ctx.arc(fx, baseY - poleH, 3, 0, Math.PI * 2); ctx.fill();
+          // Big flag hoists up
+          const hoistPct = Math.min(1, (elapsed - 1600) / 1000);
+          const flagY = baseY - poleH * hoistPct;
+          const flagW = 36, flagH = 22;
+          const wave = Math.sin(elapsed / 150) * 3;
+          ctx.fillStyle = "#e02020";
+          ctx.beginPath();
+          ctx.moveTo(fx + 2, flagY);
+          ctx.lineTo(fx + 2 + flagW + wave, flagY + flagH * 0.3);
+          ctx.lineTo(fx + 2 + flagW - wave, flagY + flagH * 0.7);
+          ctx.lineTo(fx + 2, flagY + flagH);
+          ctx.closePath();
+          ctx.fill();
+          // Star on flag
+          ctx.fillStyle = "#f0d040"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+          ctx.fillText("★", fx + 2 + flagW / 2 + wave / 2, flagY + flagH / 2 + 5);
+        }
+        ctx.restore();
+      }
+
+      // Game over overlay with buttons
+      if (s.gameOver) {
+        ctx.save();
+        ctx.fillStyle = "rgba(15,23,42,0.75)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = s.winner === "player" ? "#22c55e" : "#ef4444";
+        ctx.font = "bold 36px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(s.winner === "player" ? "SEGER!" : "NEDLAG!", canvas.width / 2, canvas.height / 2 - 40);
+        ctx.fillStyle = "#f0f0f0";
+        ctx.font = "bold 16px monospace";
+        ctx.fillText(s.winner === "player" ? "Fiendens slott föll!" : "Ditt slott föll...", canvas.width / 2, canvas.height / 2 - 14);
+
+        // Buttons
+        const btnW = 160;
+        const btnH = 32;
+        const btnY = canvas.height / 2 + 20;
+        const playBtnX = canvas.width / 2 - btnW - 10;
+        const menuBtnX = canvas.width / 2 + 10;
+
+        // SPELA IGEN
+        ctx.fillStyle = "#0f0f1a";
+        ctx.fillRect(playBtnX - 2, btnY - 2, btnW + 4, btnH + 4);
+        ctx.fillStyle = "#1e7a1e";
+        ctx.fillRect(playBtnX, btnY, btnW, btnH);
+        ctx.strokeStyle = "#30c030";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(playBtnX, btnY, btnW, btnH);
+        ctx.fillStyle = "#f0f0f0";
+        ctx.font = "bold 14px monospace";
+        ctx.fillText("SPELA IGEN", playBtnX + btnW / 2, btnY + 22);
+
+        // MENY
+        ctx.fillStyle = "#0f0f1a";
+        ctx.fillRect(menuBtnX - 2, btnY - 2, btnW + 4, btnH + 4);
+        ctx.fillStyle = "#2050c0";
+        ctx.fillRect(menuBtnX, btnY, btnW, btnH);
+        ctx.strokeStyle = "#4080f0";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(menuBtnX, btnY, btnW, btnH);
+        ctx.fillStyle = "#f0f0f0";
+        ctx.font = "bold 14px monospace";
+        ctx.fillText("MENY", menuBtnX + btnW / 2, btnY + 22);
+
+        s.gameOverButtons = { playBtnX, menuBtnX, btnY, btnW, btnH };
+        ctx.restore();
+      }
+
+      ctx.imageSmoothingEnabled = prevSmoothing;
+    }
+
+    // ─── END SIEGE MODE ─────────────────────────────────────────────────
 
     function drawBossFallback(boss, bx, by) {
       ctx.fillStyle = boss.color;
@@ -1554,9 +3349,24 @@
       updateBossAdvance(nowMs);
       updateFortress(nowMs);
       updateDuel();
+      updateSiege();
+      if (arena.mode === "boot") {
+        drawBootMode();
+        if (performance.now() - arena.bootStartMs > BOOT_DURATION) {
+          arena.bootDone = true;
+          arena.mode = "menu";
+        }
+      } else if (arena.mode === "menu") {
+        drawMenuMode();
+      } else if (arena.mode === "siege") {
+        drawSiegeMode();
+      } else {
       drawParallaxBackground();
+      }
       if (arena.mode === "fortress") {
         drawFortressMode(t);
+      } else if (arena.mode === "menu" || arena.mode === "siege") {
+        // already drawn above
       } else if (arena.mode === "duel") {
         drawDuelMode();
       } else if (arena.mode === "idle") {
@@ -1601,6 +3411,7 @@
         arena.running = false;
       },
       setMode(mode) {
+        if ((arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") && mode !== "menu" && mode !== "siege" && mode !== "boot") return;
         arena.mode = mode;
       },
       showTextFlash(line1, color, line2, durationMs) {
@@ -1611,6 +3422,7 @@
         return bossRoster.find((b) => b.id === id) || bossRoster[0];
       },
       setPreviewBoss(bossId) {
+        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") return;
         arena.mode = "boss";
         arena.activeBoss = this.getBossById(bossId);
         arena.roundStartMs = 0;
@@ -1626,6 +3438,7 @@
         arena.debris = [];
       },
       startRound(bossId, durationSec, onBossReach) {
+        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") return;
         arena.mode = "boss";
         arena.activeBoss = this.getBossById(bossId);
         arena.roundDurationSec = durationSec;
@@ -1862,6 +3675,7 @@
         }, 950);
       },
       reset() {
+        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") return;
         arena.mode = "boss";
         arena.playerProjectiles = [];
         arena.bossProjectiles = [];
@@ -1887,8 +3701,17 @@
         arena.duel.groupActive = false;
         arena.duel.groupLeft = [];
         arena.duel.groupRight = [];
+        arena.siege.active = false;
+        arena.siege.playerSoldiers = [];
+        arena.siege.enemySoldiers = [];
+        arena.siege.gameOver = false;
+        arena.siege.winner = null;
+        arena.siege.glosaText = null;
+        arena.siege.glosaFeedback = null;
+        arena.siege.enemyFeed = [];
       },
       startFortressMode(timerSec, onCastleDestroyed) {
+        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") return;
         arena.mode = "fortress";
         arena.fortressBlocks = [];
         arena.fortressShells = [];
@@ -1969,6 +3792,7 @@
         return Math.max(0, arena.roundDurationSec - elapsed);
       },
       startDuelMode(options = {}) {
+        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") return;
         arena.mode = "duel";
         arena.duel.playerLevel = Math.max(1, Number(options.playerLevel || 1));
         arena.duel.enemyLevel = Math.max(1, Number(options.enemyLevel || 1));
@@ -2027,6 +3851,7 @@
         });
       },
       startGroupBattleMode(groupState = {}) {
+        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") return;
         arena.mode = "duel";
         arena.duel.groupActive = true;
         arena.duel.projectiles = [];
@@ -2147,6 +3972,275 @@
           toSlotId,
           damageRatio: Math.max(0.05, Math.min(0.95, damageRatio)),
         });
+      },
+      // ─── SIEGE MODE API ──────────────────────────────────────────
+      startSiegeMode(options = {}) {
+        arena.mode = "siege";
+        enemySpawnCount = 0;
+        playerSpawnCount = 0;
+        const s = arena.siege;
+        s.active = true;
+        s.defeatAnim = null;
+        s.victoryAnim = null;
+        s.stuckArrows = [];
+        s.arrows = [];
+        s.playerCastleHp = Number(options.playerCastleHp || 200);
+        s.playerCastleMaxHp = Number(options.playerCastleMaxHp || 200);
+        s.enemyCastleHp = Number(options.enemyCastleHp || 200);
+        s.enemyCastleMaxHp = Number(options.enemyCastleMaxHp || 200);
+        s.playerSoldiers = [];
+        s.enemySoldiers = [];
+        s.lastPlayerSpawnMs = performance.now();
+        s.lastEnemySpawnMs = performance.now();
+        s.spawnIntervalMs = Number(options.spawnIntervalMs || 5000);
+        s.isGroupFight = !!options.isGroupFight;
+        s.glosaText = null;
+        s.glosaFeedback = null;
+        s.gameOver = false;
+        s.winner = null;
+        s.onGameOver = typeof options.onGameOver === "function" ? options.onGameOver : null;
+        s.frameCount = 0;
+        // Spawn initial soldiers
+        spawnSiegeSoldier("player");
+        spawnSiegeSoldier("enemy");
+      },
+      siegeSpawnPlayerSoldier() {
+        if (arena.mode !== "siege" || arena.siege.gameOver) return;
+        if (arena.siege.playerSoldiers.length < 25) {
+          spawnSiegeSoldier("player");
+        }
+      },
+      siegeSpawnEnemySoldier() {
+        if (arena.mode !== "siege" || arena.siege.gameOver) return;
+        if (arena.siege.enemySoldiers.length < 25) {
+          spawnSiegeSoldier("enemy");
+        }
+      },
+      setSiegeGlosa(text) {
+        arena.siege.glosaText = text || null;
+      },
+      setSiegeFeedback(text, color, sub, durationMs) {
+        const now = Date.now();
+        arena.siege.glosaFeedback = {
+          text, color, sub: sub || null,
+          duration: durationMs || 1800,
+          startedAt: now,
+          expiresAt: now + (durationMs || 1800),
+        };
+      },
+      setSiegeCountdown(seconds) {
+        arena.siege.countdownEndsAt = Date.now() + seconds * 1000;
+      },
+      triggerVictory() {
+        const s = arena.siege;
+        s.gameOver = true;
+        s.winner = "player";
+        // Enemy castle explodes
+        const ecx = (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS;
+        const ecy = (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS;
+        addImpactParticles(ecx, ecy, 500, "#fca5a5", "#fde68a");
+        arena.flashes.push({ x: ecx, y: ecy, radius: 80, life: 20, color: "#ef4444" });
+        arena.flashes.push({ x: ecx, y: ecy, radius: 120, life: 16, color: "#fb7185" });
+        // Victory flag on player castle
+        const pcx = (SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS;
+        const pcy = (SIEGE_GROUND_Y - SIEGE_CASTLE_H) * SIEGE_PS;
+        s.victoryAnim = { startMs: Date.now(), flagX: pcx, flagBaseY: pcy - 10 };
+        // Defeat debris on enemy castle
+        s.defeatAnim = { startMs: Date.now(), debris: [] };
+        for (let i = 0; i < 40; i++) {
+          s.defeatAnim.debris.push({
+            x: ecx + (Math.random() - 0.5) * 60,
+            y: ecy + (Math.random() - 0.5) * 40,
+            vx: (Math.random() - 0.5) * 6,
+            vy: -2 - Math.random() * 5,
+            size: 3 + Math.random() * 8,
+            rot: Math.random() * Math.PI * 2,
+            vr: (Math.random() - 0.5) * 0.2,
+            color: ["#a0a0b0", "#707880", "#c0c8d0", "#505860"][Math.floor(Math.random() * 4)],
+            life: 80 + Math.random() * 60,
+          });
+        }
+      },
+      triggerGiveUp() {
+        const s = arena.siege;
+        s.gameOver = true;
+        s.winner = "enemy";
+        // Spawn massive crumble particles from player castle
+        const cx = (SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS;
+        const cy = (SIEGE_GROUND_Y - SIEGE_CASTLE_H / 2) * SIEGE_PS;
+        // Castle debris — big chunks falling
+        s.defeatAnim = { startMs: Date.now(), debris: [], flagPhase: 0 };
+        for (let i = 0; i < 40; i++) {
+          s.defeatAnim.debris.push({
+            x: cx + (Math.random() - 0.5) * 60,
+            y: cy + (Math.random() - 0.5) * 40,
+            vx: (Math.random() - 0.5) * 6,
+            vy: -2 - Math.random() * 5,
+            size: 3 + Math.random() * 8,
+            rot: Math.random() * Math.PI * 2,
+            vr: (Math.random() - 0.5) * 0.2,
+            color: ["#a0a0b0", "#707880", "#c0c8d0", "#505860"][Math.floor(Math.random() * 4)],
+            life: 80 + Math.random() * 60,
+          });
+        }
+        // Explosion particles
+        addImpactParticles(cx, cy, 500, "#fca5a5", "#fde68a");
+        arena.flashes.push({ x: cx, y: cy, radius: 80, life: 20, color: "#ef4444" });
+        arena.flashes.push({ x: cx, y: cy, radius: 120, life: 16, color: "#fb7185" });
+        // Victory anim for enemy castle
+        const ecx = (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS;
+        const ecy = (SIEGE_GROUND_Y - SIEGE_CASTLE_H) * SIEGE_PS;
+        s.victoryAnim = { startMs: Date.now(), flagX: ecx, flagBaseY: ecy - 10 };
+      },
+      getSiegeState() {
+        const s = arena.siege;
+        return {
+          playerCastleHp: s.playerCastleHp,
+          enemyCastleHp: s.enemyCastleHp,
+          playerSoldierCount: s.playerSoldiers.length,
+          enemySoldierCount: s.enemySoldiers.length,
+          gameOver: s.gameOver,
+          winner: s.winner,
+          countdownActive: s.countdownEndsAt > Date.now(),
+          isGroupFight: s.isGroupFight,
+        };
+      },
+      pushSiegeEnemyFeed(text, isGood, durationMs) {
+        arena.siege.enemyFeed.unshift({
+          text: String(text || ""),
+          good: !!isGood,
+          time: Date.now(),
+          duration: durationMs || 4000,
+        });
+        if (arena.siege.enemyFeed.length > 5) arena.siege.enemyFeed.length = 5;
+      },
+      siegeAnswerType(ch) {
+        if (arena.siege.answerText.length < 40) arena.siege.answerText += ch;
+      },
+      siegeAnswerBackspace() {
+        arena.siege.answerText = arena.siege.answerText.slice(0, -1);
+      },
+      clearSiegeAnswer() {
+        arena.siege.answerText = "";
+      },
+      getSiegeAnswer() {
+        return arena.siege.answerText;
+      },
+      isSiegeMode() {
+        return arena.mode === "siege" && arena.siege.active;
+      },
+      // ─── MENU API ──────────────────────────────────────────────
+      startBoot() {
+        arena.mode = "boot";
+        arena.bootStartMs = performance.now();
+        arena.bootDone = false;
+        arena.siege.active = false;
+      },
+      showMenu() {
+        arena.mode = "menu";
+        arena.siege.active = false;
+      },
+      isMenuMode() {
+        return arena.mode === "menu";
+      },
+      setMenuData(options = {}) {
+        const m = arena.menu;
+        if (options.weeks) m.weeks = options.weeks;
+        if (options.languages) m.languages = options.languages;
+        if (options.selectedLanguage) m.selectedLanguage = options.selectedLanguage;
+        if (options.selectedWeekId !== undefined) m.selectedWeekId = options.selectedWeekId;
+        if (options.stats) Object.assign(m.stats, options.stats);
+        if (options.guestName !== undefined) m.guestName = options.guestName;
+        if (options.leaderboard) m.leaderboard = options.leaderboard;
+        if (options.weekStats) m.weekStats = options.weekStats;
+        if (options.pendingChallenges) m.pendingChallenges = options.pendingChallenges;
+      },
+      handleCanvasClick(cx, cy) {
+        if (arena.mode === "menu") {
+          return handleMenuClick(cx, cy);
+        }
+        if (arena.mode === "siege") {
+          // Menu button
+          if (arena.siege.menuBtnBounds) {
+            const mb = arena.siege.menuBtnBounds;
+            if (cx >= mb.x && cx <= mb.x + mb.w && cy >= mb.y && cy <= mb.y + mb.h) {
+              return { action: "menu" };
+            }
+          }
+          // Give up button
+          if (arena.siege.giveUpBtnBounds) {
+            const gb = arena.siege.giveUpBtnBounds;
+            if (cx >= gb.x && cx <= gb.x + gb.w && cy >= gb.y && cy <= gb.y + gb.h) {
+              return { action: "giveUp" };
+            }
+          }
+          // Game over buttons
+          if (arena.siege.gameOver && arena.siege.gameOverButtons) {
+            const b = arena.siege.gameOverButtons;
+            if (cy >= b.btnY && cy <= b.btnY + b.btnH) {
+              if (cx >= b.playBtnX && cx <= b.playBtnX + b.btnW) return { action: "playAgain" };
+              if (cx >= b.menuBtnX && cx <= b.menuBtnX + b.btnW) return { action: "menu" };
+            }
+          }
+        }
+        return null;
+      },
+      handleCanvasHover(cx, cy) {
+        if (arena.mode === "menu") {
+          return handleMenuHover(cx, cy);
+        }
+        return false;
+      },
+      selectMenuWeek(weekId) {
+        arena.menu.selectedWeekId = weekId;
+      },
+      getMenuSelectedWeekId() {
+        return arena.menu.selectedWeekId;
+      },
+      startNameEdit() {
+        arena.menu.nameEditing = true;
+        arena.menu.nameBuffer = arena.menu.guestName || "";
+      },
+      nameEditType(ch) {
+        if (arena.menu.nameBuffer.length < 20) arena.menu.nameBuffer += ch;
+      },
+      nameEditBackspace() {
+        arena.menu.nameBuffer = arena.menu.nameBuffer.slice(0, -1);
+      },
+      nameEditConfirm() {
+        arena.menu.guestName = arena.menu.nameBuffer.trim() || "GÄST";
+        arena.menu.nameEditing = false;
+        return arena.menu.guestName;
+      },
+      nameEditCancel() {
+        arena.menu.nameEditing = false;
+      },
+      isNameEditing() {
+        return arena.menu.nameEditing;
+      },
+      getMenuState() {
+        return arena.menu;
+      },
+      getTeacherCode() {
+        return arena.menu.teacherCode;
+      },
+      teacherCodeType(ch) {
+        if (arena.menu.teacherCode.length < 30) arena.menu.teacherCode += ch;
+      },
+      teacherCodeBackspace() {
+        arena.menu.teacherCode = arena.menu.teacherCode.slice(0, -1);
+      },
+      clearTeacherCode() {
+        arena.menu.teacherCode = "";
+      },
+      setTeacherMsg(msg, color) {
+        arena.menu.teacherMsg = msg || "";
+        arena.menu.teacherMsgColor = color || "#00aa00";
+      },
+      setMenuLanguage(lang) {
+        arena.menu.selectedLanguage = lang;
+        arena.menu.scrollOffset = 0;
+        arena.menu.selectedWeekId = null;
       },
     };
   }
@@ -2531,6 +4625,10 @@
     if (!message) {
       return;
     }
+    // Suppress HTML toasts when in canvas mode
+    if (bossFightEngine && (bossFightEngine.isMenuMode() || bossFightEngine.isSiegeMode())) {
+      return;
+    }
     let host = document.getElementById("toastHost");
     if (!host) {
       host = document.createElement("div");
@@ -2551,6 +4649,7 @@
   }
 
   function pulseChallengeBox() {
+    if (bossFightEngine && (bossFightEngine.isMenuMode() || bossFightEngine.isSiegeMode())) return;
     if (!elements.challengeInboxList) {
       return;
     }
@@ -2695,6 +4794,9 @@
   }
 
   function updateBars() {
+    const siegeActive = bossFightEngine && bossFightEngine.isSiegeMode();
+    const menuActive = bossFightEngine && bossFightEngine.isMenuMode && bossFightEngine.isMenuMode();
+    if (siegeActive || menuActive) return; // Skip all old UI updates in canvas modes
     const combatActive = state.bossMode || state.fortressMode || appState.duel.active || appState.groupBattle.active;
     if (elements.combatPanel) {
       elements.combatPanel.style.display = combatActive ? "" : "none";
@@ -2782,6 +4884,11 @@
     if (!elements.duelPrepOverlay) {
       return;
     }
+    // Suppress in canvas mode
+    if (bossFightEngine && ((bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) || (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()))) {
+      elements.duelPrepOverlay.style.display = "none";
+      return;
+    }
     const remainingMs = appState.duel.prepEndsAtMs - Date.now();
     if (!appState.duel.active || remainingMs <= 0) {
       elements.duelPrepOverlay.style.display = "none";
@@ -2801,6 +4908,7 @@
   }
 
   function updateGroupBattlePrep() {
+    if (bossFightEngine && ((bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) || (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()))) return;
     if (!appState.groupBattle.active) {
       return;
     }
@@ -3307,6 +5415,391 @@
     }
   }
 
+  // ─── SIEGE MODE ANSWER HANDLERS ──────────────────────────────────
+  function pickSiegeWord() {
+    const words = currentWords();
+    if (!words.length) return null;
+    return words[Math.floor(Math.random() * words.length)];
+  }
+
+  function showSiegeGlosa() {
+    const word = pickSiegeWord();
+    if (!word) return;
+    state.currentWord = word;
+    if (bossFightEngine) {
+      // Siege always shows Swedish word, player answers in target language
+      const showText = String(word.sv || "");
+      bossFightEngine.setSiegeGlosa(showText);
+    }
+  }
+
+  function expectedSiegeAnswer() {
+    if (!state.currentWord) return "";
+    return String(state.currentWord.en || "");
+  }
+
+  function onSiegeCorrect() {
+    state.streak += 1;
+    const xpGain = 18;
+    const coinGain = 6;
+    grantXp(xpGain);
+    grantWeekXp(1);
+    state.coins += coinGain;
+    addCorrectKey(state.currentWord);
+
+    if (bossFightEngine) {
+      bossFightEngine.siegeSpawnPlayerSoldier();
+      bossFightEngine.setSiegeFeedback("RÄTT", "#22c55e", `+${xpGain} XP  +${coinGain} coins`, 3000);
+      // Broadcast to opponent in group fights
+      if (bossFightEngine.getSiegeState().isGroupFight) {
+        const team = getLocalGroupTeam() || "A";
+        sendGroupFightBroadcast(team, `__SIEGE_HIT__:${team}`, true);
+      }
+    }
+
+    renderStats();
+    showSiegeGlosa();
+  }
+
+  function onSiegeWrong() {
+    state.streak = 0;
+    if (bossFightEngine) {
+      bossFightEngine.siegeSpawnEnemySoldier();
+      bossFightEngine.setSiegeFeedback("FEL", "#ef4444", `Rätt svar: ${expectedSiegeAnswer()}`, 3500);
+      // Broadcast miss
+      if (bossFightEngine.getSiegeState().isGroupFight) {
+        const team = getLocalGroupTeam() || "A";
+        sendGroupFightBroadcast(team, `__SIEGE_MISS__:${team}`, false);
+      }
+    }
+    renderStats();
+    showSiegeGlosa();
+  }
+
+  let hasBooted = false;
+  function killAllHtmlOverlays() {
+    document.querySelectorAll('#groupResultOverlay,#duelPrepOverlay,#groupBattleFeed,#groupFightPopup').forEach(el => { el.style.display = "none"; });
+    const toasts = document.getElementById("toastHost");
+    if (toasts) toasts.innerHTML = "";
+  }
+
+  function updateMenuStats() {
+    if (!bossFightEngine) return;
+    bossFightEngine.setMenuData({
+      stats: {
+        level: state.level,
+        xp: state.xp,
+        xpNext: xpToNextLevel(state.level),
+        coins: state.coins,
+        streak: state.streak,
+      },
+    });
+  }
+
+  function showCanvasMenu() {
+    if (!bossFightEngine) return;
+    killAllHtmlOverlays();
+    if (!hasBooted) {
+      hasBooted = true;
+    } else {
+      bossFightEngine.showMenu();
+    }
+    // Collect available languages from weeks
+    const allLangs = new Set();
+    (appState.weeks || []).forEach(w => allLangs.add((w.language || "english").toLowerCase()));
+    const languages = allLangs.size > 0 ? [...allLangs] : ["english"];
+    const selectedLang = (appState.selectedLanguage || "english").toLowerCase();
+
+    bossFightEngine.setMenuData({
+      weeks: appState.weeks || [],
+      languages,
+      selectedLanguage: selectedLang,
+      selectedWeekId: appState.selectedWeekId || null,
+      stats: {
+        level: state.level,
+        xp: state.xp,
+        xpNext: xpToNextLevel(state.level),
+        coins: state.coins,
+        streak: state.streak,
+      },
+      guestName: (elements.guestNameInput && elements.guestNameInput.value) || "",
+    });
+    // Hide ALL old HTML panels and overlays
+    if (elements.heroPanel) elements.heroPanel.style.display = "none";
+    if (elements.controlsPanel) elements.controlsPanel.style.display = "none";
+    if (elements.questionPanel) elements.questionPanel.style.display = "none";
+    if (elements.combatPanel) elements.combatPanel.style.display = "none";
+    if (elements.siegeCanvasInput) elements.siegeCanvasInput.style.display = "none";
+    if (elements.groupResultOverlay) elements.groupResultOverlay.style.display = "none";
+    if (elements.duelPrepOverlay) elements.duelPrepOverlay.style.display = "none";
+    if (elements.groupBattleFeed) elements.groupBattleFeed.style.display = "none";
+    const gs = document.getElementById("gameShell");
+    if (gs) gs.style.display = "none";
+    const gfp = document.getElementById("groupFightPopup");
+    if (gfp) gfp.style.display = "none";
+  }
+
+  function ensureFightStateOuter() {
+    if (!appState.groupFight) appState.groupFight = { teamA: [], teamB: [], open: false };
+    if (!appState.groupFight.teamA) appState.groupFight.teamA = [];
+    if (!appState.groupFight.teamB) appState.groupFight.teamB = [];
+  }
+  function isInAnyTeamOuter(player) {
+    const id = player.profileId || player.sessionId || player.id;
+    const inA = (appState.groupFight?.teamA || []).some(p => (p.profileId || p.sessionId || p.id) === id);
+    const inB = (appState.groupFight?.teamB || []).some(p => (p.profileId || p.sessionId || p.id) === id);
+    return inA || inB;
+  }
+
+  async function handleCanvasAction(hit) {
+    if (!hit || !hit.action) return;
+    if (hit.action === "selectWeek") {
+      appState.selectedWeekId = hit.weekId;
+      const week = (appState.weeks || []).find(w => w.id === hit.weekId);
+      if (week) {
+        // Update the regular week select too
+        if (elements.weekSelect) elements.weekSelect.value = hit.weekId;
+        appState.selectedLanguage = (week.language || "english").toLowerCase();
+      }
+      bossFightEngine.selectMenuWeek(hit.weekId);
+      bossFightEngine.setMenuData({
+        selectedWeekId: hit.weekId,
+        selectedLanguage: appState.selectedLanguage,
+        stats: { level: state.level, xp: state.xp, xpNext: xpToNextLevel(state.level), coins: state.coins, streak: state.streak },
+      });
+    } else if (hit.action === "startSiege") {
+      // Ensure appState has the selected week
+      const menuWeekId = bossFightEngine.getMenuSelectedWeekId ? bossFightEngine.getMenuSelectedWeekId() : appState.selectedWeekId;
+      if (menuWeekId) {
+        appState.selectedWeekId = menuWeekId;
+        if (elements.weekSelect) elements.weekSelect.value = String(menuWeekId);
+        const week = (appState.weeks || []).find(w => w.id === menuWeekId || String(w.id) === String(menuWeekId));
+        if (week) {
+          appState.selectedLanguage = (week.language || "english").toLowerCase();
+          appState.practiceAnswerLanguage = week.language || "english";
+        }
+      }
+      startSiegeGame();
+    } else if (hit.action === "changeLanguage") {
+      appState.selectedLanguage = hit.lang;
+      if (elements.appLanguageSelect) elements.appLanguageSelect.value = hit.lang;
+      bossFightEngine.setMenuLanguage(hit.lang);
+      bossFightEngine.setMenuData({
+        selectedLanguage: hit.lang,
+        weeks: appState.weeks || [],
+      });
+    } else if (hit.action === "startNameEdit") {
+      bossFightEngine.startNameEdit();
+    } else if (hit.action === "addBotA") {
+      ensureFightStateOuter();
+      const botNum = appState.groupFight.teamA.filter(p => p.isBot).length + appState.groupFight.teamB.filter(p => p.isBot).length + 1;
+      const botId = `bot-oiia-${botNum}`;
+      appState.groupFight.teamA.push({ id: botId, name: `Bot ${botNum}`, isBot: true, botId: "bot-oiia" });
+    } else if (hit.action === "addBotB") {
+      ensureFightStateOuter();
+      const botNum = appState.groupFight.teamA.filter(p => p.isBot).length + appState.groupFight.teamB.filter(p => p.isBot).length + 1;
+      const botId = `bot-oiia-${botNum}`;
+      appState.groupFight.teamB.push({ id: botId, name: `Bot ${botNum}`, isBot: true, botId: "bot-oiia" });
+    } else if (hit.action === "playerToA") {
+      ensureFightStateOuter();
+      if (!isInAnyTeamOuter(hit.player)) appState.groupFight.teamA.push({ ...hit.player });
+    } else if (hit.action === "playerToB") {
+      ensureFightStateOuter();
+      if (!isInAnyTeamOuter(hit.player)) appState.groupFight.teamB.push({ ...hit.player });
+    } else if (hit.action === "swapTeam") {
+      ensureFightStateOuter();
+      const from = hit.team === "A" ? appState.groupFight.teamA : appState.groupFight.teamB;
+      const to = hit.team === "A" ? appState.groupFight.teamB : appState.groupFight.teamA;
+      if (hit.index >= 0 && hit.index < from.length) {
+        const [moved] = from.splice(hit.index, 1);
+        to.push(moved);
+      }
+    } else if (hit.action === "removeFromTeam") {
+      ensureFightStateOuter();
+      const team = hit.team === "A" ? appState.groupFight.teamA : appState.groupFight.teamB;
+      if (hit.index >= 0 && hit.index < team.length) team.splice(hit.index, 1);
+    } else if (hit.action === "startFight") {
+      const teamA = appState.groupFight?.teamA || [];
+      const teamB = appState.groupFight?.teamB || [];
+      if (!teamA.length || !teamB.length) return;
+      // Prevent duplicate invites
+      if (appState.groupFight._lastInviteId) {
+        return;
+      }
+      appState.groupFight.answerLanguage = normalizeLanguage(appState.selectedLanguage || "english");
+      try {
+        const inviteId = await createGroupFightInvite();
+        appState.groupFight._lastInviteId = inviteId;
+        // Poll to pick it up
+        await pollGroupFightCurrent();
+      } catch (e) {
+        console.error("[FIGHT] Error:", e);
+      }
+    } else if (hit.action === "acceptChallenge") {
+      try {
+        const result = await respondGroupFightInvite(hit.challengeId, true);
+        if (result.ok) {
+          // Remove from pending list immediately
+          if (bossFightEngine && bossFightEngine.getMenuState) {
+            const ms = bossFightEngine.getMenuState();
+            if (ms.pendingChallenges) {
+              const ch = ms.pendingChallenges.find(c => c.id === hit.challengeId);
+              if (ch) ch.status = "Accepted";
+            }
+          }
+          if (result.status === "Active") {
+            // All accepted — start siege with countdown!
+            startSiegeGame(10);
+          } else {
+            // Still waiting for others — update display
+            await pollChallengeInbox();
+          }
+        }
+      } catch (e) { console.error("[CHALLENGE] Accept error:", e); }
+    } else if (hit.action === "declineChallenge") {
+      try {
+        const result = await respondGroupFightInvite(hit.challengeId, false);
+        // Remove from canvas menu immediately (both sides — API cancels the invite)
+        if (bossFightEngine && bossFightEngine.getMenuState) {
+          const ms = bossFightEngine.getMenuState();
+          if (ms.pendingChallenges) {
+            bossFightEngine.setMenuData({
+              pendingChallenges: ms.pendingChallenges.filter(c => c.id !== hit.challengeId)
+            });
+          }
+        }
+        // Re-poll to sync (other player will see it removed on next poll)
+        await pollChallengeInbox();
+      } catch (e) { console.error("[CHALLENGE] Decline error:", e); }
+    } else if (hit.action === "giveUp") {
+      // Broadcast surrender to opponent
+      if (bossFightEngine && bossFightEngine.isSiegeMode()) {
+        const team = getLocalGroupTeam() || "A";
+        sendGroupFightBroadcast(team, `__SIEGE_SURRENDER__:${team}`, false);
+      }
+      // Immediately end fight and go to menu
+      state.bossMode = false;
+      state.fortressMode = false;
+      appState.duel.active = false;
+      appState.groupBattle.active = false;
+      appState.groupBattle.finishing = false;
+      if (appState.groupBattle.botTimerId) {
+        window.clearInterval(appState.groupBattle.botTimerId);
+        appState.groupBattle.botTimerId = 0;
+      }
+      appState.groupFight._lastInviteId = null;
+      appState._lastHandledActiveInvite = null;
+      showCanvasMenu();
+    } else if (hit.action === "playAgain") {
+      appState._lastHandledActiveInvite = null;
+      appState.groupFight._lastInviteId = null;
+      startSiegeGame();
+    } else if (hit.action === "menu") {
+      showCanvasMenu();
+    } else if (hit.action === "hideTeacherInput") {
+      // no-op, using canvas typing now
+    } else if (hit.action === "navigate") {
+      window.location.href = hit.url;
+    }
+  }
+
+  function startSiegeGame(countdownSec = 0) {
+    // Try to get words, fall back to finding the week directly
+    let words = currentWords();
+    if (!words.length && appState.selectedWeekId) {
+      // Try matching by string comparison
+      const week = (appState.weeks || []).find(w => String(w.id) === String(appState.selectedWeekId));
+      if (week && Array.isArray(week.words) && week.words.length) {
+        words = week.words;
+      }
+    }
+    if (!words.length) {
+      // Show error on canvas instead of hidden panel
+      if (bossFightEngine) {
+        bossFightEngine.showTextFlash("Välj en vecka först!", "#ef4444", "Klicka på en vecka i listan", 3000);
+        bossFightEngine.showMenu();
+      }
+      return;
+    }
+    if (bossFightEngine) {
+      // Kill all old game modes
+      state.bossMode = false;
+      state.fortressMode = false;
+      appState.duel.active = false;
+      appState.groupBattle.active = false;
+      appState.groupBattle.finishing = false;
+      if (appState.groupBattle.botTimerId) {
+        window.clearInterval(appState.groupBattle.botTimerId);
+        appState.groupBattle.botTimerId = 0;
+      }
+
+      bossFightEngine.startSiegeMode({
+        playerCastleHp: 200,
+        playerCastleMaxHp: 200,
+        enemyCastleHp: 200,
+        enemyCastleMaxHp: 200,
+        spawnIntervalMs: appState.groupInvite?.current?.id ? 999999 : 5000,
+        isGroupFight: !!appState.groupInvite?.current?.id,
+        onGameOver: (winner) => {
+          // Stop all old game sessions
+          state.bossMode = false;
+          state.fortressMode = false;
+          appState.duel.active = false;
+          appState.groupBattle.active = false;
+          if (appState.groupBattle.botTimerId) {
+            window.clearInterval(appState.groupBattle.botTimerId);
+            appState.groupBattle.botTimerId = 0;
+          }
+        },
+      });
+      // Hide all old HTML
+      killAllHtmlOverlays();
+      if (elements.combatPanel) elements.combatPanel.style.display = "none";
+      if (elements.groupBattleFeed) elements.groupBattleFeed.style.display = "none";
+      const gs = document.getElementById("gameShell");
+      if (gs) gs.style.display = "none";
+      // Countdown or immediate start
+      if (countdownSec > 0) {
+        bossFightEngine.setSiegeCountdown(countdownSec);
+        setTimeout(() => showSiegeGlosa(), countdownSec * 1000);
+      } else {
+        showSiegeGlosa();
+      }
+      if (elements.bossFightCanvas) elements.bossFightCanvas.focus();
+    }
+  }
+
+  function renderSiegeSpecialChars() {
+    if (!elements.siegeSpecialCharsRow) return;
+    const lang = normalizeLanguage(appState.practiceAnswerLanguage || appState.selectedLanguage || "english");
+    const charSets = {
+      spanish: ["á","é","í","ó","ú","ü","ñ","¿","¡"],
+      french: ["à","â","ç","è","é","ê","ë","î","ï","ô","ù","û","ü","œ"],
+      german: ["ä","ö","ü","ß"],
+    };
+    const chars = charSets[lang];
+    if (!chars) { elements.siegeSpecialCharsRow.style.display = "none"; return; }
+    elements.siegeSpecialCharsRow.style.display = "flex";
+    elements.siegeSpecialCharsRow.innerHTML = "";
+    chars.forEach(ch => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = ch;
+      btn.style.cssText = "padding:2px 6px;font-size:13px;font-weight:700;font-family:monospace;background:rgba(15,23,42,0.8);color:#f0f0f0;border:1px solid #475569;border-radius:4px;cursor:pointer;";
+      btn.addEventListener("click", () => {
+        if (!elements.siegeAnswerInput) return;
+        const inp = elements.siegeAnswerInput;
+        const start = inp.selectionStart;
+        const end = inp.selectionEnd;
+        inp.value = inp.value.substring(0, start) + ch + inp.value.substring(end);
+        inp.selectionStart = inp.selectionEnd = start + ch.length;
+        inp.focus();
+      });
+      elements.siegeSpecialCharsRow.appendChild(btn);
+    });
+  }
+  // ─── END SIEGE MODE HANDLERS ───────────────────────────────────
+
   function spendCoins(cost) {
     if (state.coins < cost) {
       elements.feedbackText.className = "feedback bad";
@@ -3615,6 +6108,12 @@
     }
     const data = await response.json();
     const items = Array.isArray(data.items) ? data.items : [];
+    // Feed to canvas menu
+    if (bossFightEngine && bossFightEngine.setMenuData) {
+      bossFightEngine.setMenuData({
+        leaderboard: items.map(it => ({ name: it.userName || "???", score: it.totalCorrect || it.totalXp || 0 })),
+      });
+    }
     if (!items.length) {
       elements.leaderboardList.innerHTML = "<li>Ingen har spelat an.</li>";
       return;
@@ -3652,6 +6151,24 @@
       }
       const data = await response.json();
       const items = Array.isArray(data.items) ? data.items : [];
+      // Feed to canvas menu
+      if (bossFightEngine && bossFightEngine.setMenuData) {
+        bossFightEngine.setMenuData({
+          weekStats: items.map(wk => {
+            const players = Array.isArray(wk.players) ? wk.players : [];
+            const totalCorrect = players.reduce((s, p) => s + (p.totalCorrect || 0), 0);
+            const totalWords = Math.max(1, wk.totalWords || 1) * Math.max(1, players.length);
+            const pct = totalCorrect / totalWords;
+            return {
+              weekName: wk.weekName || "Vecka",
+              correct: totalCorrect,
+              total: totalWords,
+              xp: players.reduce((s, p) => s + (p.totalXp || 0), 0),
+              trophy: pct >= 1 ? "gold" : pct >= 0.8 ? "silver" : pct >= 0.5 ? "bronze" : null,
+            };
+          }),
+        });
+      }
       if (!items.length) {
         elements.weekStatsContainer.innerHTML = "<p>Ingen statistik än.</p>";
         return;
@@ -4181,6 +6698,15 @@
     if (appState.groupBattle.feed.length > 4) {
       appState.groupBattle.feed.length = 4;
     }
+    // In canvas mode, suppress HTML feed
+    if (bossFightEngine && ((bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) || (bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()))) {
+      if (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) {
+        const isGood = text.includes("RÄTT") || text.includes("klarade");
+        bossFightEngine.pushSiegeEnemyFeed(text, isGood, 4000);
+      }
+      if (elements.groupBattleFeed) elements.groupBattleFeed.style.display = "none";
+      return;
+    }
     if (elements.groupBattleFeed) {
       elements.groupBattleFeed.style.display = "block";
       elements.groupBattleFeed.textContent = appState.groupBattle.feed[0];
@@ -4246,6 +6772,11 @@
 
   function showGroupBattleResultOverlay(isWinner, winnerName) {
     if (!elements.groupResultOverlay) {
+      return;
+    }
+    // Suppress HTML overlay in canvas mode
+    if (bossFightEngine && ((bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) || (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()))) {
+      elements.groupResultOverlay.style.display = "none";
       return;
     }
     elements.groupResultOverlay.style.display = "flex";
@@ -4376,7 +6907,7 @@
       elements.feedbackText.textContent = reason;
       pushLog(reason);
     }
-    if (bossFightEngine && !appState.duel.active && !state.bossMode && !state.fortressMode) {
+    if (bossFightEngine && !appState.duel.active && !state.bossMode && !state.fortressMode && !(bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) && !(bossFightEngine.isMenuMode && bossFightEngine.isMenuMode())) {
       bossFightEngine.setMode("idle");
     }
     updateGroupBattleBoard();
@@ -4618,12 +7149,31 @@
   }
 
   async function pollGroupFightCurrent() {
+    const inCanvasMode = bossFightEngine && ((bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) || (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()));
     const response = await fetch("/api/groupfight/current", { headers: challengeHeaders() });
     if (!response.ok) {
       return;
     }
     const data = await response.json();
     const invite = data && data.invite ? data.invite : null;
+    // In canvas menu: if invite is Active, auto-start siege with countdown
+    if (inCanvasMode && invite && invite.status === "Active") {
+      if (bossFightEngine.isMenuMode && bossFightEngine.isMenuMode() && appState._lastHandledActiveInvite !== invite.id) {
+        appState._lastHandledActiveInvite = invite.id;
+        appState.selectedWeekId = invite.weekId;
+        if (elements.weekSelect) elements.weekSelect.value = invite.weekId;
+        startSiegeGame(10);
+      }
+      return;
+    }
+    if (inCanvasMode) {
+      // Still poll events for siege sync, but skip old UI updates
+      appState.groupInvite.current = invite;
+      if (invite && invite.status === "Active") {
+        await pollGroupFightEvents();
+      }
+      return;
+    }
     const previousInviteId = appState.groupInvite.current?.id || null;
     appState.groupInvite.current = invite;
     if (!invite) {
@@ -4700,7 +7250,28 @@
       if (String(evt.actorId || "") === String(me)) {
         return;
       }
-      const parsedWinner = parseWinnerPayload(evt.text || "");
+      const evtText = evt.text || "";
+
+      // Handle siege-specific events
+      if (evtText.startsWith("__SIEGE_HIT__:") && bossFightEngine && bossFightEngine.isSiegeMode()) {
+        // Opponent answered correctly — spawn a soldier for their team (enemy from our perspective)
+        bossFightEngine.siegeSpawnEnemySoldier();
+        bossFightEngine.pushSiegeEnemyFeed("Motståndare svarade rätt!", true, 3000);
+        return;
+      }
+      if (evtText.startsWith("__SIEGE_MISS__:") && bossFightEngine && bossFightEngine.isSiegeMode()) {
+        // Opponent answered wrong — spawn a soldier for OUR team
+        bossFightEngine.siegeSpawnPlayerSoldier();
+        bossFightEngine.pushSiegeEnemyFeed("Motståndare svarade fel!", false, 3000);
+        return;
+      }
+      if (evtText.startsWith("__SIEGE_SURRENDER__:") && bossFightEngine && bossFightEngine.isSiegeMode()) {
+        // Opponent surrendered — we win!
+        bossFightEngine.triggerVictory();
+        return;
+      }
+
+      const parsedWinner = parseWinnerPayload(evtText);
       if (parsedWinner) {
         if (!appState.groupBattle.finishing) {
           appState.groupBattle.finishing = true;
@@ -4781,11 +7352,12 @@
       body: JSON.stringify({ accept: !!accept }),
     });
     if (!res.ok) {
-      return false;
+      return { ok: false };
     }
-    await pollGroupFightCurrent();
-    await pollChallengeInbox();
-    return true;
+    const data = await res.json();
+    // Don't call pollGroupFightCurrent — it's blocked in canvas mode
+    // Return the status so the caller can decide what to do
+    return { ok: true, status: data.status, prepEndsUnixMs: data.prepEndsUnixMs };
   }
 
   async function pollChallengeInbox() {
@@ -4814,6 +7386,35 @@
       pulseChallengeBox();
     }
     appState.challengeInboxSeenIds = groupItems.map((x) => x.id).filter((id) => !!id);
+    // Feed to canvas menu
+    if (bossFightEngine && bossFightEngine.setMenuData) {
+      const actorId = getActorKey();
+      const pending = groupItems.map(x => {
+        const isCreator = String(x.creatorActorId || "") === String(actorId || "");
+        const creatorName = [...(x.teamA || []), ...(x.teamB || [])].find(m => m.actorId === x.creatorActorId)?.displayName || "Okänd";
+        const allMembers = [...(x.teamA || []), ...(x.teamB || [])];
+        const accepted = allMembers.filter(m => m.status === "Accepted").length;
+        const total = allMembers.length;
+        return {
+          id: x.id,
+          isCreator,
+          challengerName: creatorName,
+          weekName: x.weekName || "?",
+          status: x.status,
+          accepted, total,
+        };
+      });
+      bossFightEngine.setMenuData({ pendingChallenges: pending });
+      // Auto-start siege when a challenge becomes Active (all accepted)
+      const activeChallenge = groupItems.find(x => x.status === "Active");
+      if (activeChallenge && bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) {
+        // Set the week from the challenge
+        appState.selectedWeekId = activeChallenge.weekId;
+        if (elements.weekSelect) elements.weekSelect.value = activeChallenge.weekId;
+        appState.selectedLanguage = (activeChallenge.answerLanguage || "english").toLowerCase();
+        startSiegeGame(10);
+      }
+    }
 
     const currentInvite = appState.groupInvite.current;
     const renderKey = JSON.stringify({
@@ -4924,6 +7525,7 @@
   }
 
   async function refreshDuelState() {
+    if (bossFightEngine && ((bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) || (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()))) return;
     const response = await fetch("/api/duel/current", {
       headers: appState.auth.isAuthenticated ? {} : {
         "X-Guest-Session": getGuestSessionId(),
@@ -4947,7 +7549,7 @@
       appState.duel.visualMatchId = null;
       appState.duel.lastSyncPlayerHp = null;
       appState.duel.lastSyncEnemyHp = null;
-      if (bossFightEngine && !state.bossMode && !state.fortressMode && !appState.groupBattle.active) {
+      if (bossFightEngine && !state.bossMode && !state.fortressMode && !appState.groupBattle.active && !(bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) && !(bossFightEngine.isMenuMode && bossFightEngine.isMenuMode())) {
         bossFightEngine.setMode("idle");
         bossFightEngine.setDuelPrepEndsAt(0);
       }
@@ -5581,6 +8183,12 @@
       });
     }
 
+    if (elements.startSiegeButton) {
+      elements.startSiegeButton.addEventListener("click", () => {
+        startSiegeGame();
+      });
+    }
+
     if (elements.trainModeButton) {
       elements.trainModeButton.addEventListener("click", () => {
         stopGroupBattle("");
@@ -5652,6 +8260,135 @@
         onWrong();
       }
     });
+
+    // Siege canvas answer form
+    if (elements.siegeAnswerForm) {
+      elements.siegeAnswerForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (!state.currentWord || !bossFightEngine || !bossFightEngine.isSiegeMode()) return;
+        const val = elements.siegeAnswerInput.value;
+        if (normalize(val) === normalize(expectedSiegeAnswer())) {
+          onSiegeCorrect();
+        } else {
+          onSiegeWrong();
+        }
+        elements.siegeAnswerInput.value = "";
+        elements.siegeAnswerInput.focus();
+      });
+    }
+
+    // Canvas keyboard handler for typing (siege answers + teacher login)
+    document.addEventListener("keydown", async (e) => {
+      if (!bossFightEngine) return;
+
+      // Siege mode typing
+      if (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) {
+        const siegeState = bossFightEngine.getSiegeState();
+        if (siegeState.gameOver) return;
+        if (siegeState.countdownActive) return;
+
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          bossFightEngine.siegeAnswerBackspace();
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          const answer = bossFightEngine.getSiegeAnswer();
+          if (!answer) return;
+          if (normalize(answer) === normalize(expectedSiegeAnswer())) {
+            onSiegeCorrect();
+          } else {
+            onSiegeWrong();
+          }
+          bossFightEngine.clearSiegeAnswer();
+        } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+          e.preventDefault();
+          bossFightEngine.siegeAnswerType(e.key);
+        }
+        return;
+      }
+
+      // Menu mode typing (name edit or teacher login)
+      if (!bossFightEngine.isMenuMode || !bossFightEngine.isMenuMode()) return;
+
+      // Name editing takes priority
+      if (bossFightEngine.isNameEditing && bossFightEngine.isNameEditing()) {
+        if (e.key === "Escape") { e.preventDefault(); bossFightEngine.nameEditCancel(); return; }
+        if (e.key === "Backspace") { e.preventDefault(); bossFightEngine.nameEditBackspace(); return; }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const newName = bossFightEngine.nameEditConfirm();
+          // Update guest name in the app
+          if (elements.guestNameInput) elements.guestNameInput.value = newName;
+          // Save to localStorage
+          try { localStorage.setItem("glosTrainerGuestName", newName); } catch {}
+          return;
+        }
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) { e.preventDefault(); bossFightEngine.nameEditType(e.key); }
+        return;
+      }
+
+      const m = bossFightEngine.getMenuState ? bossFightEngine.getMenuState() : null;
+      if (!m || !m.teacherTyping) return;
+
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        bossFightEngine.teacherCodeBackspace();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const code = bossFightEngine.getTeacherCode();
+        if (!code) return;
+        bossFightEngine.setTeacherMsg("VERIFIERAR...", "#00aa00");
+        try {
+          const resp = await fetch("/auth/teacher-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            bossFightEngine.setTeacherMsg("ÅTKOMST BEVILJAD — OMDIRIGERAR...", "#00ff00");
+            setTimeout(() => { window.location.href = data.redirect || "/Teacher/Weeks"; }, 800);
+          } else {
+            const data = await resp.json().catch(() => ({}));
+            bossFightEngine.setTeacherMsg(data.error || "FEL LÄRARKOD", "#ff4040");
+            bossFightEngine.clearTeacherCode();
+          }
+        } catch {
+          bossFightEngine.setTeacherMsg("NÄTVERKSFEL", "#ff4040");
+        }
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        bossFightEngine.teacherCodeType(e.key);
+      }
+    });
+
+    // Canvas click/hover for menu and game-over
+    if (elements.bossFightCanvas) {
+      elements.bossFightCanvas.addEventListener("click", (e) => {
+        if (!bossFightEngine) return;
+        // Always kill any HTML overlays on canvas click
+        if (elements.groupResultOverlay) elements.groupResultOverlay.style.display = "none";
+        if (elements.duelPrepOverlay) elements.duelPrepOverlay.style.display = "none";
+        if (elements.groupBattleFeed) elements.groupBattleFeed.style.display = "none";
+        const rect = elements.bossFightCanvas.getBoundingClientRect();
+        const scaleX = elements.bossFightCanvas.width / rect.width;
+        const scaleY = elements.bossFightCanvas.height / rect.height;
+        const cx = (e.clientX - rect.left) * scaleX;
+        const cy = (e.clientY - rect.top) * scaleY;
+        const hit = bossFightEngine.handleCanvasClick(cx, cy);
+        if (hit) handleCanvasAction(hit);
+      });
+      elements.bossFightCanvas.addEventListener("mousemove", (e) => {
+        if (!bossFightEngine) return;
+        const rect = elements.bossFightCanvas.getBoundingClientRect();
+        const scaleX = elements.bossFightCanvas.width / rect.width;
+        const scaleY = elements.bossFightCanvas.height / rect.height;
+        const cx = (e.clientX - rect.left) * scaleX;
+        const cy = (e.clientY - rect.top) * scaleY;
+        const isClickable = bossFightEngine.handleCanvasHover(cx, cy);
+        elements.bossFightCanvas.style.cursor = isClickable ? "pointer" : "default";
+      });
+    }
 
     elements.hintButton.addEventListener("click", () => {
       if (!state.currentWord || !spendCoins(15)) {
@@ -5779,6 +8516,7 @@
       applyAuthUi();
       loadState();
       hookEvents();
+      showCanvasMenu();
       try { await sendHeartbeat(); } catch {}
       try { await loadOnlineUsers(); } catch {}
       try { await pollChallengeInbox(); } catch {}
@@ -5787,6 +8525,10 @@
       window.setInterval(() => {
         if (state.bossMode || state.fortressMode || appState.groupBattle.active || appState.duel.active) {
           updateBars();
+        }
+        // Keep menu stats fresh
+        if (bossFightEngine && bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) {
+          updateMenuStats();
         }
       }, 100);
       window.setInterval(() => {

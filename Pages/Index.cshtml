@@ -4,8 +4,28 @@
     ViewData["Title"] = "GlosTrainer";
 }
 
-<div class="game-shell">
-    <section class="hero-panel">
+<section class="battle-canvas-shell" id="mainCanvasShell">
+    <canvas id="bossFightCanvas" width="900" height="460" tabindex="0" style="image-rendering:pixelated;outline:none;"></canvas>
+    <div id="siegeCanvasInput" style="display:none;"></div>
+    <div id="teacherCodeInput" style="display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-30%);z-index:10;">
+        <form id="teacherCodeForm" autocomplete="off" style="display:flex;gap:4px;">
+            <input id="teacherCodeField" type="password" placeholder="Ange lärarkod..."
+                   style="width:200px;padding:8px 12px;font-size:14px;font-weight:700;font-family:monospace;
+                          background:rgba(10,16,32,0.95);color:#00cc00;border:2px solid #00aa00;
+                          border-radius:4px;outline:none;caret-color:#00ff00;" />
+            <button type="submit" style="padding:8px 16px;font-size:12px;font-weight:800;font-family:monospace;
+                                         background:#1a4a1a;color:#00ff00;border:2px solid #00aa00;
+                                         border-radius:4px;cursor:pointer;">LOGGA IN</button>
+        </form>
+        <p id="teacherCodeError" style="color:#ff4040;font:bold 11px monospace;margin:6px 0 0 0;text-align:center;"></p>
+    </div>
+    <div id="duelPrepOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.62);color:#fff;font-weight:800;font-size:1.4rem;align-items:center;justify-content:center;text-align:center;padding:1rem;">Gör dig redo...</div>
+    <div id="groupResultOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.72);color:#fff;font-weight:900;font-size:3rem;align-items:center;justify-content:center;text-align:center;padding:1rem;letter-spacing:.04em;text-transform:uppercase;">DU VANN!</div>
+    <div id="groupBattleFeed" style="display:none;position:absolute;left:10px;right:10px;bottom:10px;color:#fff;background:rgba(15,23,42,.58);border-radius:10px;padding:.45rem .6rem;font-weight:700;"></div>
+</section>
+
+<div class="game-shell" id="gameShell" style="display:none;">
+    <section class="hero-panel" id="heroPanel" style="display:none;">
         <div>
             <p class="kicker">Web Edition</p>
             <h1>GlosTrainer</h1>
@@ -26,7 +46,7 @@
         </div>
     </section>
 
-    <section class="controls-panel">
+    <section class="controls-panel" id="controlsPanel" style="display:none;">
         <div class="train-cta-shell">
             <select id="weekSelect" class="train-week-select"></select>
         </div>
@@ -73,12 +93,6 @@
                 <p id="wordsProgressText">0%</p>
             </div>
         </div>
-        <div class="battle-canvas-shell">
-            <canvas id="bossFightCanvas" width="900" height="320"></canvas>
-            <div id="duelPrepOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.62);color:#fff;font-weight:800;font-size:1.4rem;align-items:center;justify-content:center;text-align:center;padding:1rem;">Gör dig redo...</div>
-            <div id="groupResultOverlay" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,.72);color:#fff;font-weight:900;font-size:3rem;align-items:center;justify-content:center;text-align:center;padding:1rem;letter-spacing:.04em;text-transform:uppercase;">DU VANN!</div>
-            <div id="groupBattleFeed" style="display:none;position:absolute;left:10px;right:10px;bottom:10px;color:#fff;background:rgba(15,23,42,.58);border-radius:10px;padding:.45rem .6rem;font-weight:700;"></div>
-        </div>
     </section>
 
     <section id="groupBattleBoard" class="card-panel" style="display:none;">
@@ -93,7 +107,7 @@
         <ul id="groupBattlePlayers" class="leaderboard-list"></ul>
     </section>
 
-    <section class="card-panel">
+    <section class="card-panel" id="questionPanel" style="display:none;">
         <button id="flipDirectionButton" type="button" style="display:block;width:100%;padding:.7rem;margin-bottom:.6rem;font-size:1rem;font-weight:800;border:none;border-radius:10px;background:#16a34a;color:#fff;cursor:pointer;">Klicka för att välja ordning: English → Svenska</button>
         <p id="questionLabel" class="question-label" style="display:none;"></p>
         <p class="question-word" id="questionWord">Laddar glosor...</p>
@@ -105,6 +119,9 @@
         <div style="display:flex;gap:.6rem;margin-top:.6rem;">
             <button id="nextWordButton" type="button" class="ghost">Ny glosa</button>
             <button id="resetSessionButton" type="button" class="ghost" style="color:#ef4444;border-color:#ef4444;">Nollställ</button>
+        </div>
+        <div style="margin-top:.6rem;">
+            <button id="startSiegeButton" type="button" style="display:block;width:100%;padding:.7rem;font-size:1rem;font-weight:800;border:none;border-radius:10px;background:linear-gradient(135deg,#1e40af,#7c3aed);color:#fff;cursor:pointer;letter-spacing:.03em;">⚔️ SIEGE BATTLE — Pixel Warfare</button>
         </div>
         <div id="trainProgressWrap" style="display:none;margin-top:.6rem;">
             <div style="position:relative;width:100%;height:32px;border-radius:10px;overflow:hidden;background:#334155;border:2px solid #475569;">
@@ -120,40 +137,7 @@
         <ul id="challengeInboxList" class="leaderboard-list"></ul>
     </section>
 
-    <div id="groupFightPopup" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:9999;align-items:center;justify-content:center;">
-        <div style="background:#fff;border-radius:16px;max-width:940px;width:94%;padding:1rem;border:2px solid #7aa7d0;">
-            <h3 style="margin-top:0;">Skapa gruppfight / bossfight</h3>
-            <p style="margin:.2rem 0 .7rem 0;">Välj språk, vecka, lag och fyll på med bottar.</p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem;">
-                <div>
-                    <label for="groupFightLanguageSelect" style="font-weight:700;display:block;margin-bottom:.25rem;">Språk</label>
-                    <select id="groupFightLanguageSelect"></select>
-                </div>
-                <div>
-                    <label for="groupFightWeekSelect" style="font-weight:700;display:block;margin-bottom:.25rem;">Vecka</label>
-                    <select id="groupFightWeekSelect"></select>
-                </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
-                <div style="grid-column:1 / -1;border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
-                    <h4 style="margin:0 0 .5rem 0;">Tillgängliga spelare</h4>
-                    <ul id="groupPoolList" class="leaderboard-list"></ul>
-                </div>
-                <div style="border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
-                    <h4 style="margin:0 0 .5rem 0;">Ditt lag</h4>
-                    <ul id="groupTeamAList" class="leaderboard-list"></ul>
-                </div>
-                <div style="border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
-                    <h4 style="margin:0 0 .5rem 0;">Motståndarlag</h4>
-                    <ul id="groupTeamBList" class="leaderboard-list"></ul>
-                </div>
-            </div>
-            <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem;">
-                <button id="groupFightCreateButton" type="button" style="background:#16a34a;">Skapa</button>
-                <button id="groupFightCancelButton" type="button" style="background:#475569;">Avbryt</button>
-            </div>
-        </div>
-    </div>
+    <!-- popup moved outside game-shell, see below -->
 
     <section class="card-panel">
         <p class="question-label">Inloggade nu</p>
@@ -237,4 +221,39 @@ ryggsack: backpack"></textarea>
     <section class="log-panel" style="display:none;">
         <ul id="eventLog"></ul>
     </section>
+</div>
+
+<div id="groupFightPopup" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.92);z-index:99999;overflow-y:auto;padding:1rem;">
+    <div style="background:#fff;border-radius:16px;max-width:940px;width:94%;padding:1rem;border:2px solid #7aa7d0;">
+        <h3 style="margin-top:0;">Skapa gruppfight / bossfight</h3>
+        <p style="margin:.2rem 0 .7rem 0;">Välj språk, vecka, lag och fyll på med bottar.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem;">
+            <div>
+                <label for="groupFightLanguageSelect" style="font-weight:700;display:block;margin-bottom:.25rem;">Språk</label>
+                <select id="groupFightLanguageSelect"></select>
+            </div>
+            <div>
+                <label for="groupFightWeekSelect" style="font-weight:700;display:block;margin-bottom:.25rem;">Vecka</label>
+                <select id="groupFightWeekSelect"></select>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
+            <div style="grid-column:1 / -1;border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
+                <h4 style="margin:0 0 .5rem 0;">Tillgängliga spelare</h4>
+                <ul id="groupPoolList" class="leaderboard-list"></ul>
+            </div>
+            <div style="border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
+                <h4 style="margin:0 0 .5rem 0;">Ditt lag</h4>
+                <ul id="groupTeamAList" class="leaderboard-list"></ul>
+            </div>
+            <div style="border:1px solid #d6e4f3;border-radius:12px;padding:.6rem;">
+                <h4 style="margin:0 0 .5rem 0;">Motståndarlag</h4>
+                <ul id="groupTeamBList" class="leaderboard-list"></ul>
+            </div>
+        </div>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem;">
+            <button id="groupFightCreateButton" type="button" style="background:#16a34a;">Skapa</button>
+            <button id="groupFightCancelButton" type="button" style="background:#475569;">Avbryt</button>
+        </div>
+    </div>
 </div>
