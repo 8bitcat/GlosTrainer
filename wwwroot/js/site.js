@@ -418,12 +418,23 @@
     const SIEGE_CASTLE_DMG = 15;
     const SIEGE_ATTACK_COOLDOWN = 36;
 
+    // Bosses ordered easy→hard. Each has unique army theme + colors.
     const SIEGE_BOSSES = [
-      { id: "oiia", name: "OIIA Cat", icon: "🐱", army: ["soldier", "soldier", "soldier", "archer", "soldier", "soldier", "knight", "soldier", "soldier", "boss"] },
-      { id: "keyboard", name: "Keyboard Cat", icon: "🎹", army: ["soldier", "soldier", "archer", "soldier", "soldier", "archer", "soldier", "soldier", "knight", "boss"] },
-      { id: "grumpy", name: "Grumpy Cat", icon: "😾", army: ["soldier", "knight", "soldier", "soldier", "soldier", "knight", "soldier", "soldier", "soldier", "boss"] },
-      { id: "nyan", name: "Nyan Cat", icon: "🌈", army: ["soldier", "soldier", "nyan", "soldier", "soldier", "nyan", "soldier", "soldier", "nyan", "boss"] },
-      { id: "longcat", name: "Longcat", icon: "🐈", army: ["soldier", "soldier", "soldier", "soldier", "knight", "soldier", "soldier", "archer", "knight", "boss"] },
+      { id: "oiia", name: "OIIA Cat", icon: "🐱", skulls: 1, accuracy: 0.3, spawnMs: 7000,
+        theme: "cat", army: ["grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "grunt", "boss"],
+        colors: { armor: "#c08040", armorLight: "#d0a060", helmet: "#a07030", helmetLight: "#c09050", shield: "#906020", shieldLight: "#b08040", boots: "#5a3a1a", crest: "#e0a040" } },
+      { id: "keyboard", name: "Keyboard Cat", icon: "🎹", skulls: 2, accuracy: 0.45, spawnMs: 6000,
+        theme: "wolf", army: ["grunt", "grunt", "grunt", "archer", "grunt", "grunt", "grunt", "archer", "grunt", "boss"],
+        colors: { armor: "#505060", armorLight: "#707080", helmet: "#404050", helmetLight: "#606070", shield: "#383848", shieldLight: "#505060", boots: "#2a2a30", crest: "#8080a0" } },
+      { id: "grumpy", name: "Grumpy Cat", icon: "😾", skulls: 3, accuracy: 0.55, spawnMs: 5000,
+        theme: "zombie", army: ["grunt", "grunt", "knight", "grunt", "grunt", "archer", "grunt", "grunt", "knight", "boss"],
+        colors: { armor: "#406030", armorLight: "#508040", helmet: "#305020", helmetLight: "#407030", shield: "#2a4018", shieldLight: "#386028", boots: "#1a2a0e", crest: "#60a040" } },
+      { id: "nyan", name: "Nyan Cat", icon: "🌈", skulls: 4, accuracy: 0.65, spawnMs: 4500,
+        theme: "skeleton", army: ["grunt", "knight", "grunt", "archer", "grunt", "knight", "archer", "grunt", "knight", "boss"],
+        colors: { armor: "#606068", armorLight: "#808088", helmet: "#505058", helmetLight: "#707078", shield: "#404048", shieldLight: "#606068", boots: "#303038", crest: "#a0a0b0" } },
+      { id: "dino", name: "Chrome Dino", icon: "🦕", skulls: 5, accuracy: 0.75, spawnMs: 4000,
+        theme: "dino", army: ["grunt", "knight", "archer", "knight", "grunt", "knight", "archer", "knight", "knight", "boss"],
+        colors: { armor: "#3a3a3a", armorLight: "#5a5a5a", helmet: "#2a2a2a", helmetLight: "#4a4a4a", shield: "#1a1a1a", shieldLight: "#3a3a3a", boots: "#1a1a1a", crest: "#808080" } },
     ];
 
     bossRoster.forEach((boss) => {
@@ -774,10 +785,9 @@
         ctx.fillStyle = sel ? "#e0c0f0" : "#a0a0b0";
         ctx.font = sel ? "bold 12px monospace" : "11px monospace";
         ctx.fillText(boss.name, bossX + 32, by + 14);
-        // Army preview
-        ctx.fillStyle = "#606070"; ctx.font = "8px monospace";
-        const armyPreview = [...new Set(boss.army)].join(", ");
-        ctx.fillText(`Armé: ${armyPreview}`, bossX + 32, by + 25);
+        // Difficulty skulls
+        ctx.fillStyle = "#c04040"; ctx.font = "10px sans-serif";
+        ctx.fillText("💀".repeat(boss.skulls || 1), bossX + 32, by + 26);
         m.buttons.push({ type: "selectBoss", bossId: boss.id, x: bossX, y: by, w: bossW, h: 30 });
       });
 
@@ -1593,6 +1603,101 @@
     let enemySpawnCount = 0;
     let playerSpawnCount = 0;
 
+    // Themed grunt sprites per boss
+    function drawThemedGrunt(gx, gy, direction, walkFrame, attackFrame, colors, hp, maxHp, theme) {
+      if (theme === "zombie") {
+        // Green-skinned zombie with torn clothes
+        const ps = SIEGE_PS, isAtk = attackFrame > 0;
+        siegePx(gx, gy + 10, 6, 1, "rgba(0,0,0,0.2)");
+        const lp = Math.floor(walkFrame / 8) % 2; // Shambling walk
+        siegePx(gx + 1 + lp, gy + 8, 1, 2, "#2a3a1a");
+        siegePx(gx + 3 + (1 - lp), gy + 8, 1, 2, "#2a3a1a");
+        siegePx(gx + 1, gy + 4, 4, 4, colors.armor); // Torn shirt
+        siegePx(gx + 2, gy + 5, 2, 2, "#4a6030"); // Exposed skin
+        siegePx(gx, gy + 4, 1, 3, "#4a6030"); // Arms (green skin)
+        siegePx(gx + 5, gy + 4, 1, 3, "#4a6030");
+        if (isAtk) { siegePx(direction > 0 ? gx + 6 : gx - 2, gy + 3, 2, 1, "#4a6030"); } // Reaching
+        siegePx(gx + 1, gy + 1, 4, 3, "#5a7840"); // Green head
+        siegePx(gx + 2, gy + 2, 1, 1, "#c02020"); // Red eyes
+        siegePx(gx + 3, gy + 2, 1, 1, "#c02020");
+        siegePx(gx + 2, gy + 3, 2, 1, "#1a1a1a"); // Open mouth
+        const hr = Math.max(0, hp / Math.max(1, maxHp)); siegePx(gx, gy - 2, 6, 1, "#1a1a1a");
+        if (hr > 0) siegePx(gx, gy - 2, Math.max(1, Math.round(6 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
+      } else if (theme === "wolf") {
+        // Gray wolf on all fours
+        const ps = SIEGE_PS;
+        siegePx(gx, gy + 10, 7, 1, "rgba(0,0,0,0.2)");
+        const lp = Math.floor(walkFrame / 5) % 2;
+        siegePx(gx + 1 + lp, gy + 7, 1, 3, "#606060"); // Front legs
+        siegePx(gx + 4 + (1-lp), gy + 7, 1, 3, "#606060"); // Back legs
+        siegePx(gx + 1, gy + 4, 5, 3, "#808080"); // Body
+        siegePx(gx + 2, gy + 5, 3, 1, "#a0a0a0"); // Belly
+        // Head
+        const hx = direction > 0 ? gx + 5 : gx - 1;
+        siegePx(hx, gy + 3, 3, 3, "#707070");
+        siegePx(hx + (direction > 0 ? 2 : 0), gy + 4, 1, 1, "#1a1a1a"); // Eye
+        siegePx(hx + (direction > 0 ? 2 : 0), gy + 5, 1, 1, "#2a2a2a"); // Snout
+        // Ears
+        siegePx(hx, gy + 2, 1, 1, "#606060");
+        siegePx(hx + 2, gy + 2, 1, 1, "#606060");
+        // Tail
+        siegePx(direction > 0 ? gx - 1 : gx + 6, gy + 3 + Math.floor(Math.sin(walkFrame / 3)), 1, 2, "#707070");
+        const hr = Math.max(0, hp / Math.max(1, maxHp)); siegePx(gx, gy, 7, 1, "#1a1a1a");
+        if (hr > 0) siegePx(gx, gy, Math.max(1, Math.round(7 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
+      } else if (theme === "skeleton") {
+        // Bone-white skeleton with sword
+        const ps = SIEGE_PS;
+        siegePx(gx, gy + 10, 6, 1, "rgba(0,0,0,0.15)");
+        const lp = Math.floor(walkFrame / 6) % 2;
+        siegePx(gx + 1 + lp, gy + 8, 1, 2, "#d0d0c0"); // Leg bones
+        siegePx(gx + 3 + (1-lp), gy + 8, 1, 2, "#d0d0c0");
+        siegePx(gx + 2, gy + 4, 2, 4, "#e0e0d0"); // Ribcage
+        siegePx(gx + 1, gy + 5, 1, 2, "#c0c0b0"); // Ribs
+        siegePx(gx + 4, gy + 5, 1, 2, "#c0c0b0");
+        siegePx(gx, gy + 4, 1, 3, "#d0d0c0"); // Arms
+        siegePx(gx + 5, gy + 4, 1, 3, "#d0d0c0");
+        // Sword
+        siegePx(direction > 0 ? gx + 6 : gx - 2, gy + 2, 1, 4, "#a0a0a0");
+        // Skull
+        siegePx(gx + 1, gy + 1, 4, 3, "#f0f0e0");
+        siegePx(gx + 2, gy + 1, 1, 1, "#1a1a1a"); // Eye sockets
+        siegePx(gx + 3, gy + 1, 1, 1, "#1a1a1a");
+        siegePx(gx + 2, gy + 3, 2, 1, "#2a2a2a"); // Teeth
+        siegePx(gx + 2, gy, 2, 1, "#e0e0d0"); // Skull top
+        const hr = Math.max(0, hp / Math.max(1, maxHp)); siegePx(gx, gy - 2, 6, 1, "#1a1a1a");
+        if (hr > 0) siegePx(gx, gy - 2, Math.max(1, Math.round(6 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
+      } else if (theme === "dino") {
+        // Chrome Dino — pixel T-Rex like the Chrome game
+        const ps = SIEGE_PS;
+        siegePx(gx, gy + 10, 7, 1, "rgba(0,0,0,0.2)");
+        const lp = Math.floor(walkFrame / 5) % 2;
+        // Legs
+        siegePx(gx + 2 + lp, gy + 7, 1, 3, "#535353");
+        siegePx(gx + 4 + (1-lp), gy + 7, 1, 3, "#535353");
+        // Body
+        siegePx(gx + 1, gy + 4, 5, 3, "#535353");
+        siegePx(gx + 2, gy + 5, 3, 1, "#636363");
+        // Tiny arms (iconic!)
+        siegePx(direction > 0 ? gx + 5 : gx, gy + 5, 1, 1, "#535353");
+        // Tail
+        siegePx(direction > 0 ? gx - 1 : gx + 6, gy + 4, 2, 1, "#535353");
+        siegePx(direction > 0 ? gx - 2 : gx + 7, gy + 3, 1, 1, "#535353");
+        // Head — square block head like Chrome dino
+        const hx = direction > 0 ? gx + 4 : gx - 1;
+        siegePx(hx, gy + 1, 4, 3, "#535353");
+        siegePx(hx, gy, 3, 1, "#535353"); // Flat top
+        // Eye
+        siegePx(hx + (direction > 0 ? 2 : 1), gy + 1, 1, 1, "#ffffff");
+        // Mouth
+        siegePx(hx + (direction > 0 ? 1 : 0), gy + 3, 3, 1, "#434343");
+        const hr = Math.max(0, hp / Math.max(1, maxHp)); siegePx(gx, gy - 2, 7, 1, "#1a1a1a");
+        if (hr > 0) siegePx(gx, gy - 2, Math.max(1, Math.round(7 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
+      } else {
+        // Default cat theme — use soldier sprite with boss colors
+        drawPixelSoldier(gx, gy, direction, walkFrame, attackFrame, colors, hp, maxHp);
+      }
+    }
+
     function spawnSiegeSoldier(team) {
       const s = arena.siege;
       const isEnemy = team !== "player";
@@ -1642,14 +1747,25 @@
       const now = performance.now();
       s.frameCount++;
 
-      // Auto-spawn soldiers every interval
-      if (now - s.lastPlayerSpawnMs >= s.spawnIntervalMs && s.playerSoldiers.length < 25) {
-        spawnSiegeSoldier("player");
-        s.lastPlayerSpawnMs = now;
+      // Auto-spawn for solo play only
+      if (!s.isGroupFight) {
+        if (now - s.lastPlayerSpawnMs >= s.spawnIntervalMs && s.playerSoldiers.length < 25) {
+          spawnSiegeSoldier("player");
+          s.lastPlayerSpawnMs = now;
+        }
       }
-      if (now - s.lastEnemySpawnMs >= s.spawnIntervalMs && s.enemySoldiers.length < 25) {
-        spawnSiegeSoldier("enemy");
-        s.lastEnemySpawnMs = now;
+      // Boss AI — answers glosas on timer (solo play)
+      if (!s.isGroupFight && now - s.bossLastAnswerMs >= s.bossSpawnMs) {
+        s.bossLastAnswerMs = now;
+        const isCorrect = Math.random() < s.bossAccuracy;
+        if (isCorrect) {
+          spawnSiegeSoldier("enemy");
+          s.enemyFeed.unshift({ text: `${(SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).name} svarade RÄTT!`, good: true, time: Date.now(), duration: 3000 });
+        } else {
+          spawnSiegeSoldier("player"); // Boss mistake = player gets a soldier
+          s.enemyFeed.unshift({ text: `${(SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).name} svarade FEL!`, good: false, time: Date.now(), duration: 3000 });
+        }
+        if (s.enemyFeed.length > 5) s.enemyFeed.length = 5;
       }
 
       // Update all soldiers
@@ -1889,12 +2005,17 @@
       // Draw all soldiers sorted by x for proper layering
       const allSoldiers = [
         ...s.playerSoldiers.map(s => ({ ...s, colors: PLAYER_COLORS })),
-        ...s.enemySoldiers.map(s => ({ ...s, colors: ENEMY_COLORS })),
+        ...s.enemySoldiers.map(s => {
+          const boss = SIEGE_BOSSES.find(b => b.id === arena.siege.selectedBossId) || SIEGE_BOSSES[0];
+          return { ...s, colors: boss.colors, theme: boss.theme };
+        }),
       ].sort((a, b) => a.x - b.x);
 
       allSoldiers.forEach(sol => {
         if (sol.unitType === "nyan" || sol.unitType === "boss") {
           drawNyanCat(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.hp, sol.maxHp);
+        } else if (sol.team !== "player" && sol.unitType === "grunt") {
+          drawThemedGrunt(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.attackFrame, sol.colors, sol.hp, sol.maxHp, sol.theme || "cat");
         } else if (sol.unitType === "archer") {
           drawPixelSoldier(sol.x, SIEGE_GROUND_Y - 11, sol.direction, sol.walkFrame, sol.attackFrame, sol.colors, sol.hp, sol.maxHp);
           // Bow on top
@@ -4067,7 +4188,10 @@
         s.isGroupFight = !!options.isGroupFight;
         s.selectedBossId = options.bossId || "oiia";
         const boss = SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0];
-        s.bossArmy = boss.army || ["soldier"];
+        s.bossArmy = boss.army || ["grunt"];
+        s.bossAccuracy = boss.accuracy || 0.5;
+        s.bossSpawnMs = boss.spawnMs || 5000;
+        s.bossLastAnswerMs = 0;
         s.glosaText = null;
         s.glosaFeedback = null;
         s.gameOver = false;
