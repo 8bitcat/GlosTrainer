@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.5.0";
+  const GAME_VERSION = "1.6.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -1962,11 +1962,13 @@
       const bossTheme = (SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).theme;
 
       // Periodic ambient sounds
-      const totalSoldiers = s.playerSoldiers.length + s.enemySoldiers.length;
-      if (totalSoldiers > 0 && s.frameCount % 20 === 0) siegeAudio.playSfx("walk");
+      const allUnits = [...s.playerSoldiers, ...s.enemySoldiers];
+      if (allUnits.length > 0 && s.frameCount % 20 === 0) siegeAudio.playSfx("walk");
       // Ambulance sirens
-      const ambulances = [...s.playerSoldiers, ...s.enemySoldiers].filter(u => u.unitType === "ambulance" && u.state === "walk");
-      if (ambulances.length > 0 && s.frameCount % 40 === 0) siegeAudio.playSfx("ambulanceSiren");
+      if (allUnits.some(u => u.unitType === "ambulance" && u.state === "walk") && s.frameCount % 40 === 0) siegeAudio.playSfx("ambulanceSiren");
+      // Knight galloping
+      if (allUnits.some(u => u.unitType === "knight" && u.state === "walk") && s.frameCount % 15 === 0) siegeAudio.playSfx("gallop");
+      // Dino roar handled in combat below (only on attack)
 
       // Auto-spawn for solo play only
       if (!s.isGroupFight) {
@@ -2208,7 +2210,7 @@
             pendingDamage.push({ target: e.target, dmg: SIEGE_SOLDIER_DMG, attacker: e });
             e.attackCooldown = SIEGE_ATTACK_COOLDOWN;
             e.attackFrame = SIEGE_ATTACK_COOLDOWN;
-            siegeAudio.playSfx("swordHit");
+            siegeAudio.playSfx(bossTheme === "dino" ? "dinoRoar" : "swordHit");
             addImpactParticles(e.target.x * SIEGE_PS + 9, (SIEGE_GROUND_Y - 4) * SIEGE_PS, 8, "#fde68a", "#ef4444");
           }
           if (e.attackFrame > 0) e.attackFrame--;
@@ -5460,243 +5462,47 @@
     bossNoteIndex: 0,
     bossNoteTimer: 0,
 
-    // === BACKGROUND MUSIC — Geometry Dash style chiptune ===
+    // === BACKGROUND MUSIC — MP3 tracks, picked randomly ===
+    musicTracks: ["/music/stereo-madness.mp3", "/music/crazy-dave.mp3", "/music/machina.mp3"],
+    audioEl: null,
+    _pendingPlay: false,
+
     startMusic() {
-      if (!appState.settings.soundEnabled || !this.musicEnabled) return;
-      if (this.musicPlaying) return;
-      const ac = getAudioContext();
-      if (!ac) return;
-      if (ac.state === "suspended") ac.resume();
-      this.musicPlaying = true;
+      if (!this.musicEnabled) return;
+      if (this.musicPlaying && this.audioEl && !this.audioEl.paused) return;
 
-      const masterGain = ac.createGain();
-      masterGain.gain.value = 0.12;
-      masterGain.connect(ac.destination);
-
-      // Note name → frequency converter (supports sharps: Fs = F#, Bf = Bb/A#)
-      const noteFreq = (name) => {
-        const map = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
-        let n = map[name[0]];
-        let octIdx = 1;
-        if (name[1] === "s") { n++; octIdx = 2; } // sharp
-        else if (name[1] === "f") { n--; octIdx = 2; } // flat
-        const oct = parseInt(name[octIdx]);
-        return 440 * Math.pow(2, (n - 9) / 12 + (oct - 4));
-      };
-
-      // === GEOMETRY DASH MEDLEY — transcribed from piano sheet ===
-      // === STEREO MADNESS — Geometry Dash Level 1 (Symphoniac piano arrangement) ===
-      // Key: C major, ♩=160, 4/4 time. Transcribed from sheet music.
-
-      const sections = [
-        // ─── Section 1: Intro riff (m5-12) — melody only, no bass ───
-        { bpm: 160, sub: 0.5,
-          melody: [
-            // m5: Running 8th notes — parallel voices, upper line
-            "C5","D5","E5","F5","E5","D5","C5","D5",
-            // m6: Ascending sequence
-            "E5","F5","G5","A5","G5","F5","E5","F5",
-            // m7: Return to opening
-            "C5","D5","E5","F5","E5","D5","C5","B4",
-            // m8: Wider range
-            "C5","D5","E5","F5","G5","F5","E5","D5",
-            // m9: Descending then ascending
-            "E5","D5","C5","D5","E5","F5","G5","A5",
-            // m10: Peak phrase
-            "G5","F5","E5","D5","E5","F5","G5","F5",
-            // m11: Winding down
-            "E5","D5","C5","D5","E5","F5","E5","D5",
-            // m12: Resolving
-            "C5","D5","E5","D5","C5","B4","A4","B4",
-          ],
-          bass: [
-            // m5-12: Light sustained C pedal
-            "C3","C3","C3","C3","C3","C3","C3","C3",
-            "C3","C3","C3","C3","C3","C3","C3","C3",
-            "A2","A2","A2","A2","A2","A2","A2","A2",
-            "G2","G2","G2","G2","G2","G2","G2","G2",
-            "C3","C3","C3","C3","C3","C3","C3","C3",
-            "F2","F2","F2","F2","F2","F2","F2","F2",
-            "G2","G2","G2","G2","G2","G2","G2","G2",
-            "C3","C3","C3","C3","G2","G2","G2","G2",
-          ],
-        },
-        // ─── Section 2: Main theme with bass chords (m13-20) ───
-        { bpm: 160, sub: 0.5,
-          melody: [
-            // m13: Melody restates with bass support
-            "C5","D5","E5","F5","E5","D5","C5","D5",
-            // m14
-            "E5","F5","G5","A5","G5","F5","E5","F5",
-            // m15: Variation
-            "C5","D5","E5","F5","E5","D5","C5","B4",
-            // m16: Building
-            "C5","D5","E5","F5","G5","F5","E5","D5",
-            // m17: Climbing higher
-            "C5","D5","E5","F5","G5","A5","G5","F5",
-            // m18: Intensity
-            "E5","D5","C5","D5","E5","F5","G5","A5",
-            // m19: Block chord section — quarter notes
-            "G5","A5","G5","F5","E5","F5","E5","D5",
-            // m20: Resolution — whole note C5
-            "C5","C5","C5","C5","C5","C5","C5","C5",
-          ],
-          bass: [
-            // m13-14: Whole note chords (root notes)
-            "C2","C2","C2","C2","C2","C2","C2","C2",
-            "C2","C2","C2","C2","C2","C2","C2","C2",
-            // m15-16
-            "A2","A2","A2","A2","A2","A2","A2","A2",
-            "F2","F2","F2","F2","F2","F2","F2","F2",
-            // m17
-            "G2","G2","G2","G2","G2","G2","G2","G2",
-            // m18: Building bass
-            "C2","C2","C2","C2","C2","C2","C2","C2",
-            // m19: Half note chords
-            "G2","G2","G2","G2","F2","F2","F2","F2",
-            // m20: Whole note C
-            "C2","C2","C2","C2","C2","C2","C2","C2",
-          ],
-        },
-        // ─── Section 3: Dotted rhythm section (m21-26) with walking bass ───
-        { bpm: 160, sub: 0.5,
-          melody: [
-            // m21: New rhythmic pattern — dotted 8th feel
-            "E5","E5","E5","D5","E5","F5","E5","D5",
-            // m22
-            "E5","E5","E5","D5","E5","F5","E5","D5",
-            // m23: Lower register dotted pattern
-            "C5","C5","C5","B4","C5","D5","C5","B4",
-            // m24
-            "C5","C5","C5","B4","C5","D5","C5","B4",
-            // m25: Back up
-            "E5","E5","E5","D5","E5","F5","E5","D5",
-            // m26: Final ascending push
-            "E5","E5","E5","D5","E5","F5","G5","A5",
-          ],
-          bass: [
-            // m21-26: Walking bass in octaves (quarter notes = 2 per 8th)
-            "C3","C2","E3","E2","C3","C2","E3","E2",
-            "F3","F2","A3","A2","F3","F2","A3","A2",
-            "C3","C2","E3","E2","C3","C2","E3","E2",
-            "G3","G2","B2","B2","G3","G2","B2","B2",
-            "C3","C2","E3","E2","C3","C2","E3","E2",
-            "F3","F2","G3","G2","C3","C2","G2","G2",
-          ],
-        },
-      ];
-
-      // Calculate total medley duration
-      let totalDuration = 0;
-      sections.forEach(s => { totalDuration += s.melody.length * (60 / s.bpm) * s.sub; });
-
-      // Schedule the full medley
-      const scheduleMedley = (startTime) => {
-        let offset = 0;
-        sections.forEach(sec => {
-          const beatSec = (60 / sec.bpm) * sec.sub;
-
-          // Melody — square wave (chiptune lead)
-          sec.melody.forEach((note, i) => {
-            const t = startTime + offset + i * beatSec;
-            const osc = ac.createOscillator();
-            const g = ac.createGain();
-            osc.type = "square";
-            osc.frequency.value = noteFreq(note);
-            g.gain.setValueAtTime(0.001, t);
-            g.gain.linearRampToValueAtTime(0.15, t + 0.015);
-            g.gain.setValueAtTime(0.15, t + beatSec * 0.65);
-            g.gain.linearRampToValueAtTime(0.001, t + beatSec * 0.9);
-            osc.connect(g); g.connect(masterGain);
-            osc.start(t); osc.stop(t + beatSec);
-          });
-
-          // Bass — triangle wave
-          sec.bass.forEach((note, i) => {
-            const t = startTime + offset + i * beatSec;
-            const osc = ac.createOscillator();
-            const g = ac.createGain();
-            osc.type = "triangle";
-            osc.frequency.value = noteFreq(note);
-            g.gain.setValueAtTime(0.2, t);
-            g.gain.setValueAtTime(0.2, t + beatSec * 0.75);
-            g.gain.linearRampToValueAtTime(0.001, t + beatSec * 0.9);
-            osc.connect(g); g.connect(masterGain);
-            osc.start(t); osc.stop(t + beatSec);
-          });
-
-          // Drums
-          const numBeats = sec.melody.length;
-          for (let i = 0; i < numBeats; i++) {
-            const t = startTime + offset + i * beatSec;
-            // Kick on 1 and 3 (every 4 8th-notes = beats 1,3 in 4/4)
-            if (i % 4 === 0 || i % 4 === 2) {
-              const osc = ac.createOscillator();
-              const g = ac.createGain();
-              osc.type = "sine";
-              osc.frequency.setValueAtTime(150, t);
-              osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
-              g.gain.setValueAtTime(0.3, t);
-              g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-              osc.connect(g); g.connect(masterGain);
-              osc.start(t); osc.stop(t + 0.1);
-            }
-            // Snare on 2 and 4
-            if (i % 4 === 1 || i % 4 === 3) {
-              const bufSize = ac.sampleRate * 0.05;
-              const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
-              const d = buf.getChannelData(0);
-              for (let j = 0; j < bufSize; j++) d[j] = (Math.random() * 2 - 1);
-              const src = ac.createBufferSource(); src.buffer = buf;
-              const ng = ac.createGain();
-              const flt = ac.createBiquadFilter();
-              flt.type = "highpass"; flt.frequency.value = 1000;
-              ng.gain.setValueAtTime(0.08, t);
-              ng.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-              src.connect(flt); flt.connect(ng); ng.connect(masterGain);
-              src.start(t); src.stop(t + 0.05);
-            }
-            // Hi-hat on every 8th
-            const bufSize = ac.sampleRate * 0.02;
-            const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
-            const d = buf.getChannelData(0);
-            for (let j = 0; j < bufSize; j++) d[j] = (Math.random() * 2 - 1) * 0.2;
-            const noise = ac.createBufferSource(); noise.buffer = buf;
-            const ng = ac.createGain();
-            ng.gain.setValueAtTime(i % 2 === 0 ? 0.06 : 0.03, t);
-            ng.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
-            noise.connect(ng); ng.connect(masterGain);
-            noise.start(t); noise.stop(t + 0.02);
+      if (!this.audioEl) {
+        this.audioEl = new Audio();
+        this.audioEl.loop = false;
+        this.audioEl.volume = 0.25;
+        this.audioEl.addEventListener("ended", () => {
+          if (this.musicPlaying && this.musicEnabled) {
+            this.audioEl.src = this.musicTracks[Math.floor(Math.random() * this.musicTracks.length)];
+            this.audioEl.play().catch(() => {});
           }
-
-          offset += numBeats * beatSec;
         });
-      };
+      }
+      this.audioEl.src = this.musicTracks[Math.floor(Math.random() * this.musicTracks.length)];
+      this.musicPlaying = true;
+      const p = this.audioEl.play();
+      if (p && p.catch) p.catch(() => { this._pendingPlay = true; });
+    },
 
-      // Schedule loops continuously
-      let nextLoopTime = ac.currentTime + 0.05;
-      scheduleMedley(nextLoopTime);
-
-      const loopInterval = setInterval(() => {
-        if (!this.musicPlaying) { clearInterval(loopInterval); return; }
-        nextLoopTime += totalDuration;
-        if (nextLoopTime - ac.currentTime < totalDuration * 0.3) {
-          nextLoopTime = ac.currentTime + 0.05;
-        }
-        scheduleMedley(nextLoopTime);
-      }, (totalDuration - 1) * 1000);
-
-      this.musicNodes = { masterGain, loopInterval };
+    // Called on any user gesture to unblock autoplay
+    resumeIfPending() {
+      if (this._pendingPlay && this.musicEnabled && this.audioEl) {
+        this._pendingPlay = false;
+        this.musicPlaying = true;
+        this.audioEl.play().catch(() => {});
+      }
     },
 
     stopMusic() {
       this.musicPlaying = false;
-      if (this.musicNodes) {
-        if (this.musicNodes.loopInterval) clearInterval(this.musicNodes.loopInterval);
-        if (this.musicNodes.masterGain) {
-          try { this.musicNodes.masterGain.gain.linearRampToValueAtTime(0, getAudioContext().currentTime + 0.3); } catch(e) {}
-        }
-        this.musicNodes = null;
+      this._pendingPlay = false;
+      if (this.audioEl) {
+        this.audioEl.pause();
+        this.audioEl.currentTime = 0;
       }
     },
 
@@ -5706,6 +5512,7 @@
       else this.stopMusic();
     },
 
+    // Dead code removed — chiptune generator replaced by MP3 playback
     // === SOUND EFFECTS ===
     playSfx(name, vol = 0.1) {
       if (!appState.settings.soundEnabled) return;
@@ -5844,6 +5651,49 @@
         g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
         osc.connect(g); g.connect(ac.destination);
         osc.start(t); osc.stop(t + 0.25);
+
+      } else if (name === "gallop") {
+        // Horse gallop — rapid low thuds (clip-clop)
+        for (let k = 0; k < 2; k++) {
+          const osc = ac.createOscillator();
+          const g = ac.createGain();
+          const dt = k * 0.07;
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(k === 0 ? 180 : 140, t + dt);
+          osc.frequency.exponentialRampToValueAtTime(60, t + dt + 0.04);
+          g.gain.setValueAtTime(vol * 0.4, t + dt);
+          g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.06);
+          osc.connect(g); g.connect(ac.destination);
+          osc.start(t + dt); osc.stop(t + dt + 0.06);
+        }
+
+      } else if (name === "dinoRoar") {
+        // T-Rex roar — sharp screech with distortion
+        // High-pitched attack screech
+        const osc1 = ac.createOscillator();
+        const g1 = ac.createGain();
+        osc1.type = "sawtooth";
+        osc1.frequency.setValueAtTime(900, t);
+        osc1.frequency.exponentialRampToValueAtTime(300, t + 0.08);
+        osc1.frequency.exponentialRampToValueAtTime(150, t + 0.25);
+        g1.gain.setValueAtTime(vol * 0.6, t);
+        g1.gain.linearRampToValueAtTime(vol * 0.3, t + 0.08);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        osc1.connect(g1); g1.connect(ac.destination);
+        osc1.start(t); osc1.stop(t + 0.3);
+        // Noise layer for texture
+        const bufSize = ac.sampleRate * 0.15;
+        const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let j = 0; j < bufSize; j++) d[j] = (Math.random() * 2 - 1);
+        const src = ac.createBufferSource(); src.buffer = buf;
+        const ng = ac.createGain();
+        const flt = ac.createBiquadFilter();
+        flt.type = "bandpass"; flt.frequency.value = 600; flt.Q.value = 2;
+        ng.gain.setValueAtTime(vol * 0.4, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        src.connect(flt); flt.connect(ng); ng.connect(ac.destination);
+        src.start(t); src.stop(t + 0.2);
       }
     },
 
@@ -6874,6 +6724,8 @@
   function showCanvasMenu() {
     if (!bossFightEngine) return;
     killAllHtmlOverlays();
+    // Start music on first menu load — will be pending until user gesture
+    siegeAudio.startMusic();
     if (!hasBooted) {
       hasBooted = true;
     } else {
@@ -9675,6 +9527,7 @@
 
     // Canvas keyboard handler for typing (siege answers + teacher login)
     document.addEventListener("keydown", async (e) => {
+      siegeAudio.resumeIfPending();
       if (!bossFightEngine) return;
 
       // Siege mode typing
@@ -9766,6 +9619,7 @@
     // Canvas click/hover for menu and game-over
     if (elements.bossFightCanvas) {
       elements.bossFightCanvas.addEventListener("click", (e) => {
+        siegeAudio.resumeIfPending();
         if (!bossFightEngine) return;
         // Always kill any HTML overlays on canvas click
         if (elements.groupResultOverlay) elements.groupResultOverlay.style.display = "none";
