@@ -5457,7 +5457,7 @@
   const siegeAudio = {
     musicPlaying: false,
     musicNodes: null,
-    musicEnabled: true,
+    musicEnabled: false,
     sfxCooldowns: {},
     bossNoteIndex: 0,
     bossNoteTimer: 0,
