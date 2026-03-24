@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.6.0";
+  const GAME_VERSION = "1.6.1";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -434,7 +434,7 @@
       { id: "grumpy", name: "Grumpy Cat", icon: "😾", skulls: 3, accuracy: 0.60, spawnMs: 3500,
         theme: "zombie", army: ["grunt", "grunt", "knight", "grunt", "grunt", "archer", "grunt", "grunt", "knight", "boss"],
         colors: { armor: "#406030", armorLight: "#508040", helmet: "#305020", helmetLight: "#407030", shield: "#2a4018", shieldLight: "#386028", boots: "#1a2a0e", crest: "#60a040" } },
-      { id: "klara", name: "Klara G", icon: "🏥", skulls: 3, accuracy: 0.58, spawnMs: 3800,
+      { id: "klara", name: "Klara G", icon: "🏥", skulls: 6, accuracy: 0.58, spawnMs: 3800,
         theme: "nurse", army: ["grunt", "grunt", "ambulance", "grunt", "archer", "grunt", "ambulance", "grunt", "grunt", "boss"],
         colors: { armor: "#ffffff", armorLight: "#e8f0ff", helmet: "#ff4060", helmetLight: "#ff6080", shield: "#f0f0f0", shieldLight: "#ffffff", boots: "#ffffff", crest: "#ff4060" } },
       { id: "nyan", name: "Nyan Cat", icon: "🌈", skulls: 4, accuracy: 0.70, spawnMs: 3000,
@@ -6528,7 +6528,7 @@
       })();
       pushLog("Miss i duel. Nästa skott blir starkare.");
     } else if (bossFightEngine) {
-      bossFightEngine.showTextFlash("Fel!", "#ef4444", `Rätt svar: ${expectedAnswerForCurrentWord()}`, 2500);
+      bossFightEngine.showTextFlash("Fel!", "#ef4444", `Rätt svar: ${expectedAnswerForCurrentWord()}`, Infinity);
     }
 
     if (state.bossMode && state.playerHp <= 0) {
