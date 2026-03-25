@@ -4552,6 +4552,19 @@
               adv.answerResults.push({ heroIndex: i, correct: false });
             }
           }
+          // Time ran out — show correct answer
+          if (adv.currentGlosa) {
+            adv.wrongQueue.push(adv.currentGlosa);
+            adv.phase = "wrongReveal";
+            adv.wrongRevealAnswer = adv.currentGlosa.en;
+            adv.wrongRevealWord = adv.currentGlosa.sv;
+            adv.wrongRevealStart = now;
+          } else {
+            advStartActionSelect();
+          }
+        }
+      } else if (adv.phase === "wrongReveal") {
+        if (now - adv.wrongRevealStart > 2500) {
           advStartActionSelect();
         }
       } else if (adv.phase === "playerTurn") {
@@ -4976,6 +4989,38 @@
         ctx.font = "12px sans-serif";
         ctx.fillStyle = "#666";
         ctx.fillText(`Runda ${adv.roundNumber}`, w / 2, 155);
+
+      } else if (adv.phase === "wrongReveal") {
+        // Show the word and correct answer
+        const revealElapsed = Date.now() - adv.wrongRevealStart;
+        const fadeIn = Math.min(1, revealElapsed / 300);
+
+        ctx.save();
+        ctx.globalAlpha = fadeIn;
+        ctx.textAlign = "center";
+
+        // The Swedish word
+        ctx.font = "bold 24px sans-serif";
+        ctx.fillStyle = "#fde68a";
+        ctx.shadowColor = "#000";
+        ctx.shadowBlur = 4;
+        ctx.fillText(adv.wrongRevealWord || "", w / 2, 55);
+        ctx.shadowBlur = 0;
+
+        // "Fel!" label
+        ctx.font = "bold 20px sans-serif";
+        ctx.fillStyle = "#ef4444";
+        ctx.fillText("Fel!", w / 2, 85);
+
+        // Correct answer
+        ctx.font = "bold 26px sans-serif";
+        ctx.fillStyle = "#22c55e";
+        ctx.shadowColor = "#000";
+        ctx.shadowBlur = 4;
+        ctx.fillText(adv.wrongRevealAnswer || "", w / 2, 120);
+        ctx.shadowBlur = 0;
+
+        ctx.restore();
 
       } else if (adv.phase === "actionSelect") {
         const hero = adv.heroes[adv.actionMenuHero];
@@ -5973,11 +6018,16 @@
           adv.answerResults.push({ heroIndex: 0, correct });
           if (!correct && adv.currentGlosa) {
             adv.wrongQueue.push(adv.currentGlosa);
+            // Show correct answer before moving on
+            adv.phase = "wrongReveal";
+            adv.wrongRevealAnswer = adv.currentGlosa.en;
+            adv.wrongRevealWord = adv.currentGlosa.sv;
+            adv.wrongRevealStart = Date.now();
+            return;
           }
           if (correct) {
             adv.heroes[0].specialCharge = Math.min(3, (adv.heroes[0].specialCharge || 0) + 1);
           }
-          // In single-player, immediately go to action select
           advStartActionSelect();
         }
       },
