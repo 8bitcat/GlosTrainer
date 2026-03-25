@@ -2913,22 +2913,40 @@
 
         // Special character buttons below SVAR box
         const siegeLang = normalizeLanguage(appState.practiceAnswerLanguage || appState.selectedLanguage || "english");
-        const siegeCharSets = {
+        const siegeAllChars = {
           spanish: ["á","é","í","ó","ú","ü","ñ","¿","¡"],
           french: ["à","â","ç","è","é","ê","ë","î","ï","ô","ù","û","ü","œ"],
           german: ["ä","ö","ü","ß"],
           japanese: ["あ","い","う","え","お","か","き","く","け","こ","さ","し","す","せ","そ","た","ち","つ","て","と","な","に","ぬ","ね","の","は","ひ","ふ","へ","ほ","ま","み","む","め","も","や","ゆ","よ","ら","り","る","れ","ろ","わ","を","ん"],
         };
-        let siegeChars = null;
+        let siegeFullSet = null;
         if (siegeLang === "japanese") {
-          siegeChars = siegeFlipped ? siegeCharSets.japanese : null;
+          siegeFullSet = siegeFlipped ? siegeAllChars.japanese : null;
         } else {
-          siegeChars = siegeFlipped ? null : siegeCharSets[siegeLang];
+          siegeFullSet = siegeFlipped ? null : siegeAllChars[siegeLang];
         }
         arena.siege.charBtnBounds = [];
-        if (siegeChars && !s.gameOver) {
-          const btnW = siegeLang === "japanese" ? 22 : 26;
-          const btnH = 20;
+        if (siegeFullSet && !s.gameOver) {
+          // For Japanese: pick answer chars + random distractors, then shuffle
+          // For others: show all (small set anyway)
+          let siegeChars = siegeFullSet;
+          if (siegeLang === "japanese" && state.currentWord) {
+            const answer = siegeFlipped ? String(state.currentWord.sv || "") : String(state.currentWord.en || "");
+            const answerChars = [...new Set([...answer])];
+            const distractors = siegeFullSet.filter(c => !answerChars.includes(c));
+            // Pick enough distractors to fill ~12 buttons total
+            const numDistractors = Math.max(4, 12 - answerChars.length);
+            const shuffled = [...distractors].sort(() => Math.random() - 0.5);
+            siegeChars = [...answerChars, ...shuffled.slice(0, numDistractors)];
+            // Use a seeded shuffle based on current word so it's stable per word
+            if (!arena.siege._charShuffle || arena.siege._charShuffleWord !== answer) {
+              arena.siege._charShuffleWord = answer;
+              arena.siege._charShuffle = [...siegeChars].sort(() => Math.random() - 0.5);
+            }
+            siegeChars = arena.siege._charShuffle;
+          }
+          const btnW = siegeLang === "japanese" ? 28 : 26;
+          const btnH = 24;
           const gap = 3;
           const cols = Math.floor(boxW / (btnW + gap));
           const startY = boxY + boxH + 4;
@@ -2943,7 +2961,7 @@
             ctx.lineWidth = 1;
             ctx.strokeRect(bx, by, btnW, btnH);
             ctx.fillStyle = "#f0f0f0";
-            ctx.font = siegeLang === "japanese" ? "bold 13px sans-serif" : "bold 12px monospace";
+            ctx.font = siegeLang === "japanese" ? "bold 15px sans-serif" : "bold 12px monospace";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(ch, bx + btnW / 2, by + btnH / 2);
@@ -5884,6 +5902,7 @@
       },
       setSiegeGlosa(text) {
         arena.siege.glosaText = text || null;
+        arena.siege._charShuffle = null; // reset char button shuffle for new word
       },
       setSiegeFeedback(text, color, sub, durationMs) {
         const now = Date.now();
@@ -6564,6 +6583,15 @@
     if (!chars) {
       elements.specialCharsRow.style.display = "none";
       return;
+    }
+    // For Japanese: show answer chars + random distractors, shuffled
+    if (lang === "japanese" && state.currentWord) {
+      const answer = expectedAnswerForCurrentWord();
+      const answerChars = [...new Set([...answer])];
+      const distractors = chars.filter(c => !answerChars.includes(c));
+      const numDistractors = Math.max(4, 12 - answerChars.length);
+      const picked = [...distractors].sort(() => Math.random() - 0.5).slice(0, numDistractors);
+      chars = [...answerChars, ...picked].sort(() => Math.random() - 0.5);
     }
     elements.specialCharsRow.style.display = "flex";
     elements.specialCharsRow.style.flexWrap = "wrap";
