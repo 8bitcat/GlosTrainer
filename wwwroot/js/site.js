@@ -2910,6 +2910,48 @@
           ctx.fillStyle = "#60a0e0";
           ctx.fillRect(cursorX, boxY + 5, 10, 16);
         }
+
+        // Special character buttons below SVAR box
+        const siegeLang = normalizeLanguage(appState.practiceAnswerLanguage || appState.selectedLanguage || "english");
+        const siegeCharSets = {
+          spanish: ["á","é","í","ó","ú","ü","ñ","¿","¡"],
+          french: ["à","â","ç","è","é","ê","ë","î","ï","ô","ù","û","ü","œ"],
+          german: ["ä","ö","ü","ß"],
+          japanese: ["あ","い","う","え","お","か","き","く","け","こ","さ","し","す","せ","そ","た","ち","つ","て","と","な","に","ぬ","ね","の","は","ひ","ふ","へ","ほ","ま","み","む","め","も","や","ゆ","よ","ら","り","る","れ","ろ","わ","を","ん"],
+        };
+        let siegeChars = null;
+        if (siegeLang === "japanese") {
+          siegeChars = siegeFlipped ? siegeCharSets.japanese : null;
+        } else {
+          siegeChars = siegeFlipped ? null : siegeCharSets[siegeLang];
+        }
+        arena.siege.charBtnBounds = [];
+        if (siegeChars && !s.gameOver) {
+          const btnW = siegeLang === "japanese" ? 22 : 26;
+          const btnH = 20;
+          const gap = 3;
+          const cols = Math.floor(boxW / (btnW + gap));
+          const startY = boxY + boxH + 4;
+          siegeChars.forEach((ch, i) => {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const bx = boxX + col * (btnW + gap);
+            const by = startY + row * (btnH + gap);
+            ctx.fillStyle = "rgba(15,23,42,0.85)";
+            ctx.fillRect(bx, by, btnW, btnH);
+            ctx.strokeStyle = "#475569";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bx, by, btnW, btnH);
+            ctx.fillStyle = "#f0f0f0";
+            ctx.font = siegeLang === "japanese" ? "bold 13px sans-serif" : "bold 12px monospace";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(ch, bx + btnW / 2, by + btnH / 2);
+            arena.siege.charBtnBounds.push({ x: bx, y: by, w: btnW, h: btnH, ch });
+          });
+          ctx.textBaseline = "alphabetic";
+        }
+
         ctx.restore();
       }
 
@@ -6134,6 +6176,14 @@
               return { action: "giveUp" };
             }
           }
+          // Special char buttons
+          if (arena.siege.charBtnBounds) {
+            for (const btn of arena.siege.charBtnBounds) {
+              if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+                return { action: "siegeCharInsert", ch: btn.ch };
+              }
+            }
+          }
           // Game over buttons
           if (arena.siege.gameOver && arena.siege.gameOverButtons) {
             const b = arena.siege.gameOverButtons;
@@ -7800,6 +7850,7 @@
       const showText = siegeFlipped ? String(word.en || "") : String(word.sv || "");
       bossFightEngine.setSiegeGlosa(showText);
     }
+    renderSiegeSpecialChars();
   }
 
   function expectedSiegeAnswer() {
@@ -8064,9 +8115,12 @@
       if (bossFightEngine) bossFightEngine.adventureSelectAction(hit.actionId);
     } else if (hit.action === "adventurePlayAgain") {
       startAdventureGame();
+    } else if (hit.action === "siegeCharInsert") {
+      if (bossFightEngine) bossFightEngine.siegeAnswerType(hit.ch);
     } else if (hit.action === "flipSiegeLanguage") {
       siegeFlipped = !siegeFlipped;
       showSiegeGlosa();
+      renderSiegeSpecialChars();
     } else if (hit.action === "giveUp") {
       // Broadcast surrender to opponent
       if (bossFightEngine && bossFightEngine.isSiegeMode()) {
@@ -8243,7 +8297,13 @@
         "わ","を","ん",
       ],
     };
-    const chars = charSets[lang];
+    // Same direction logic as regular mode but using siegeFlipped
+    let chars = null;
+    if (lang === "japanese") {
+      chars = siegeFlipped ? charSets.japanese : null;
+    } else {
+      chars = siegeFlipped ? null : charSets[lang];
+    }
     if (!chars) { elements.siegeSpecialCharsRow.style.display = "none"; return; }
     elements.siegeSpecialCharsRow.style.display = "flex";
     elements.siegeSpecialCharsRow.style.flexWrap = "wrap";
