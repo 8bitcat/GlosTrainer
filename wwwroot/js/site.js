@@ -6390,7 +6390,9 @@
 
   function filteredWeeks() {
     const selectedLanguage = normalizeLanguage(appState.selectedLanguage);
-    return (appState.weeks || []).filter((week) => normalizeLanguage(week.language) === selectedLanguage);
+    return (appState.weeks || [])
+      .filter((week) => normalizeLanguage(week.language) === selectedLanguage)
+      .sort((a, b) => a.weekName.localeCompare(b.weekName, undefined, { numeric: true }));
   }
 
   function settingsKey() {
@@ -8476,10 +8478,12 @@
     const available = Array.isArray(appState.availableLanguages) && appState.availableLanguages.length
       ? appState.availableLanguages.map((x) => normalizeLanguage(x))
       : ["english"];
-    // Sort English first, then alphabetical
+    // Fixed order: English first, Japanese last, rest alphabetical
+    const langOrder = { english: 0, japanese: 99 };
     available.sort((a, b) => {
-      if (a === "english") return -1;
-      if (b === "english") return 1;
+      const oa = langOrder[a] ?? 50;
+      const ob = langOrder[b] ?? 50;
+      if (oa !== ob) return oa - ob;
       return a.localeCompare(b);
     });
     elements.appLanguageSelect.innerHTML = "";
@@ -10555,7 +10559,7 @@
       loadOnlineUsers();
     });
 
-    elements.weekSelect.addEventListener("change", async () => {
+    async function onWeekChanged() {
       appState.selectedWeekId = elements.weekSelect.value;
       saveSelectedWeek();
       syncAnswerLanguageFromCurrentWeek();
@@ -10568,7 +10572,25 @@
       setQuestion(pickWord());
       const week = currentWeek();
       pushLog(`Vecka bytt till ${week ? week.weekName : "okand"}.`);
+    }
+
+    elements.weekSelect.addEventListener("change", async () => {
+      await onWeekChanged();
     });
+
+    // Week prev/next arrow buttons
+    function stepWeek(dir) {
+      const opts = elements.weekSelect.options;
+      if (!opts.length) return;
+      const idx = elements.weekSelect.selectedIndex + dir;
+      if (idx < 0 || idx >= opts.length) return;
+      elements.weekSelect.selectedIndex = idx;
+      elements.weekSelect.dispatchEvent(new Event("change"));
+    }
+    const weekPrev = document.getElementById("weekPrevBtn");
+    const weekNext = document.getElementById("weekNextBtn");
+    if (weekPrev) weekPrev.addEventListener("click", () => stepWeek(-1));
+    if (weekNext) weekNext.addEventListener("click", () => stepWeek(1));
 
     if (elements.leaderboardWeekSelect) {
       elements.leaderboardWeekSelect.addEventListener("change", async () => {

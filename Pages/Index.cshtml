@@ -47,8 +47,10 @@
     </section>
 
     <section class="controls-panel" id="controlsPanel" style="display:none;">
-        <div class="train-cta-shell">
-            <select id="weekSelect" class="train-week-select"></select>
+        <div class="train-cta-shell" style="display:flex;align-items:center;gap:4px;">
+            <button id="weekPrevBtn" type="button" style="padding:4px 8px;font-size:1.1rem;border:1px solid #b8d2e9;border-radius:6px;background:#f1f5f9;cursor:pointer;">&#9664;</button>
+            <select id="weekSelect" class="train-week-select" style="flex:1;"></select>
+            <button id="weekNextBtn" type="button" style="padding:4px 8px;font-size:1.1rem;border:1px solid #b8d2e9;border-radius:6px;background:#f1f5f9;cursor:pointer;">&#9654;</button>
         </div>
         <label for="appLanguageSelect">Språk</label>
         <select id="appLanguageSelect">
