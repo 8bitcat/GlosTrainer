@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.6.1";
+  const GAME_VERSION = "1.7.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -97,6 +97,7 @@
     groupBattlePlayers: document.getElementById("groupBattlePlayers"),
     resetSessionButton: document.getElementById("resetSessionButton"),
     startSiegeButton: document.getElementById("startSiegeButton"),
+    startAdventureButton: document.getElementById("startAdventureButton"),
     combatPanel: document.getElementById("combatPanel"),
     heroPanel: document.getElementById("heroPanel"),
     controlsPanel: document.getElementById("controlsPanel"),
@@ -382,6 +383,32 @@
         totalWords: 0,
         answeredWords: 0,
         correctWords: 0,
+      },
+      adventure: {
+        active: false,
+        phase: "idle",        // idle, vocab, actionSelect, playerTurn, enemyTurn, victory, defeat
+        heroes: [],           // [{name, hp, maxHp, defending, specialCharge, actionChoice}]
+        boss: null,           // {name, hp, maxHp, sprite, size}
+        turnTimer: 0,         // countdown ms
+        turnTimerStart: 0,
+        turnDuration: 8000,
+        currentGlosa: null,
+        answerText: "",
+        answerResults: [],    // [{heroIndex, correct}]
+        actionMenuHero: -1,   // which hero is choosing action
+        actionBtnBounds: [],  // clickable action button rects
+        menuBtnBounds: null,
+        particles: [],
+        damageNumbers: [],
+        flashEffect: null,
+        roundNumber: 0,
+        bossAttackTarget: -1,
+        bossAttackAnim: 0,
+        playerAttackAnim: 0,
+        playerAttackHero: -1,
+        animCallback: null,
+        wordQueue: [],
+        wrongQueue: [],
       },
       bootStartMs: performance.now(),
       bootDone: false,
@@ -869,17 +896,31 @@
       ctx.fillText(sfxOn ? "🔊" : "🔈", sfxBtnX + musBtnW / 2, musBtnY + 11);
       m.buttons.push({ type: "toggleSound", x: sfxBtnX, y: musBtnY, w: musBtnW, h: musBtnH });
 
-      // Start button
-      const btnW = 280, btnH = 32, btnX = w / 2 - btnW / 2, btnY = canvas.height - 38;
+      // Start buttons (Siege + Adventure side by side)
+      const btnW = 136, btnH = 32, gap = 8;
+      const totalW = btnW * 2 + gap;
+      const btnX1 = w / 2 - totalW / 2, btnX2 = btnX1 + btnW + gap, btnY = canvas.height - 38;
       const canStart = !!m.selectedWeekId;
-      ctx.fillStyle = "#0f0f1a"; ctx.fillRect(btnX - 2, btnY - 2, btnW + 4, btnH + 4);
-      ctx.fillStyle = canStart ? "#1a5a1a" : "#1a1a2a";
-      ctx.fillRect(btnX, btnY, btnW, btnH);
-      if (canStart) { ctx.strokeStyle = "#30c030"; ctx.lineWidth = 2; ctx.strokeRect(btnX, btnY, btnW, btnH); }
+
+      // Siege button
+      ctx.fillStyle = "#0f0f1a"; ctx.fillRect(btnX1 - 2, btnY - 2, btnW + 4, btnH + 4);
+      ctx.fillStyle = canStart ? "#1a1a5a" : "#1a1a2a";
+      ctx.fillRect(btnX1, btnY, btnW, btnH);
+      if (canStart) { ctx.strokeStyle = "#6060e0"; ctx.lineWidth = 2; ctx.strokeRect(btnX1, btnY, btnW, btnH); }
       ctx.fillStyle = canStart ? "#f0f0f0" : "#404050";
-      ctx.font = "bold 16px monospace"; ctx.textAlign = "center";
-      ctx.fillText("⚔  STARTA SIEGE  ⚔", w / 2, btnY + 24);
-      m.buttons.push({ type: "start", x: btnX, y: btnY, w: btnW, h: btnH });
+      ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+      ctx.fillText("⚔ SIEGE", btnX1 + btnW / 2, btnY + 24);
+      m.buttons.push({ type: "start", x: btnX1, y: btnY, w: btnW, h: btnH });
+
+      // Adventure button
+      ctx.fillStyle = "#0f0f1a"; ctx.fillRect(btnX2 - 2, btnY - 2, btnW + 4, btnH + 4);
+      ctx.fillStyle = canStart ? "#0a3a2a" : "#1a1a2a";
+      ctx.fillRect(btnX2, btnY, btnW, btnH);
+      if (canStart) { ctx.strokeStyle = "#30c060"; ctx.lineWidth = 2; ctx.strokeRect(btnX2, btnY, btnW, btnH); }
+      ctx.fillStyle = canStart ? "#f0f0f0" : "#404050";
+      ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+      ctx.fillText("🗡 ADVENTURE", btnX2 + btnW / 2, btnY + 24);
+      m.buttons.push({ type: "startAdventure", x: btnX2, y: btnY, w: btnW, h: btnH });
     }
 
     function drawLeaderboardTab(m) {
@@ -1294,6 +1335,7 @@
           }
           if (btn.type === "week") return { action: "selectWeek", weekId: btn.weekId };
           if (btn.type === "start" && m.selectedWeekId) return { action: "startSiege" };
+          if (btn.type === "startAdventure" && m.selectedWeekId) return { action: "startAdventure" };
           if (btn.type === "lang") return { action: "changeLanguage", lang: btn.lang };
           if (btn.type === "scrollUp") { m.scrollOffset = Math.max(0, m.scrollOffset - 1); return null; }
           if (btn.type === "scrollDown") { m.scrollOffset += 1; return null; }
@@ -4149,6 +4191,659 @@
       tickDuelProjectiles();
     }
 
+    // ─── ADVENTURE MODE (FF7-style turn-based RPG) ──────────────────
+    const ADV_PS = 4; // pixel scale for adventure sprites
+    const ADV_HERO_X = 60; // left side base x for heroes
+    const ADV_BOSS_X = 620; // right side base x for boss
+    const ADV_GROUND_Y = 320; // ground line y in canvas pixels
+
+    function advPx(gx, gy, w, h, color) {
+      if (!color) return;
+      ctx.fillStyle = color;
+      ctx.fillRect(gx, gy, w * ADV_PS, h * ADV_PS);
+    }
+
+    // Draw a pixel hero (FF7-style, ~128px tall)
+    // heroIndex determines color palette, x/y is canvas position
+    function drawAdventureHero(x, y, heroIndex, walkFrame, isDefending) {
+      const palettes = [
+        { hair: "#f0c040", skin: "#ffd5a0", armor: "#2563eb", armorL: "#3b82f6", boots: "#1e3a5f", cape: "#1e40af" },
+        { hair: "#c0392b", skin: "#ffe0c0", armor: "#16a34a", armorL: "#22c55e", boots: "#14532d", cape: "#065f46" },
+        { hair: "#8b5cf6", skin: "#fdd5b1", armor: "#dc2626", armorL: "#ef4444", boots: "#450a0a", cape: "#991b1b" },
+        { hair: "#f97316", skin: "#fde0c8", armor: "#7c3aed", armorL: "#a855f7", boots: "#3b0764", cape: "#581c87" },
+      ];
+      const p = palettes[heroIndex % palettes.length];
+      const s = ADV_PS;
+      const bob = Math.sin(walkFrame * 0.05) * 2;
+      const baseY = y + bob;
+
+      // Shadow
+      ctx.fillStyle = "rgba(0,0,0,0.2)";
+      ctx.fillRect(x - 12, y + 28 * s, 10 * s, 2 * s);
+
+      if (isDefending) {
+        // Shield raised stance
+        // Legs (standing)
+        advPx(x + 2 * s, baseY + 24 * s, 3, 4, p.boots);
+        advPx(x + 6 * s, baseY + 24 * s, 3, 4, p.boots);
+        // Body
+        advPx(x + 1 * s, baseY + 14 * s, 9, 10, p.armor);
+        advPx(x + 1 * s, baseY + 14 * s, 9, 2, p.armorL);
+        // Big shield in front
+        advPx(x - 2 * s, baseY + 10 * s, 5, 16, "#a0a0a0");
+        advPx(x - 1 * s, baseY + 11 * s, 3, 14, "#c0c0c0");
+        advPx(x - 0.5 * s, baseY + 14 * s, 2, 8, "#d4af37");
+        // Head
+        advPx(x + 2 * s, baseY + 8 * s, 7, 6, p.skin);
+        // Hair
+        advPx(x + 2 * s, baseY + 6 * s, 7, 3, p.hair);
+        advPx(x + 1 * s, baseY + 7 * s, 2, 4, p.hair);
+        // Eyes
+        advPx(x + 3 * s, baseY + 10 * s, 1, 1, "#222");
+        advPx(x + 6 * s, baseY + 10 * s, 1, 1, "#222");
+        return;
+      }
+
+      // Cape (behind)
+      advPx(x + 8 * s, baseY + 12 * s, 3, 14, p.cape);
+      advPx(x + 9 * s, baseY + 14 * s, 2, 10, p.cape);
+
+      // Legs (animated walk)
+      const legOff = Math.sin(walkFrame * 0.08) * 1.5 * s;
+      advPx(x + 2 * s, baseY + 24 * s + legOff, 3, 4, p.boots);
+      advPx(x + 6 * s, baseY + 24 * s - legOff, 3, 4, p.boots);
+
+      // Body / armor
+      advPx(x + 1 * s, baseY + 14 * s, 9, 10, p.armor);
+      advPx(x + 1 * s, baseY + 14 * s, 9, 2, p.armorL); // highlight
+
+      // Arms
+      advPx(x, baseY + 14 * s, 1, 8, p.armor);
+      advPx(x + 10 * s, baseY + 14 * s, 1, 8, p.armor);
+
+      // Sword (right hand)
+      advPx(x - 2 * s, baseY + 8 * s, 1, 8, "#c0c0c0");
+      advPx(x - 2 * s, baseY + 7 * s, 1, 2, "#e0e0e0");
+      advPx(x - 3 * s, baseY + 12 * s, 3, 1, "#d4af37"); // crossguard
+
+      // Head
+      advPx(x + 2 * s, baseY + 8 * s, 7, 6, p.skin);
+
+      // Hair
+      advPx(x + 2 * s, baseY + 6 * s, 7, 3, p.hair);
+      advPx(x + 1 * s, baseY + 7 * s, 2, 4, p.hair);
+
+      // Eyes
+      advPx(x + 3 * s, baseY + 10 * s, 1, 1, "#222");
+      advPx(x + 6 * s, baseY + 10 * s, 1, 1, "#222");
+
+      // Mouth
+      advPx(x + 4 * s, baseY + 12 * s, 3, 1, "#c0856c");
+    }
+
+    // Draw pixel boss (large, FF7-style enemy, 256-400px)
+    function drawAdventureBoss(x, y, bossId, frame, hpRatio) {
+      const boss = SIEGE_BOSSES.find(b => b.id === bossId) || SIEGE_BOSSES[0];
+      const c = boss.colors;
+      const s = 6; // larger pixel scale for bosses
+      const bob = Math.sin(frame * 0.03) * 4;
+      const baseY = y + bob;
+
+      // Shadow
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.fillRect(x - 20, y + 42 * s, 44 * s, 3 * s);
+
+      // Damage flash
+      const dmgFlash = hpRatio < 0.3 && Math.sin(frame * 0.15) > 0.5;
+
+      // Legs
+      const legBob = Math.sin(frame * 0.06) * 2 * s;
+      ctx.fillStyle = dmgFlash ? "#ff6666" : c.boots;
+      ctx.fillRect(x + 8 * s, baseY + 36 * s + legBob, 8 * s, 6 * s);
+      ctx.fillRect(x + 24 * s, baseY + 36 * s - legBob, 8 * s, 6 * s);
+
+      // Body
+      ctx.fillStyle = dmgFlash ? "#ff8888" : c.armor;
+      ctx.fillRect(x + 4 * s, baseY + 16 * s, 32 * s, 20 * s);
+      ctx.fillStyle = c.armorLight;
+      ctx.fillRect(x + 4 * s, baseY + 16 * s, 32 * s, 4 * s);
+
+      // Arms
+      ctx.fillStyle = dmgFlash ? "#ff8888" : c.armor;
+      ctx.fillRect(x, baseY + 18 * s, 4 * s, 14 * s);
+      ctx.fillRect(x + 36 * s, baseY + 18 * s, 4 * s, 14 * s);
+
+      // Weapon (right hand — large axe)
+      ctx.fillStyle = "#888";
+      ctx.fillRect(x + 38 * s, baseY + 8 * s, 2 * s, 24 * s); // handle
+      ctx.fillStyle = "#c0c0c0";
+      ctx.fillRect(x + 40 * s, baseY + 8 * s, 6 * s, 4 * s); // blade top
+      ctx.fillRect(x + 40 * s, baseY + 12 * s, 4 * s, 4 * s); // blade bottom
+      ctx.fillStyle = "#e0e0e0";
+      ctx.fillRect(x + 41 * s, baseY + 9 * s, 4 * s, 2 * s); // highlight
+
+      // Shield (left hand)
+      ctx.fillStyle = c.shield;
+      ctx.fillRect(x - 4 * s, baseY + 16 * s, 6 * s, 12 * s);
+      ctx.fillStyle = c.shieldLight;
+      ctx.fillRect(x - 3 * s, baseY + 18 * s, 4 * s, 8 * s);
+
+      // Head
+      ctx.fillStyle = dmgFlash ? "#ff8888" : c.helmet;
+      ctx.fillRect(x + 8 * s, baseY + 4 * s, 24 * s, 14 * s);
+      ctx.fillStyle = c.helmetLight;
+      ctx.fillRect(x + 8 * s, baseY + 4 * s, 24 * s, 4 * s);
+
+      // Crest / horn
+      ctx.fillStyle = c.crest;
+      ctx.fillRect(x + 16 * s, baseY, 8 * s, 6 * s);
+      ctx.fillRect(x + 18 * s, baseY - 3 * s, 4 * s, 4 * s);
+
+      // Eyes (menacing)
+      ctx.fillStyle = "#ff0000";
+      ctx.fillRect(x + 12 * s, baseY + 10 * s, 4 * s, 3 * s);
+      ctx.fillRect(x + 24 * s, baseY + 10 * s, 4 * s, 3 * s);
+      // Eye glow
+      ctx.fillStyle = "#ffcc00";
+      ctx.fillRect(x + 13 * s, baseY + 11 * s, 2 * s, 1 * s);
+      ctx.fillRect(x + 25 * s, baseY + 11 * s, 2 * s, 1 * s);
+
+      // Boss name above
+      ctx.save();
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.fillText(boss.name, x + 20 * s, baseY - 6 * s);
+      ctx.restore();
+    }
+
+    // Draw HP bar for adventure mode
+    function drawAdvHpBar(x, y, w, h, hp, maxHp, color) {
+      const ratio = Math.max(0, hp / maxHp);
+      // BG
+      ctx.fillStyle = "#1a1a2e";
+      ctx.fillRect(x, y, w, h);
+      // Fill
+      const barColor = ratio > 0.5 ? (color || "#22c55e") : ratio > 0.25 ? "#eab308" : "#ef4444";
+      ctx.fillStyle = barColor;
+      ctx.fillRect(x + 1, y + 1, (w - 2) * ratio, h - 2);
+      // Border
+      ctx.strokeStyle = "#555";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, w, h);
+      // Text
+      ctx.save();
+      ctx.font = "bold 11px sans-serif";
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${Math.ceil(hp)}/${maxHp}`, x + w / 2, y + h / 2);
+      ctx.restore();
+    }
+
+    function updateAdventure() {
+      if (arena.mode !== "adventure" || !arena.adventure.active) return;
+      const adv = arena.adventure;
+      const now = Date.now();
+
+      // Tick damage numbers
+      adv.damageNumbers = adv.damageNumbers.filter(d => now - d.startedAt < 1500);
+
+      // Tick particles
+      adv.particles = adv.particles.filter(p => now - p.startedAt < p.duration);
+
+      if (adv.phase === "vocab") {
+        // Check timer
+        const elapsed = now - adv.turnTimerStart;
+        adv.turnTimer = Math.max(0, adv.turnDuration - elapsed);
+        if (adv.turnTimer <= 0) {
+          // Time's up — mark unanswered heroes as failed
+          for (let i = 0; i < adv.heroes.length; i++) {
+            if (!adv.answerResults.find(r => r.heroIndex === i)) {
+              adv.answerResults.push({ heroIndex: i, correct: false });
+            }
+          }
+          advStartActionSelect();
+        }
+      } else if (adv.phase === "playerTurn") {
+        // Animate player attacks sequentially
+        if (adv.playerAttackAnim > 0) {
+          adv.playerAttackAnim--;
+          if (adv.playerAttackAnim === 15) {
+            // Apply damage at mid-animation
+            const hero = adv.heroes[adv.playerAttackHero];
+            if (hero && hero.actionChoice) {
+              advApplyHeroAction(adv.playerAttackHero, hero.actionChoice);
+            }
+          }
+        } else {
+          // Find next hero with an action
+          let found = false;
+          for (let i = adv.playerAttackHero + 1; i < adv.heroes.length; i++) {
+            if (adv.heroes[i].actionChoice && adv.heroes[i].hp > 0) {
+              adv.playerAttackHero = i;
+              adv.playerAttackAnim = 30;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            // All player actions done — boss turn
+            adv.phase = "enemyTurn";
+            adv.bossAttackAnim = 45;
+            adv.bossAttackTarget = advPickBossTarget();
+          }
+        }
+      } else if (adv.phase === "enemyTurn") {
+        if (adv.bossAttackAnim > 0) {
+          adv.bossAttackAnim--;
+          if (adv.bossAttackAnim === 20) {
+            // Boss deals damage
+            advApplyBossAttack();
+          }
+        } else {
+          // Check win/loss
+          if (adv.boss.hp <= 0) {
+            adv.phase = "victory";
+            adv.flashEffect = { color: "#fde68a", startedAt: now, duration: 2000 };
+          } else if (adv.heroes.every(h => h.hp <= 0)) {
+            adv.phase = "defeat";
+            adv.flashEffect = { color: "#ef4444", startedAt: now, duration: 2000 };
+          } else {
+            // Next round
+            advStartVocabPhase();
+          }
+        }
+      }
+    }
+
+    function advStartVocabPhase() {
+      const adv = arena.adventure;
+      adv.roundNumber++;
+      adv.phase = "vocab";
+      adv.turnTimerStart = Date.now();
+      adv.turnTimer = adv.turnDuration;
+      adv.answerText = "";
+      adv.answerResults = [];
+      adv.actionMenuHero = -1;
+      for (const h of adv.heroes) h.actionChoice = null;
+      // Pick next word
+      if (adv.wordQueue.length === 0 && adv.wrongQueue.length > 0) {
+        adv.wordQueue = [...adv.wrongQueue].sort(() => Math.random() - 0.5);
+        adv.wrongQueue = [];
+      }
+      if (adv.wordQueue.length > 0) {
+        adv.currentGlosa = adv.wordQueue.shift();
+      }
+    }
+
+    function advStartActionSelect() {
+      const adv = arena.adventure;
+      adv.phase = "actionSelect";
+      adv.actionMenuHero = -1;
+      // Auto-advance: find first hero who answered correctly and needs to pick action
+      advNextActionHero();
+    }
+
+    function advNextActionHero() {
+      const adv = arena.adventure;
+      for (let i = adv.actionMenuHero + 1; i < adv.heroes.length; i++) {
+        const result = adv.answerResults.find(r => r.heroIndex === i);
+        if (result && result.correct && adv.heroes[i].hp > 0) {
+          adv.actionMenuHero = i;
+          return;
+        }
+      }
+      // No more heroes to pick — start player turn animations
+      adv.phase = "playerTurn";
+      adv.playerAttackHero = -1;
+      adv.playerAttackAnim = 0;
+    }
+
+    function advApplyHeroAction(heroIdx, action) {
+      const adv = arena.adventure;
+      const hero = adv.heroes[heroIdx];
+      if (!hero || hero.hp <= 0) return;
+      const now = Date.now();
+
+      if (action === "attack") {
+        const dmg = 15 + Math.floor(Math.random() * 10);
+        adv.boss.hp = Math.max(0, adv.boss.hp - dmg);
+        adv.damageNumbers.push({ x: ADV_BOSS_X + 60, y: 100 + Math.random() * 40, text: `-${dmg}`, color: "#fff", startedAt: now });
+        adv.particles.push({ x: ADV_BOSS_X + 80, y: 160, color: "#fde68a", startedAt: now, duration: 400 });
+      } else if (action === "heal") {
+        const heal = 20 + Math.floor(Math.random() * 10);
+        // Heal the hero with lowest HP
+        let target = adv.heroes.filter(h => h.hp > 0).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+        if (target) {
+          target.hp = Math.min(target.maxHp, target.hp + heal);
+          const tIdx = adv.heroes.indexOf(target);
+          adv.damageNumbers.push({ x: ADV_HERO_X + 60, y: 100 + tIdx * 80, text: `+${heal}`, color: "#22c55e", startedAt: now });
+        }
+      } else if (action === "defend") {
+        hero.defending = true;
+      } else if (action === "special") {
+        if (hero.specialCharge >= 3) {
+          hero.specialCharge = 0;
+          const dmg = 40 + Math.floor(Math.random() * 20);
+          adv.boss.hp = Math.max(0, adv.boss.hp - dmg);
+          adv.damageNumbers.push({ x: ADV_BOSS_X + 60, y: 80, text: `-${dmg}!`, color: "#fbbf24", startedAt: now });
+          adv.flashEffect = { color: "#fbbf24", startedAt: now, duration: 300 };
+        }
+      }
+    }
+
+    function advPickBossTarget() {
+      const adv = arena.adventure;
+      const alive = adv.heroes.map((h, i) => ({ h, i })).filter(x => x.h.hp > 0);
+      if (!alive.length) return 0;
+      return alive[Math.floor(Math.random() * alive.length)].i;
+    }
+
+    function advApplyBossAttack() {
+      const adv = arena.adventure;
+      const target = adv.heroes[adv.bossAttackTarget];
+      if (!target || target.hp <= 0) return;
+      const now = Date.now();
+      let dmg = 12 + Math.floor(Math.random() * 8) + adv.roundNumber * 2;
+      if (target.defending) {
+        dmg = Math.floor(dmg / 2);
+        target.defending = false;
+      }
+      target.hp = Math.max(0, target.hp - dmg);
+      adv.damageNumbers.push({
+        x: ADV_HERO_X + 60,
+        y: 100 + adv.bossAttackTarget * 80,
+        text: `-${dmg}`,
+        color: "#ef4444",
+        startedAt: now,
+      });
+      adv.particles.push({ x: ADV_HERO_X + 60, y: 120 + adv.bossAttackTarget * 80, color: "#ef4444", startedAt: now, duration: 400 });
+      // Increment special charge for all alive heroes
+      for (const h of adv.heroes) {
+        if (h.hp > 0) h.specialCharge = Math.min(3, (h.specialCharge || 0) + 1);
+      }
+    }
+
+    function drawAdventureMode() {
+      const adv = arena.adventure;
+      const w = canvas.width, h = canvas.height;
+
+      // Dark RPG background
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, "#0a0a1a");
+      grad.addColorStop(0.6, "#1a1a3e");
+      grad.addColorStop(1, "#0f1520");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Ground
+      ctx.fillStyle = "#1a2a1a";
+      ctx.fillRect(0, ADV_GROUND_Y, w, h - ADV_GROUND_Y);
+      ctx.fillStyle = "#2a3a2a";
+      ctx.fillRect(0, ADV_GROUND_Y, w, 3);
+
+      // Draw heroes (left side)
+      const heroSpacing = 80;
+      const heroStartY = ADV_GROUND_Y - 128;
+      for (let i = 0; i < adv.heroes.length; i++) {
+        const hero = adv.heroes[i];
+        const hx = ADV_HERO_X;
+        const hy = heroStartY - (adv.heroes.length - 1 - i) * heroSpacing + i * heroSpacing;
+        const isAttacking = adv.phase === "playerTurn" && adv.playerAttackHero === i && adv.playerAttackAnim > 0;
+        const attackOffsetX = isAttacking ? Math.sin(adv.playerAttackAnim * 0.3) * 40 : 0;
+
+        if (hero.hp > 0) {
+          drawAdventureHero(hx + attackOffsetX, hy, i, arena.phase * 50, hero.defending);
+        } else {
+          // Dead hero — draw fallen
+          ctx.save();
+          ctx.globalAlpha = 0.4;
+          ctx.translate(hx + 20, hy + 100);
+          ctx.rotate(Math.PI / 2);
+          ctx.translate(-(hx + 20), -(hy + 100));
+          drawAdventureHero(hx, hy, i, 0, false);
+          ctx.restore();
+        }
+
+        // HP bar below hero
+        drawAdvHpBar(hx - 10, hy + 29 * ADV_PS, 140, 14, hero.hp, hero.maxHp, "#22c55e");
+
+        // Name
+        ctx.save();
+        ctx.font = "bold 12px sans-serif";
+        ctx.fillStyle = hero.hp > 0 ? "#fff" : "#666";
+        ctx.textAlign = "center";
+        ctx.fillText(hero.name, hx + 50, hy + 29 * ADV_PS + 28);
+
+        // Special charge indicator
+        if (hero.hp > 0) {
+          const charge = hero.specialCharge || 0;
+          for (let c = 0; c < 3; c++) {
+            ctx.fillStyle = c < charge ? "#fbbf24" : "#333";
+            ctx.fillRect(hx + 20 + c * 16, hy + 29 * ADV_PS + 32, 12, 4);
+          }
+        }
+        ctx.restore();
+
+        // Highlight current action-select hero
+        if (adv.phase === "actionSelect" && adv.actionMenuHero === i) {
+          ctx.save();
+          ctx.strokeStyle = "#fbbf24";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(hx - 15, hy - 5, 160, 145);
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
+
+      // Draw boss (right side)
+      if (adv.boss) {
+        const bossY = ADV_GROUND_Y - adv.boss.size;
+        const bossAttackOffset = adv.phase === "enemyTurn" && adv.bossAttackAnim > 20 ? -Math.sin((45 - adv.bossAttackAnim) * 0.2) * 60 : 0;
+        drawAdventureBoss(ADV_BOSS_X + bossAttackOffset, bossY, adv.boss.id, arena.phase * 50, adv.boss.hp / adv.boss.maxHp);
+        // Boss HP bar
+        drawAdvHpBar(ADV_BOSS_X - 20, ADV_GROUND_Y + 10, 300, 18, adv.boss.hp, adv.boss.maxHp, "#ef4444");
+      }
+
+      // Draw damage numbers
+      for (const dn of adv.damageNumbers) {
+        const age = Date.now() - dn.startedAt;
+        const alpha = Math.max(0, 1 - age / 1500);
+        const floatY = dn.y - age * 0.04;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = "bold 22px sans-serif";
+        ctx.fillStyle = dn.color;
+        ctx.textAlign = "center";
+        ctx.fillText(dn.text, dn.x, floatY);
+        ctx.restore();
+      }
+
+      // Draw particles
+      for (const p of adv.particles) {
+        const age = Date.now() - p.startedAt;
+        const alpha = Math.max(0, 1 - age / p.duration);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        const spread = age * 0.1;
+        for (let i = 0; i < 6; i++) {
+          const angle = (i / 6) * Math.PI * 2 + age * 0.01;
+          ctx.fillRect(p.x + Math.cos(angle) * spread, p.y + Math.sin(angle) * spread, 6, 6);
+        }
+        ctx.restore();
+      }
+
+      // Flash effect
+      if (adv.flashEffect) {
+        const age = Date.now() - adv.flashEffect.startedAt;
+        if (age < adv.flashEffect.duration) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, 0.3 * (1 - age / adv.flashEffect.duration));
+          ctx.fillStyle = adv.flashEffect.color;
+          ctx.fillRect(0, 0, w, h);
+          ctx.restore();
+        }
+      }
+
+      // ── UI OVERLAYS ──
+
+      // Top center: Glosa / timer / round info
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      if (adv.phase === "vocab") {
+        // Timer bar
+        const timerRatio = adv.turnTimer / adv.turnDuration;
+        const barW = 300, barH = 8, barX = w / 2 - barW / 2, barY = 20;
+        ctx.fillStyle = "#1a1a2e";
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.fillStyle = timerRatio > 0.3 ? "#3b82f6" : "#ef4444";
+        ctx.fillRect(barX, barY, barW * timerRatio, barH);
+        ctx.strokeStyle = "#555";
+        ctx.strokeRect(barX, barY, barW, barH);
+
+        // Timer text
+        ctx.font = "bold 18px sans-serif";
+        ctx.fillStyle = timerRatio > 0.3 ? "#fff" : "#ef4444";
+        ctx.fillText(`⏱ ${(adv.turnTimer / 1000).toFixed(1)}s`, w / 2, 50);
+
+        // Glosa word
+        if (adv.currentGlosa) {
+          ctx.font = "bold 28px sans-serif";
+          ctx.fillStyle = "#fde68a";
+          const questionText = adv.currentGlosa.sv;
+          ctx.fillText(questionText, w / 2, 85);
+        }
+
+        // Answer input display
+        ctx.fillStyle = "#0f172a";
+        const inputW = 280, inputH = 36, inputX = w / 2 - inputW / 2, inputY = 105;
+        ctx.fillRect(inputX, inputY, inputW, inputH);
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(inputX, inputY, inputW, inputH);
+        ctx.font = "20px sans-serif";
+        ctx.fillStyle = "#fff";
+        ctx.fillText(adv.answerText + (Math.floor(Date.now() / 500) % 2 === 0 ? "│" : ""), w / 2, inputY + inputH / 2);
+
+        // Round number
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = "#888";
+        ctx.fillText(`Runda ${adv.roundNumber}`, w / 2, 155);
+
+      } else if (adv.phase === "actionSelect") {
+        const hero = adv.heroes[adv.actionMenuHero];
+        if (hero) {
+          ctx.font = "bold 20px sans-serif";
+          ctx.fillStyle = "#fde68a";
+          ctx.fillText(`${hero.name} — Välj action:`, w / 2, 40);
+
+          // Action buttons
+          adv.actionBtnBounds = [];
+          const actions = [
+            { id: "attack", label: "⚔️ Attack", color: "#dc2626" },
+            { id: "heal", label: "💚 Heal", color: "#16a34a" },
+            { id: "defend", label: "🛡️ Defend", color: "#2563eb" },
+            { id: "special", label: "⚡ Special", color: hero.specialCharge >= 3 ? "#eab308" : "#444", enabled: hero.specialCharge >= 3 },
+          ];
+          const btnW = 140, btnH = 44, gap = 16;
+          const totalW = actions.length * btnW + (actions.length - 1) * gap;
+          const startX = w / 2 - totalW / 2;
+
+          for (let i = 0; i < actions.length; i++) {
+            const bx = startX + i * (btnW + gap);
+            const by = 60;
+            const act = actions[i];
+            // Button bg
+            ctx.fillStyle = act.enabled === false ? "#222" : act.color;
+            ctx.fillRect(bx, by, btnW, btnH);
+            // Border
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bx, by, btnW, btnH);
+            // Label
+            ctx.font = "bold 16px sans-serif";
+            ctx.fillStyle = act.enabled === false ? "#666" : "#fff";
+            ctx.fillText(act.label, bx + btnW / 2, by + btnH / 2);
+
+            adv.actionBtnBounds.push({ x: bx, y: by, w: btnW, h: btnH, action: act.id, enabled: act.enabled !== false });
+          }
+        }
+      } else if (adv.phase === "playerTurn") {
+        ctx.font = "bold 22px sans-serif";
+        ctx.fillStyle = "#22c55e";
+        ctx.fillText("⚔️ Spelarnas tur!", w / 2, 40);
+      } else if (adv.phase === "enemyTurn") {
+        ctx.font = "bold 22px sans-serif";
+        ctx.fillStyle = "#ef4444";
+        const boss = adv.boss;
+        ctx.fillText(`${boss ? boss.name : "Boss"} attackerar!`, w / 2, 40);
+      } else if (adv.phase === "victory") {
+        ctx.font = "bold 36px sans-serif";
+        ctx.fillStyle = "#fde68a";
+        ctx.fillText("🎉 VICTORY!", w / 2, h / 2 - 20);
+        ctx.font = "18px sans-serif";
+        ctx.fillStyle = "#fff";
+        ctx.fillText("Bossen är besegrad!", w / 2, h / 2 + 20);
+        // Draw menu/play again buttons
+        advDrawEndButtons(w, h);
+      } else if (adv.phase === "defeat") {
+        ctx.font = "bold 36px sans-serif";
+        ctx.fillStyle = "#ef4444";
+        ctx.fillText("💀 DEFEAT", w / 2, h / 2 - 20);
+        ctx.font = "18px sans-serif";
+        ctx.fillStyle = "#fff";
+        ctx.fillText("Alla hjältar har fallit...", w / 2, h / 2 + 20);
+        advDrawEndButtons(w, h);
+      }
+      ctx.restore();
+
+      // Menu button (top-left)
+      ctx.save();
+      const mbx = 10, mby = 10, mbw = 60, mbh = 28;
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(mbx, mby, mbw, mbh);
+      ctx.strokeStyle = "#475569";
+      ctx.strokeRect(mbx, mby, mbw, mbh);
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("MENY", mbx + mbw / 2, mby + mbh / 2);
+      adv.menuBtnBounds = { x: mbx, y: mby, w: mbw, h: mbh };
+      ctx.restore();
+    }
+
+    function advDrawEndButtons(w, h) {
+      const adv = arena.adventure;
+      const btnW = 140, btnH = 40, gap = 20;
+      const bx1 = w / 2 - btnW - gap / 2, bx2 = w / 2 + gap / 2, by = h / 2 + 50;
+
+      ctx.fillStyle = "#065f46";
+      ctx.fillRect(bx1, by, btnW, btnH);
+      ctx.strokeStyle = "#fff";
+      ctx.strokeRect(bx1, by, btnW, btnH);
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillStyle = "#fff";
+      ctx.fillText("🔄 Igen", bx1 + btnW / 2, by + btnH / 2);
+
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(bx2, by, btnW, btnH);
+      ctx.strokeStyle = "#fff";
+      ctx.strokeRect(bx2, by, btnW, btnH);
+      ctx.fillStyle = "#fff";
+      ctx.fillText("📋 Meny", bx2 + btnW / 2, by + btnH / 2);
+
+      adv.endBtnBounds = [
+        { x: bx1, y: by, w: btnW, h: btnH, action: "adventurePlayAgain" },
+        { x: bx2, y: by, w: btnW, h: btnH, action: "menu" },
+      ];
+    }
+
     function frame(t) {
       if (!arena.running) {
         return;
@@ -4159,6 +4854,7 @@
       updateFortress(nowMs);
       updateDuel();
       updateSiege();
+      updateAdventure();
       if (arena.mode === "boot") {
         drawBootMode();
         if (performance.now() - arena.bootStartMs > BOOT_DURATION) {
@@ -4169,12 +4865,14 @@
         drawMenuMode();
       } else if (arena.mode === "siege") {
         drawSiegeMode();
+      } else if (arena.mode === "adventure") {
+        drawAdventureMode();
       } else {
       drawParallaxBackground();
       }
       if (arena.mode === "fortress") {
         drawFortressMode(t);
-      } else if (arena.mode === "menu" || arena.mode === "siege") {
+      } else if (arena.mode === "menu" || arena.mode === "siege" || arena.mode === "adventure") {
         // already drawn above
       } else if (arena.mode === "duel") {
         drawDuelMode();
@@ -4220,7 +4918,7 @@
         arena.running = false;
       },
       setMode(mode) {
-        if ((arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") && mode !== "menu" && mode !== "siege" && mode !== "boot") return;
+        if ((arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege" || arena.mode === "adventure") && mode !== "menu" && mode !== "siege" && mode !== "boot" && mode !== "adventure") return;
         arena.mode = mode;
       },
       showTextFlash(line1, color, line2, durationMs) {
@@ -4231,7 +4929,7 @@
         return bossRoster.find((b) => b.id === id) || bossRoster[0];
       },
       setPreviewBoss(bossId) {
-        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") return;
+        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege" || arena.mode === "adventure") return;
         arena.mode = "boss";
         arena.activeBoss = this.getBossById(bossId);
         arena.roundStartMs = 0;
@@ -4247,7 +4945,7 @@
         arena.debris = [];
       },
       startRound(bossId, durationSec, onBossReach) {
-        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege") return;
+        if (arena.mode === "boot" || arena.mode === "menu" || arena.mode === "siege" || arena.mode === "adventure") return;
         arena.mode = "boss";
         arena.activeBoss = this.getBossById(bossId);
         arena.roundDurationSec = durationSec;
@@ -4961,6 +5659,119 @@
       isSiegeMode() {
         return arena.mode === "siege" && arena.siege.active;
       },
+      // ─── ADVENTURE MODE API ────────────────────────────────────
+      startAdventureMode(options = {}) {
+        arena.mode = "adventure";
+        arena.adventure.active = true;
+        arena.siege.active = false;
+        const adv = arena.adventure;
+        adv.phase = "idle";
+        adv.roundNumber = 0;
+        adv.damageNumbers = [];
+        adv.particles = [];
+        adv.flashEffect = null;
+        adv.answerText = "";
+        adv.answerResults = [];
+        adv.actionMenuHero = -1;
+        adv.actionBtnBounds = [];
+        adv.endBtnBounds = [];
+        // Setup heroes (1 per player for now, or array from options)
+        const heroNames = options.heroNames || ["Hjälte"];
+        adv.heroes = heroNames.map(name => ({
+          name,
+          hp: 100,
+          maxHp: 100,
+          defending: false,
+          specialCharge: 0,
+          actionChoice: null,
+        }));
+        // Setup boss
+        const bossId = options.bossId || "oiia";
+        const boss = SIEGE_BOSSES.find(b => b.id === bossId) || SIEGE_BOSSES[0];
+        adv.boss = {
+          id: boss.id,
+          name: boss.name,
+          hp: options.bossHp || 200,
+          maxHp: options.bossHp || 200,
+          size: 260,
+        };
+        // Word queue
+        adv.wordQueue = options.words ? [...options.words].sort(() => Math.random() - 0.5) : [];
+        adv.wrongQueue = [];
+        // Start first vocab phase after short delay
+        setTimeout(() => advStartVocabPhase(), 500);
+      },
+      isAdventureMode() {
+        return arena.mode === "adventure" && arena.adventure.active;
+      },
+      adventureAnswerType(ch) {
+        if (arena.adventure.answerText.length < 40) arena.adventure.answerText += ch;
+      },
+      adventureAnswerBackspace() {
+        arena.adventure.answerText = arena.adventure.answerText.slice(0, -1);
+      },
+      getAdventureAnswer() {
+        return arena.adventure.answerText;
+      },
+      clearAdventureAnswer() {
+        arena.adventure.answerText = "";
+      },
+      adventureSubmitAnswer(correct) {
+        const adv = arena.adventure;
+        if (adv.phase !== "vocab") return;
+        // For single player, heroIndex 0
+        if (!adv.answerResults.find(r => r.heroIndex === 0)) {
+          adv.answerResults.push({ heroIndex: 0, correct });
+          if (!correct && adv.currentGlosa) {
+            adv.wrongQueue.push(adv.currentGlosa);
+          }
+          if (correct) {
+            adv.heroes[0].specialCharge = Math.min(3, (adv.heroes[0].specialCharge || 0) + 1);
+          }
+          // In single-player, immediately go to action select
+          advStartActionSelect();
+        }
+      },
+      adventureSelectAction(actionId) {
+        const adv = arena.adventure;
+        if (adv.phase !== "actionSelect" || adv.actionMenuHero < 0) return;
+        const hero = adv.heroes[adv.actionMenuHero];
+        if (!hero || hero.hp <= 0) return;
+        if (actionId === "special" && hero.specialCharge < 3) return;
+        hero.actionChoice = actionId;
+        advNextActionHero();
+      },
+      handleAdventureClick(cx, cy) {
+        const adv = arena.adventure;
+        // Menu button
+        if (adv.menuBtnBounds) {
+          const mb = adv.menuBtnBounds;
+          if (cx >= mb.x && cx <= mb.x + mb.w && cy >= mb.y && cy <= mb.y + mb.h) {
+            return { action: "menu" };
+          }
+        }
+        // Action buttons
+        if (adv.phase === "actionSelect") {
+          for (const btn of adv.actionBtnBounds) {
+            if (btn.enabled && cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+              return { action: "adventureAction", actionId: btn.action };
+            }
+          }
+        }
+        // End buttons
+        if ((adv.phase === "victory" || adv.phase === "defeat") && adv.endBtnBounds) {
+          for (const btn of adv.endBtnBounds) {
+            if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+              return { action: btn.action };
+            }
+          }
+        }
+        return null;
+      },
+      getAdventureState() {
+        const adv = arena.adventure;
+        return { phase: adv.phase, roundNumber: adv.roundNumber, currentGlosa: adv.currentGlosa };
+      },
       // ─── MENU API ──────────────────────────────────────────────
       startBoot() {
         arena.mode = "boot";
@@ -4971,6 +5782,7 @@
       showMenu() {
         arena.mode = "menu";
         arena.siege.active = false;
+        arena.adventure.active = false;
         siegeAudio.stopMusic();
       },
       isMenuMode() {
@@ -4991,6 +5803,9 @@
       handleCanvasClick(cx, cy) {
         if (arena.mode === "menu") {
           return handleMenuClick(cx, cy);
+        }
+        if (arena.mode === "adventure") {
+          return this.handleAdventureClick(cx, cy);
         }
         if (arena.mode === "siege") {
           // Menu button
@@ -6807,6 +7622,18 @@
         }
       }
       startSiegeGame();
+    } else if (hit.action === "startAdventure") {
+      const menuWeekId = bossFightEngine.getMenuSelectedWeekId ? bossFightEngine.getMenuSelectedWeekId() : appState.selectedWeekId;
+      if (menuWeekId) {
+        appState.selectedWeekId = menuWeekId;
+        if (elements.weekSelect) elements.weekSelect.value = String(menuWeekId);
+        const week = (appState.weeks || []).find(w => w.id === menuWeekId || String(w.id) === String(menuWeekId));
+        if (week) {
+          appState.selectedLanguage = (week.language || "english").toLowerCase();
+          appState.practiceAnswerLanguage = week.language || "english";
+        }
+      }
+      startAdventureGame();
     } else if (hit.action === "changeLanguage") {
       appState.selectedLanguage = hit.lang;
       if (elements.appLanguageSelect) elements.appLanguageSelect.value = hit.lang;
@@ -6898,6 +7725,10 @@
         // Re-poll to sync (other player will see it removed on next poll)
         await pollChallengeInbox();
       } catch (e) { console.error("[CHALLENGE] Decline error:", e); }
+    } else if (hit.action === "adventureAction") {
+      if (bossFightEngine) bossFightEngine.adventureSelectAction(hit.actionId);
+    } else if (hit.action === "adventurePlayAgain") {
+      startAdventureGame();
     } else if (hit.action === "flipSiegeLanguage") {
       siegeFlipped = !siegeFlipped;
       showSiegeGlosa();
@@ -7010,6 +7841,49 @@
       } else {
         showSiegeGlosa();
       }
+      if (elements.bossFightCanvas) elements.bossFightCanvas.focus();
+    }
+  }
+
+  function startAdventureGame() {
+    let words = currentWords();
+    if (!words.length && appState.selectedWeekId) {
+      const week = (appState.weeks || []).find(w => String(w.id) === String(appState.selectedWeekId));
+      if (week && Array.isArray(week.words) && week.words.length) {
+        words = week.words;
+      }
+    }
+    if (!words.length) {
+      if (bossFightEngine) {
+        bossFightEngine.showTextFlash("Välj en vecka först!", "#ef4444", "Klicka på en vecka i listan", 3000);
+        bossFightEngine.showMenu();
+      }
+      return;
+    }
+    if (bossFightEngine) {
+      state.bossMode = false;
+      state.fortressMode = false;
+      appState.duel.active = false;
+      appState.groupBattle.active = false;
+      appState.groupBattle.finishing = false;
+      if (appState.groupBattle.botTimerId) {
+        window.clearInterval(appState.groupBattle.botTimerId);
+        appState.groupBattle.botTimerId = 0;
+      }
+      const selectedBoss = bossFightEngine.getMenuState?.()?.selectedBossId || "oiia";
+      const bossHp = 200;
+      const guestName = (elements.guestNameInput?.value || appState.selectedUserId || "Hjälte").trim();
+      bossFightEngine.startAdventureMode({
+        heroNames: [guestName],
+        bossId: selectedBoss,
+        bossHp,
+        words,
+      });
+      killAllHtmlOverlays();
+      if (elements.combatPanel) elements.combatPanel.style.display = "none";
+      if (elements.groupBattleFeed) elements.groupBattleFeed.style.display = "none";
+      const gs = document.getElementById("gameShell");
+      if (gs) gs.style.display = "none";
       if (elements.bossFightCanvas) elements.bossFightCanvas.focus();
     }
   }
@@ -9437,6 +10311,12 @@
       });
     }
 
+    if (elements.startAdventureButton) {
+      elements.startAdventureButton.addEventListener("click", () => {
+        startAdventureGame();
+      });
+    }
+
     if (elements.trainModeButton) {
       elements.trainModeButton.addEventListener("click", () => {
         stopGroupBattle("");
@@ -9529,6 +10409,47 @@
     document.addEventListener("keydown", async (e) => {
       siegeAudio.resumeIfPending();
       if (!bossFightEngine) return;
+
+      // Adventure mode typing
+      if (bossFightEngine.isAdventureMode && bossFightEngine.isAdventureMode()) {
+        const advState = bossFightEngine.getAdventureState();
+        if (e.key === "Escape") {
+          e.preventDefault();
+          handleCanvasAction({ action: "menu" });
+          return;
+        }
+        if (advState.phase === "vocab") {
+          if (e.key === "Backspace") {
+            e.preventDefault();
+            bossFightEngine.adventureAnswerBackspace();
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            const answer = bossFightEngine.getAdventureAnswer();
+            if (!answer) return;
+            const expected = advState.currentGlosa ? advState.currentGlosa.en : "";
+            const correct = normalize(answer) === normalize(expected);
+            bossFightEngine.adventureSubmitAnswer(correct);
+            bossFightEngine.clearAdventureAnswer();
+            if (correct) {
+              grantXp(12);
+              state.coins += 4;
+              state.streak += 1;
+            } else {
+              state.streak = 0;
+            }
+          } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            bossFightEngine.adventureAnswerType(e.key);
+          }
+        } else if (advState.phase === "actionSelect") {
+          // Number keys 1-4 for quick action select
+          if (e.key === "1") { bossFightEngine.adventureSelectAction("attack"); }
+          else if (e.key === "2") { bossFightEngine.adventureSelectAction("heal"); }
+          else if (e.key === "3") { bossFightEngine.adventureSelectAction("defend"); }
+          else if (e.key === "4") { bossFightEngine.adventureSelectAction("special"); }
+        }
+        return;
+      }
 
       // Siege mode typing
       if (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) {
