@@ -6500,9 +6500,17 @@
         "\u308f","\u3092","\u3093",                     // wa wo n
       ],
     };
-    // Japanese: only show hiragana picker when answer is hiragana (flipped direction)
-    let chars = charSets[lang];
-    if (lang === "japanese" && !appState.flippedDirection) chars = null;
+    // Determine the actual answer language based on direction:
+    // Normal (sv→target): answer is in target language → show target chars
+    // Flipped (target→sv): answer is Swedish → show no special chars
+    // Exception: Japanese normal = hiragana→romaji (answer=romaji, no chars needed)
+    //            Japanese flipped = romaji→hiragana (answer=hiragana, chars needed)
+    let chars = null;
+    if (lang === "japanese") {
+      chars = appState.flippedDirection ? charSets.japanese : null;
+    } else {
+      chars = appState.flippedDirection ? null : charSets[lang];
+    }
     if (!chars) {
       elements.specialCharsRow.style.display = "none";
       return;
