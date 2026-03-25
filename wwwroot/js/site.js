@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.7.0";
+  const GAME_VERSION = "1.8.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -4191,213 +4191,593 @@
       tickDuelProjectiles();
     }
 
-    // ─── ADVENTURE MODE (FF7-style turn-based RPG) ──────────────────
-    const ADV_PS = 4; // pixel scale for adventure sprites
-    const ADV_HERO_X = 60; // left side base x for heroes
-    const ADV_BOSS_X = 620; // right side base x for boss
-    const ADV_GROUND_Y = 320; // ground line y in canvas pixels
+    // ─── ADVENTURE MODE (FF2-style turn-based RPG) ──────────────────
+    const ADV_PS = 4; // pixel scale — each "pixel" = 4×4 canvas pixels
+    const ADV_HERO_HOME_X = 120; // heroes' home X (left side)
+    const ADV_BOSS_X = 600; // boss home X (right side)
+    const ADV_GROUND_Y = 330; // ground line
+    const ADV_ATTACK_TARGET_X = 480; // where heroes run to when attacking
 
-    function advPx(gx, gy, w, h, color) {
+    // Pixel helper (canvas coords, scaled by ADV_PS)
+    function advPx(x, y, w, h, color) {
       if (!color) return;
       ctx.fillStyle = color;
-      ctx.fillRect(gx, gy, w * ADV_PS, h * ADV_PS);
+      ctx.fillRect(x, y, w * ADV_PS, h * ADV_PS);
     }
 
-    // Draw a pixel hero (FF7-style, ~128px tall)
-    // heroIndex determines color palette, x/y is canvas position
-    function drawAdventureHero(x, y, heroIndex, walkFrame, isDefending) {
-      const palettes = [
-        { hair: "#f0c040", skin: "#ffd5a0", armor: "#2563eb", armorL: "#3b82f6", boots: "#1e3a5f", cape: "#1e40af" },
-        { hair: "#c0392b", skin: "#ffe0c0", armor: "#16a34a", armorL: "#22c55e", boots: "#14532d", cape: "#065f46" },
-        { hair: "#8b5cf6", skin: "#fdd5b1", armor: "#dc2626", armorL: "#ef4444", boots: "#450a0a", cape: "#991b1b" },
-        { hair: "#f97316", skin: "#fde0c8", armor: "#7c3aed", armorL: "#a855f7", boots: "#3b0764", cape: "#581c87" },
-      ];
-      const p = palettes[heroIndex % palettes.length];
+    // ── FF2 HERO SPRITE ─────────────────────────────────────────────
+    // 16×28 pixel grid, scaled by ADV_PS (=4) → 64×112 canvas pixels
+    // pose: "idle" | "walk" | "attack" | "defend" | "hurt" | "dead" | "cast"
+    const ADV_HERO_PALETTES = [
+      { hair: "#e8c030", hairD: "#b89820", skin: "#ffd5a0", skinD: "#d4a878", eye: "#204080",
+        armor: "#2050c0", armorL: "#3878e8", armorD: "#183890", belt: "#c0a030",
+        boots: "#604020", bootsL: "#785030", cape: "#1840a0", capeD: "#102870",
+        sword: "#d0d8e8", swordH: "#f0f4ff", swordD: "#a0a8b8", guard: "#d4af37", guardD: "#b08c20",
+        shield: "#6080c0", shieldL: "#80a0e0", shieldD: "#405890", shieldGem: "#e04040",
+        pants: "#3050a0", pantsL: "#4068c0" },
+      { hair: "#c03828", hairD: "#902818", skin: "#ffe0c0", skinD: "#d4b898", eye: "#206020",
+        armor: "#18802a", armorL: "#28b848", armorD: "#106018", belt: "#a08020",
+        boots: "#2a4018", bootsL: "#386028", cape: "#106028", capeD: "#083818",
+        sword: "#d0d8e8", swordH: "#f0f4ff", swordD: "#a0a8b8", guard: "#c09030", guardD: "#907020",
+        shield: "#408050", shieldL: "#60a070", shieldD: "#306040", shieldGem: "#40a0e0",
+        pants: "#1a5a2a", pantsL: "#28784a" },
+      { hair: "#7848c0", hairD: "#583098", skin: "#fdd5b1", skinD: "#d4a888", eye: "#c02020",
+        armor: "#b82020", armorL: "#e04848", armorD: "#881818", belt: "#c0c040",
+        boots: "#401010", bootsL: "#582020", cape: "#901818", capeD: "#601010",
+        sword: "#d0d8e8", swordH: "#f0f4ff", swordD: "#a0a8b8", guard: "#d0a020", guardD: "#a08018",
+        shield: "#a04040", shieldL: "#c06060", shieldD: "#803030", shieldGem: "#40e040",
+        pants: "#801818", pantsL: "#a03030" },
+      { hair: "#e88020", hairD: "#b86018", skin: "#fde0c8", skinD: "#d4b8a0", eye: "#4020a0",
+        armor: "#6030b0", armorL: "#8850d8", armorD: "#482088", belt: "#d0b040",
+        boots: "#301048", bootsL: "#482060", cape: "#502098", capeD: "#381068",
+        sword: "#d0d8e8", swordH: "#f0f4ff", swordD: "#a0a8b8", guard: "#c0a830", guardD: "#988020",
+        shield: "#7048a0", shieldL: "#9068c0", shieldD: "#503880", shieldGem: "#e0c040",
+        pants: "#482088", pantsL: "#6030a8" },
+    ];
+
+    function drawAdventureHero(x, y, heroIndex, frame, pose) {
+      const p = ADV_HERO_PALETTES[heroIndex % ADV_HERO_PALETTES.length];
       const s = ADV_PS;
-      const bob = Math.sin(walkFrame * 0.05) * 2;
-      const baseY = y + bob;
+      const bob = pose === "idle" ? Math.sin(frame * 0.06) * 2 : 0;
+      const bY = y + bob; // base Y with idle bob
 
-      // Shadow
-      ctx.fillStyle = "rgba(0,0,0,0.2)";
-      ctx.fillRect(x - 12, y + 28 * s, 10 * s, 2 * s);
+      // Shadow on ground
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.beginPath();
+      ctx.ellipse(x + 8 * s, y + 28 * s, 7 * s, 1.5 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      if (isDefending) {
-        // Shield raised stance
-        // Legs (standing)
-        advPx(x + 2 * s, baseY + 24 * s, 3, 4, p.boots);
-        advPx(x + 6 * s, baseY + 24 * s, 3, 4, p.boots);
-        // Body
-        advPx(x + 1 * s, baseY + 14 * s, 9, 10, p.armor);
-        advPx(x + 1 * s, baseY + 14 * s, 9, 2, p.armorL);
-        // Big shield in front
-        advPx(x - 2 * s, baseY + 10 * s, 5, 16, "#a0a0a0");
-        advPx(x - 1 * s, baseY + 11 * s, 3, 14, "#c0c0c0");
-        advPx(x - 0.5 * s, baseY + 14 * s, 2, 8, "#d4af37");
-        // Head
-        advPx(x + 2 * s, baseY + 8 * s, 7, 6, p.skin);
-        // Hair
-        advPx(x + 2 * s, baseY + 6 * s, 7, 3, p.hair);
-        advPx(x + 1 * s, baseY + 7 * s, 2, 4, p.hair);
-        // Eyes
-        advPx(x + 3 * s, baseY + 10 * s, 1, 1, "#222");
-        advPx(x + 6 * s, baseY + 10 * s, 1, 1, "#222");
+      if (pose === "dead") {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.translate(x + 8 * s, y + 20 * s);
+        ctx.rotate(Math.PI / 2);
+        ctx.translate(-(x + 8 * s), -(y + 20 * s));
+        drawHeroIdle(x, y, p, s, 0);
+        ctx.restore();
         return;
       }
-
-      // Cape (behind)
-      advPx(x + 8 * s, baseY + 12 * s, 3, 14, p.cape);
-      advPx(x + 9 * s, baseY + 14 * s, 2, 10, p.cape);
-
-      // Legs (animated walk)
-      const legOff = Math.sin(walkFrame * 0.08) * 1.5 * s;
-      advPx(x + 2 * s, baseY + 24 * s + legOff, 3, 4, p.boots);
-      advPx(x + 6 * s, baseY + 24 * s - legOff, 3, 4, p.boots);
-
-      // Body / armor
-      advPx(x + 1 * s, baseY + 14 * s, 9, 10, p.armor);
-      advPx(x + 1 * s, baseY + 14 * s, 9, 2, p.armorL); // highlight
-
-      // Arms
-      advPx(x, baseY + 14 * s, 1, 8, p.armor);
-      advPx(x + 10 * s, baseY + 14 * s, 1, 8, p.armor);
-
-      // Sword (right hand)
-      advPx(x - 2 * s, baseY + 8 * s, 1, 8, "#c0c0c0");
-      advPx(x - 2 * s, baseY + 7 * s, 1, 2, "#e0e0e0");
-      advPx(x - 3 * s, baseY + 12 * s, 3, 1, "#d4af37"); // crossguard
-
-      // Head
-      advPx(x + 2 * s, baseY + 8 * s, 7, 6, p.skin);
-
-      // Hair
-      advPx(x + 2 * s, baseY + 6 * s, 7, 3, p.hair);
-      advPx(x + 1 * s, baseY + 7 * s, 2, 4, p.hair);
-
-      // Eyes
-      advPx(x + 3 * s, baseY + 10 * s, 1, 1, "#222");
-      advPx(x + 6 * s, baseY + 10 * s, 1, 1, "#222");
-
-      // Mouth
-      advPx(x + 4 * s, baseY + 12 * s, 3, 1, "#c0856c");
+      if (pose === "defend") { drawHeroDefend(x, bY, p, s, frame); return; }
+      if (pose === "attack") { drawHeroAttack(x, bY, p, s, frame); return; }
+      if (pose === "cast")   { drawHeroCast(x, bY, p, s, frame); return; }
+      if (pose === "hurt") {
+        // Hurt flash — jitter left/right
+        const jx = Math.sin(frame * 1.2) * 4;
+        ctx.save();
+        if (Math.floor(frame * 0.5) % 2) ctx.globalAlpha = 0.5;
+        drawHeroIdle(x + jx, bY, p, s, frame);
+        ctx.restore();
+        return;
+      }
+      if (pose === "walk") { drawHeroWalk(x, bY, p, s, frame); return; }
+      // Default: idle
+      drawHeroIdle(x, bY, p, s, frame);
     }
 
-    // Draw pixel boss (large, FF7-style enemy, 256-400px)
+    function drawHeroIdle(x, y, p, s, frame) {
+      // ── Cape (behind body) ──
+      advPx(x + 10*s, y + 9*s, 4, 15, p.cape);
+      advPx(x + 11*s, y + 10*s, 3, 14, p.capeD);
+      // Cape bottom wave
+      const cWave = Math.sin(frame * 0.04) * s;
+      advPx(x + 10*s, y + 24*s + cWave, 5, 2, p.cape);
+
+      // ── Boots ──
+      advPx(x + 3*s, y + 24*s, 4, 3, p.boots);   // left boot
+      advPx(x + 3*s, y + 24*s, 4, 1, p.bootsL);   // highlight
+      advPx(x + 2*s, y + 26*s, 5, 1, p.boots);     // sole left
+      advPx(x + 9*s, y + 24*s, 4, 3, p.boots);    // right boot
+      advPx(x + 9*s, y + 24*s, 4, 1, p.bootsL);
+      advPx(x + 9*s, y + 26*s, 5, 1, p.boots);
+
+      // ── Pants / legs ──
+      advPx(x + 4*s, y + 20*s, 3, 4, p.pants);
+      advPx(x + 4*s, y + 20*s, 1, 4, p.pantsL);
+      advPx(x + 9*s, y + 20*s, 3, 4, p.pants);
+      advPx(x + 9*s, y + 20*s, 1, 4, p.pantsL);
+
+      // ── Body / armor ──
+      advPx(x + 3*s, y + 11*s, 10, 9, p.armor);
+      advPx(x + 3*s, y + 11*s, 10, 2, p.armorL);   // top highlight
+      advPx(x + 3*s, y + 18*s, 10, 1, p.armorD);   // bottom shadow
+      // Armor detail lines
+      advPx(x + 7*s, y + 13*s, 2, 5, p.armorL);    // center plate
+      advPx(x + 5*s, y + 14*s, 1, 3, p.armorD);    // shadow line
+
+      // ── Belt ──
+      advPx(x + 3*s, y + 19*s, 10, 1, p.belt);
+
+      // ── Left arm + shield ──
+      advPx(x + 1*s, y + 12*s, 2, 7, p.armor);
+      advPx(x + 1*s, y + 12*s, 2, 1, p.armorL);
+      // Shield
+      advPx(x - 1*s, y + 11*s, 3, 8, p.shield);
+      advPx(x - 1*s, y + 11*s, 3, 2, p.shieldL);
+      advPx(x, y + 13*s, 1, 4, p.shieldD);
+      advPx(x, y + 14*s, 1, 2, p.shieldGem);     // gem
+
+      // ── Right arm ──
+      advPx(x + 13*s, y + 12*s, 2, 7, p.armor);
+      advPx(x + 13*s, y + 12*s, 2, 1, p.armorL);
+      // Hand
+      advPx(x + 13*s, y + 18*s, 2, 1, p.skin);
+
+      // ── Sword (held at rest, pointing down) ──
+      advPx(x + 14*s, y + 14*s, 1, 1, p.guard);    // guard
+      advPx(x + 13*s, y + 14*s, 1, 1, p.guardD);
+      advPx(x + 14*s, y + 8*s,  1, 6, p.sword);    // blade
+      advPx(x + 14*s, y + 7*s,  1, 2, p.swordH);   // tip highlight
+      advPx(x + 14*s, y + 15*s, 1, 3, p.swordD);   // grip
+
+      // ── Head ──
+      advPx(x + 4*s, y + 4*s, 8, 7, p.skin);
+      advPx(x + 4*s, y + 9*s, 8, 1, p.skinD);      // chin shadow
+      advPx(x + 11*s, y + 5*s, 1, 5, p.skinD);     // side shadow
+
+      // ── Hair ──
+      advPx(x + 3*s, y + 2*s, 10, 3, p.hair);
+      advPx(x + 4*s, y + 1*s, 8, 2, p.hair);       // top
+      advPx(x + 3*s, y + 4*s, 2, 5, p.hair);       // left side
+      advPx(x + 11*s, y + 3*s, 2, 4, p.hairD);     // right side shadow
+      // Spikes
+      advPx(x + 4*s, y, 2, 2, p.hair);
+      advPx(x + 8*s, y - 1*s, 2, 2, p.hair);
+      advPx(x + 11*s, y + 1*s, 2, 2, p.hairD);
+
+      // ── Face ──
+      advPx(x + 6*s, y + 6*s, 1, 1, p.eye);        // left eye
+      advPx(x + 9*s, y + 6*s, 1, 1, p.eye);        // right eye
+      advPx(x + 6*s, y + 5*s, 1, 1, p.skinD);      // left brow
+      advPx(x + 9*s, y + 5*s, 1, 1, p.skinD);      // right brow
+      advPx(x + 7*s, y + 8*s, 2, 1, p.skinD);      // mouth
+    }
+
+    function drawHeroWalk(x, y, p, s, frame) {
+      // Walk = idle body but legs alternate
+      const step = Math.floor(frame * 0.3) % 4;
+      const lOff = [0, -1, 0, 1][step] * s;
+      const rOff = [0, 1, 0, -1][step] * s;
+
+      // Cape
+      advPx(x + 10*s, y + 9*s, 4, 15, p.cape);
+      advPx(x + 11*s, y + 10*s, 3, 14, p.capeD);
+      advPx(x + 9*s, y + 24*s, 6, 2, p.cape);
+
+      // Left leg
+      advPx(x + 4*s, y + 20*s + lOff, 3, 4, p.pants);
+      advPx(x + 3*s, y + 24*s + lOff, 4, 3, p.boots);
+      advPx(x + 2*s, y + 26*s + lOff, 5, 1, p.boots);
+      // Right leg
+      advPx(x + 9*s, y + 20*s + rOff, 3, 4, p.pants);
+      advPx(x + 9*s, y + 24*s + rOff, 4, 3, p.boots);
+      advPx(x + 9*s, y + 26*s + rOff, 5, 1, p.boots);
+
+      // Body
+      advPx(x + 3*s, y + 11*s, 10, 9, p.armor);
+      advPx(x + 3*s, y + 11*s, 10, 2, p.armorL);
+      advPx(x + 3*s, y + 18*s, 10, 1, p.armorD);
+      advPx(x + 7*s, y + 13*s, 2, 5, p.armorL);
+      advPx(x + 3*s, y + 19*s, 10, 1, p.belt);
+
+      // Arms bounce
+      advPx(x + 1*s, y + 12*s - lOff, 2, 7, p.armor);
+      advPx(x + 13*s, y + 12*s - rOff, 2, 7, p.armor);
+
+      // Sword
+      advPx(x + 14*s, y + 8*s - rOff, 1, 6, p.sword);
+      advPx(x + 14*s, y + 14*s - rOff, 1, 1, p.guard);
+
+      // Shield
+      advPx(x - 1*s, y + 11*s - lOff, 3, 8, p.shield);
+      advPx(x - 1*s, y + 11*s - lOff, 3, 2, p.shieldL);
+      advPx(x, y + 14*s - lOff, 1, 2, p.shieldGem);
+
+      // Head
+      advPx(x + 4*s, y + 4*s, 8, 7, p.skin);
+      advPx(x + 3*s, y + 2*s, 10, 3, p.hair);
+      advPx(x + 4*s, y + 1*s, 8, 2, p.hair);
+      advPx(x + 3*s, y + 4*s, 2, 5, p.hair);
+      advPx(x + 4*s, y, 2, 2, p.hair);
+      advPx(x + 8*s, y - 1*s, 2, 2, p.hair);
+      advPx(x + 6*s, y + 6*s, 1, 1, p.eye);
+      advPx(x + 9*s, y + 6*s, 1, 1, p.eye);
+    }
+
+    function drawHeroAttack(x, y, p, s, frame) {
+      // Attack pose: sword arm raised and swung, body leaning forward
+      const swingPhase = Math.min(1, frame * 0.12);   // 0→1 over the swing
+
+      // Cape billowing back
+      advPx(x + 12*s, y + 8*s, 5, 16, p.cape);
+      advPx(x + 14*s, y + 10*s, 4, 14, p.capeD);
+
+      // Legs — wide lunge stance
+      advPx(x + 2*s, y + 20*s, 3, 5, p.pants);
+      advPx(x + 1*s, y + 25*s, 4, 2, p.boots);
+      advPx(x, y + 26*s, 5, 1, p.boots);
+      advPx(x + 9*s, y + 21*s, 3, 4, p.pants);
+      advPx(x + 9*s, y + 25*s, 4, 2, p.boots);
+      advPx(x + 9*s, y + 26*s, 5, 1, p.boots);
+
+      // Body (leaning forward slightly)
+      advPx(x + 2*s, y + 11*s, 10, 9, p.armor);
+      advPx(x + 2*s, y + 11*s, 10, 2, p.armorL);
+      advPx(x + 2*s, y + 18*s, 10, 1, p.armorD);
+      advPx(x + 6*s, y + 13*s, 2, 5, p.armorL);
+      advPx(x + 2*s, y + 19*s, 10, 1, p.belt);
+
+      // Left arm + shield (held forward)
+      advPx(x, y + 12*s, 2, 7, p.armor);
+      advPx(x - 2*s, y + 10*s, 3, 9, p.shield);
+      advPx(x - 2*s, y + 10*s, 3, 2, p.shieldL);
+      advPx(x - 1*s, y + 13*s, 1, 2, p.shieldGem);
+
+      // Right arm — swing arc
+      const swordAngle = -1.2 + swingPhase * 2.8; // from raised to slashed down
+      const armBaseX = x + 11*s;
+      const armBaseY = y + 13*s;
+      advPx(armBaseX, armBaseY, 2, 5, p.armor);
+      advPx(armBaseX, armBaseY + 4*s, 2, 1, p.skin); // hand
+
+      // Sword — rotate around arm end
+      ctx.save();
+      ctx.translate(armBaseX + s, armBaseY + 5*s);
+      ctx.rotate(swordAngle);
+      // Blade
+      ctx.fillStyle = p.swordH;
+      ctx.fillRect(-s * 0.5, -10 * s, s, 2 * s);
+      ctx.fillStyle = p.sword;
+      ctx.fillRect(-s * 0.5, -8 * s, s, 6 * s);
+      ctx.fillStyle = p.swordD;
+      ctx.fillRect(s * 0.3, -8 * s, s * 0.5, 6 * s);
+      // Guard
+      ctx.fillStyle = p.guard;
+      ctx.fillRect(-1.5 * s, -1 * s, 3 * s, s);
+      ctx.restore();
+
+      // Slash trail effect (at peak of swing)
+      if (swingPhase > 0.5 && swingPhase < 0.9) {
+        ctx.save();
+        ctx.globalAlpha = 0.6 * (1 - (swingPhase - 0.5) / 0.4);
+        ctx.strokeStyle = "#e0e8ff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(armBaseX + s, armBaseY + 5*s, 10 * s, -2.0, -2.0 + swingPhase * 3, false);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Head
+      advPx(x + 3*s, y + 4*s, 8, 7, p.skin);
+      advPx(x + 3*s, y + 9*s, 8, 1, p.skinD);
+      // Hair
+      advPx(x + 2*s, y + 2*s, 10, 3, p.hair);
+      advPx(x + 3*s, y + 1*s, 8, 2, p.hair);
+      advPx(x + 2*s, y + 4*s, 2, 5, p.hair);
+      advPx(x + 3*s, y, 2, 2, p.hair);
+      advPx(x + 7*s, y - 1*s, 2, 2, p.hair);
+      // Face — determined expression
+      advPx(x + 5*s, y + 5*s, 2, 1, p.skinD);   // furrowed brow
+      advPx(x + 8*s, y + 5*s, 2, 1, p.skinD);
+      advPx(x + 5*s, y + 6*s, 1, 1, p.eye);
+      advPx(x + 9*s, y + 6*s, 1, 1, p.eye);
+      advPx(x + 6*s, y + 8*s, 3, 1, p.skinD);   // open mouth
+    }
+
+    function drawHeroDefend(x, y, p, s, frame) {
+      // Shield raised high, crouched behind it
+      const pulse = Math.sin(frame * 0.1) * 0.5;
+
+      // Cape
+      advPx(x + 10*s, y + 10*s, 4, 14, p.cape);
+
+      // Legs — crouched
+      advPx(x + 3*s, y + 22*s, 4, 3, p.pants);
+      advPx(x + 9*s, y + 22*s, 4, 3, p.pants);
+      advPx(x + 3*s, y + 25*s, 4, 2, p.boots);
+      advPx(x + 2*s, y + 26*s, 5, 1, p.boots);
+      advPx(x + 9*s, y + 25*s, 4, 2, p.boots);
+      advPx(x + 9*s, y + 26*s, 5, 1, p.boots);
+
+      // Body
+      advPx(x + 3*s, y + 13*s, 10, 9, p.armor);
+      advPx(x + 3*s, y + 13*s, 10, 2, p.armorL);
+      advPx(x + 3*s, y + 21*s, 10, 1, p.belt);
+
+      // BIG SHIELD in front
+      advPx(x - 2*s, y + 6*s, 6, 16, p.shield);
+      advPx(x - 2*s, y + 6*s, 6, 3, p.shieldL);
+      advPx(x - 1*s, y + 9*s, 4, 10, p.shieldD);
+      advPx(x, y + 12*s, 2, 3, p.shieldGem);
+      // Shield glow when recently defending
+      ctx.save();
+      ctx.globalAlpha = 0.15 + pulse * 0.1;
+      ctx.fillStyle = "#80c0ff";
+      ctx.fillRect((x - 2*s), (y + 6*s), 6 * s, 16 * s);
+      ctx.restore();
+
+      // Arms holding shield
+      advPx(x + 1*s, y + 12*s, 2, 6, p.armor);
+
+      // Sword behind shield
+      advPx(x + 13*s, y + 10*s, 1, 8, p.swordD);
+      advPx(x + 13*s, y + 10*s, 1, 1, p.guard);
+
+      // Head (peeking over shield)
+      advPx(x + 4*s, y + 6*s, 8, 7, p.skin);
+      advPx(x + 3*s, y + 4*s, 10, 3, p.hair);
+      advPx(x + 4*s, y + 3*s, 8, 2, p.hair);
+      advPx(x + 3*s, y + 6*s, 2, 4, p.hair);
+      advPx(x + 6*s, y + 8*s, 1, 1, p.eye);
+      advPx(x + 9*s, y + 8*s, 1, 1, p.eye);
+    }
+
+    function drawHeroCast(x, y, p, s, frame) {
+      // Casting pose — arms raised, magic particles
+      // Cape
+      advPx(x + 10*s, y + 9*s, 4, 15, p.cape);
+
+      // Legs
+      advPx(x + 4*s, y + 20*s, 3, 4, p.pants);
+      advPx(x + 9*s, y + 20*s, 3, 4, p.pants);
+      advPx(x + 3*s, y + 24*s, 4, 3, p.boots);
+      advPx(x + 2*s, y + 26*s, 5, 1, p.boots);
+      advPx(x + 9*s, y + 24*s, 4, 3, p.boots);
+      advPx(x + 9*s, y + 26*s, 5, 1, p.boots);
+
+      // Body
+      advPx(x + 3*s, y + 11*s, 10, 9, p.armor);
+      advPx(x + 3*s, y + 11*s, 10, 2, p.armorL);
+      advPx(x + 3*s, y + 19*s, 10, 1, p.belt);
+
+      // Arms RAISED
+      advPx(x + 1*s, y + 8*s, 2, 4, p.armor);
+      advPx(x + 1*s, y + 7*s, 2, 2, p.skin);
+      advPx(x + 13*s, y + 8*s, 2, 4, p.armor);
+      advPx(x + 13*s, y + 7*s, 2, 2, p.skin);
+
+      // Magic glow above hands
+      const glowPhase = frame * 0.15;
+      for (let i = 0; i < 5; i++) {
+        const angle = glowPhase + (i / 5) * Math.PI * 2;
+        const gx = x + 7*s + Math.cos(angle) * 4*s;
+        const gy = y + 2*s + Math.sin(angle) * 2*s;
+        ctx.save();
+        ctx.globalAlpha = 0.5 + Math.sin(glowPhase + i) * 0.3;
+        ctx.fillStyle = i % 2 ? "#80ff80" : "#40c040";
+        ctx.fillRect(gx, gy, s, s);
+        ctx.restore();
+      }
+
+      // Head
+      advPx(x + 4*s, y + 4*s, 8, 7, p.skin);
+      advPx(x + 3*s, y + 2*s, 10, 3, p.hair);
+      advPx(x + 4*s, y + 1*s, 8, 2, p.hair);
+      advPx(x + 3*s, y + 4*s, 2, 5, p.hair);
+      advPx(x + 6*s, y + 6*s, 1, 1, p.eye);
+      advPx(x + 9*s, y + 6*s, 1, 1, p.eye);
+    }
+
+    // ── FF2 BOSS SPRITE ─────────────────────────────────────────────
     function drawAdventureBoss(x, y, bossId, frame, hpRatio) {
       const boss = SIEGE_BOSSES.find(b => b.id === bossId) || SIEGE_BOSSES[0];
       const c = boss.colors;
-      const s = 6; // larger pixel scale for bosses
-      const bob = Math.sin(frame * 0.03) * 4;
-      const baseY = y + bob;
+      const s = 5;
+      const bob = Math.sin(frame * 0.03) * 3;
+      const bY = y + bob;
+      const dmg = hpRatio < 0.3 && Math.sin(frame * 0.2) > 0.4;
 
       // Shadow
       ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.fillRect(x - 20, y + 42 * s, 44 * s, 3 * s);
+      ctx.beginPath();
+      ctx.ellipse(x + 20*s, y + 48*s, 18*s, 3*s, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Damage flash
-      const dmgFlash = hpRatio < 0.3 && Math.sin(frame * 0.15) > 0.5;
-
-      // Legs
-      const legBob = Math.sin(frame * 0.06) * 2 * s;
-      ctx.fillStyle = dmgFlash ? "#ff6666" : c.boots;
-      ctx.fillRect(x + 8 * s, baseY + 36 * s + legBob, 8 * s, 6 * s);
-      ctx.fillRect(x + 24 * s, baseY + 36 * s - legBob, 8 * s, 6 * s);
-
-      // Body
-      ctx.fillStyle = dmgFlash ? "#ff8888" : c.armor;
-      ctx.fillRect(x + 4 * s, baseY + 16 * s, 32 * s, 20 * s);
+      // ── Feet / legs ──
+      const lBob = Math.sin(frame * 0.05) * 2 * s;
+      ctx.fillStyle = dmg ? "#ff6666" : c.boots;
+      ctx.fillRect(x + 6*s,  bY + 40*s + lBob, 10*s, 7*s);   // left leg
+      ctx.fillRect(x + 24*s, bY + 40*s - lBob, 10*s, 7*s);   // right leg
+      // Feet
+      ctx.fillRect(x + 4*s,  bY + 45*s + lBob, 13*s, 3*s);
+      ctx.fillRect(x + 23*s, bY + 45*s - lBob, 13*s, 3*s);
+      // Knee guards
       ctx.fillStyle = c.armorLight;
-      ctx.fillRect(x + 4 * s, baseY + 16 * s, 32 * s, 4 * s);
+      ctx.fillRect(x + 8*s,  bY + 40*s + lBob, 6*s, 3*s);
+      ctx.fillRect(x + 26*s, bY + 40*s - lBob, 6*s, 3*s);
 
-      // Arms
-      ctx.fillStyle = dmgFlash ? "#ff8888" : c.armor;
-      ctx.fillRect(x, baseY + 18 * s, 4 * s, 14 * s);
-      ctx.fillRect(x + 36 * s, baseY + 18 * s, 4 * s, 14 * s);
-
-      // Weapon (right hand — large axe)
-      ctx.fillStyle = "#888";
-      ctx.fillRect(x + 38 * s, baseY + 8 * s, 2 * s, 24 * s); // handle
-      ctx.fillStyle = "#c0c0c0";
-      ctx.fillRect(x + 40 * s, baseY + 8 * s, 6 * s, 4 * s); // blade top
-      ctx.fillRect(x + 40 * s, baseY + 12 * s, 4 * s, 4 * s); // blade bottom
-      ctx.fillStyle = "#e0e0e0";
-      ctx.fillRect(x + 41 * s, baseY + 9 * s, 4 * s, 2 * s); // highlight
-
-      // Shield (left hand)
-      ctx.fillStyle = c.shield;
-      ctx.fillRect(x - 4 * s, baseY + 16 * s, 6 * s, 12 * s);
-      ctx.fillStyle = c.shieldLight;
-      ctx.fillRect(x - 3 * s, baseY + 18 * s, 4 * s, 8 * s);
-
-      // Head
-      ctx.fillStyle = dmgFlash ? "#ff8888" : c.helmet;
-      ctx.fillRect(x + 8 * s, baseY + 4 * s, 24 * s, 14 * s);
-      ctx.fillStyle = c.helmetLight;
-      ctx.fillRect(x + 8 * s, baseY + 4 * s, 24 * s, 4 * s);
-
-      // Crest / horn
+      // ── Body / torso ──
+      ctx.fillStyle = dmg ? "#ff8888" : c.armor;
+      ctx.fillRect(x + 4*s, bY + 18*s, 32*s, 22*s);
+      // Chest plate
+      ctx.fillStyle = c.armorLight;
+      ctx.fillRect(x + 4*s, bY + 18*s, 32*s, 5*s);
+      // Shoulder pauldrons
+      ctx.fillStyle = dmg ? "#ff8888" : c.armor;
+      ctx.fillRect(x, bY + 16*s, 8*s, 8*s);        // left pauldron
+      ctx.fillRect(x + 32*s, bY + 16*s, 8*s, 8*s); // right pauldron
+      ctx.fillStyle = c.armorLight;
+      ctx.fillRect(x + 1*s, bY + 16*s, 6*s, 3*s);
+      ctx.fillRect(x + 33*s, bY + 16*s, 6*s, 3*s);
+      // Pauldron spikes
       ctx.fillStyle = c.crest;
-      ctx.fillRect(x + 16 * s, baseY, 8 * s, 6 * s);
-      ctx.fillRect(x + 18 * s, baseY - 3 * s, 4 * s, 4 * s);
+      ctx.fillRect(x - 1*s, bY + 14*s, 3*s, 4*s);
+      ctx.fillRect(x + 38*s, bY + 14*s, 3*s, 4*s);
+      // Belt / waist
+      ctx.fillStyle = c.crest;
+      ctx.fillRect(x + 4*s, bY + 36*s, 32*s, 3*s);
+      ctx.fillStyle = "#d4af37";
+      ctx.fillRect(x + 16*s, bY + 36*s, 8*s, 3*s); // buckle
+      // Armor detail — dark lines
+      ctx.fillStyle = c.armorLight;
+      ctx.fillRect(x + 14*s, bY + 23*s, 12*s, 2*s);
+      ctx.fillStyle = "#0002";
+      ctx.fillRect(x + 4*s, bY + 38*s, 32*s, 1*s);
 
-      // Eyes (menacing)
-      ctx.fillStyle = "#ff0000";
-      ctx.fillRect(x + 12 * s, baseY + 10 * s, 4 * s, 3 * s);
-      ctx.fillRect(x + 24 * s, baseY + 10 * s, 4 * s, 3 * s);
-      // Eye glow
+      // ── Arms ──
+      ctx.fillStyle = dmg ? "#ff8888" : c.armor;
+      ctx.fillRect(x - 2*s, bY + 24*s, 5*s, 14*s);   // left arm
+      ctx.fillRect(x + 37*s, bY + 24*s, 5*s, 14*s);  // right arm
+      // Gauntlets
+      ctx.fillStyle = c.armorLight;
+      ctx.fillRect(x - 2*s, bY + 24*s, 5*s, 3*s);
+      ctx.fillRect(x + 37*s, bY + 24*s, 5*s, 3*s);
+      // Hands
+      ctx.fillStyle = c.boots;
+      ctx.fillRect(x - 2*s, bY + 36*s, 4*s, 3*s);
+      ctx.fillRect(x + 38*s, bY + 36*s, 4*s, 3*s);
+
+      // ── Weapon: great axe (right hand) ──
+      ctx.fillStyle = "#706050";
+      ctx.fillRect(x + 40*s, bY + 10*s, 2*s, 30*s);   // handle
+      ctx.fillStyle = "#b0b8c0";
+      ctx.fillRect(x + 42*s, bY + 10*s, 8*s, 6*s);    // blade
+      ctx.fillRect(x + 42*s, bY + 16*s, 6*s, 4*s);
+      ctx.fillStyle = "#d0d8e0";
+      ctx.fillRect(x + 43*s, bY + 11*s, 6*s, 3*s);    // highlight
+      ctx.fillStyle = "#888";
+      ctx.fillRect(x + 42*s, bY + 19*s, 4*s, 1*s);    // blade shadow
+
+      // ── Shield (left hand) ──
+      ctx.fillStyle = c.shield;
+      ctx.fillRect(x - 6*s, bY + 22*s, 7*s, 14*s);
+      ctx.fillStyle = c.shieldLight;
+      ctx.fillRect(x - 5*s, bY + 22*s, 5*s, 4*s);
+      ctx.fillStyle = c.shieldLight;
+      ctx.fillRect(x - 4*s, bY + 28*s, 3*s, 4*s);    // emblem
+      ctx.fillStyle = "#d4af37";
+      ctx.fillRect(x - 3*s, bY + 29*s, 1*s, 2*s);    // gem
+
+      // ── Head / helmet ──
+      ctx.fillStyle = dmg ? "#ff8888" : c.helmet;
+      ctx.fillRect(x + 8*s, bY + 4*s, 24*s, 14*s);
+      ctx.fillStyle = c.helmetLight;
+      ctx.fillRect(x + 8*s, bY + 4*s, 24*s, 4*s);
+      // Visor slit
+      ctx.fillStyle = "#000";
+      ctx.fillRect(x + 10*s, bY + 10*s, 20*s, 3*s);
+      // Eyes glowing inside visor
+      ctx.fillStyle = "#ff2020";
+      ctx.fillRect(x + 13*s, bY + 10*s, 4*s, 2*s);
+      ctx.fillRect(x + 25*s, bY + 10*s, 4*s, 2*s);
       ctx.fillStyle = "#ffcc00";
-      ctx.fillRect(x + 13 * s, baseY + 11 * s, 2 * s, 1 * s);
-      ctx.fillRect(x + 25 * s, baseY + 11 * s, 2 * s, 1 * s);
+      ctx.fillRect(x + 14*s, bY + 11*s, 2*s, 1*s);
+      ctx.fillRect(x + 26*s, bY + 11*s, 2*s, 1*s);
 
-      // Boss name above
+      // Horns / crest
+      ctx.fillStyle = c.crest;
+      ctx.fillRect(x + 6*s,  bY, 4*s, 6*s);       // left horn
+      ctx.fillRect(x + 30*s, bY, 4*s, 6*s);       // right horn
+      ctx.fillRect(x + 5*s,  bY - 2*s, 3*s, 3*s); // left tip
+      ctx.fillRect(x + 31*s, bY - 2*s, 3*s, 3*s); // right tip
+      // Central crest
+      ctx.fillRect(x + 16*s, bY + 1*s, 8*s, 4*s);
+      ctx.fillStyle = c.armorLight;
+      ctx.fillRect(x + 17*s, bY + 2*s, 6*s, 2*s);
+
+      // Boss name
       ctx.save();
       ctx.font = "bold 16px sans-serif";
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
-      ctx.fillText(boss.name, x + 20 * s, baseY - 6 * s);
+      ctx.shadowColor = "#000";
+      ctx.shadowBlur = 4;
+      ctx.fillText(boss.name, x + 20*s, bY - 6*s);
+      ctx.shadowBlur = 0;
       ctx.restore();
     }
 
-    // Draw HP bar for adventure mode
+    // ── HP BAR ──────────────────────────────────────────────────────
     function drawAdvHpBar(x, y, w, h, hp, maxHp, color) {
       const ratio = Math.max(0, hp / maxHp);
-      // BG
+      ctx.fillStyle = "#0a0a1e";
+      ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
       ctx.fillStyle = "#1a1a2e";
       ctx.fillRect(x, y, w, h);
-      // Fill
       const barColor = ratio > 0.5 ? (color || "#22c55e") : ratio > 0.25 ? "#eab308" : "#ef4444";
       ctx.fillStyle = barColor;
       ctx.fillRect(x + 1, y + 1, (w - 2) * ratio, h - 2);
-      // Border
+      // Highlight on bar
+      ctx.fillStyle = "#ffffff20";
+      ctx.fillRect(x + 1, y + 1, (w - 2) * ratio, Math.floor((h - 2) / 3));
       ctx.strokeStyle = "#555";
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, w, h);
-      // Text
       ctx.save();
       ctx.font = "bold 11px sans-serif";
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+      ctx.shadowColor = "#000";
+      ctx.shadowBlur = 2;
       ctx.fillText(`${Math.ceil(hp)}/${maxHp}`, x + w / 2, y + h / 2);
+      ctx.shadowBlur = 0;
       ctx.restore();
     }
 
+    // ── ANIMATION SYSTEM ────────────────────────────────────────────
+    // Multi-phase attack: charge → swing → impact → return
+    const ADV_ANIM_CHARGE = 18;  // frames running toward boss
+    const ADV_ANIM_SWING  = 12;  // frames for sword swing
+    const ADV_ANIM_IMPACT = 8;   // frames for hit pause
+    const ADV_ANIM_RETURN = 16;  // frames running back
+    const ADV_ANIM_TOTAL  = ADV_ANIM_CHARGE + ADV_ANIM_SWING + ADV_ANIM_IMPACT + ADV_ANIM_RETURN;
+
+    const ADV_BOSS_ANIM_WINDUP = 15;
+    const ADV_BOSS_ANIM_STRIKE = 10;
+    const ADV_BOSS_ANIM_IMPACT = 10;
+    const ADV_BOSS_ANIM_RETURN = 15;
+    const ADV_BOSS_ANIM_TOTAL  = ADV_BOSS_ANIM_WINDUP + ADV_BOSS_ANIM_STRIKE + ADV_BOSS_ANIM_IMPACT + ADV_BOSS_ANIM_RETURN;
+
+    function advGetHeroAnimPhase(animFrame) {
+      const f = ADV_ANIM_TOTAL - animFrame; // convert countdown to count-up
+      if (f < ADV_ANIM_CHARGE) return { phase: "charge", t: f / ADV_ANIM_CHARGE };
+      if (f < ADV_ANIM_CHARGE + ADV_ANIM_SWING) return { phase: "swing", t: (f - ADV_ANIM_CHARGE) / ADV_ANIM_SWING };
+      if (f < ADV_ANIM_CHARGE + ADV_ANIM_SWING + ADV_ANIM_IMPACT) return { phase: "impact", t: (f - ADV_ANIM_CHARGE - ADV_ANIM_SWING) / ADV_ANIM_IMPACT };
+      return { phase: "return", t: (f - ADV_ANIM_CHARGE - ADV_ANIM_SWING - ADV_ANIM_IMPACT) / ADV_ANIM_RETURN };
+    }
+
+    function advGetBossAnimPhase(animFrame) {
+      const f = ADV_BOSS_ANIM_TOTAL - animFrame;
+      if (f < ADV_BOSS_ANIM_WINDUP) return { phase: "windup", t: f / ADV_BOSS_ANIM_WINDUP };
+      if (f < ADV_BOSS_ANIM_WINDUP + ADV_BOSS_ANIM_STRIKE) return { phase: "strike", t: (f - ADV_BOSS_ANIM_WINDUP) / ADV_BOSS_ANIM_STRIKE };
+      if (f < ADV_BOSS_ANIM_WINDUP + ADV_BOSS_ANIM_STRIKE + ADV_BOSS_ANIM_IMPACT) return { phase: "impact", t: (f - ADV_BOSS_ANIM_WINDUP - ADV_BOSS_ANIM_STRIKE) / ADV_BOSS_ANIM_IMPACT };
+      return { phase: "return", t: (f - ADV_BOSS_ANIM_WINDUP - ADV_BOSS_ANIM_STRIKE - ADV_BOSS_ANIM_IMPACT) / ADV_BOSS_ANIM_RETURN };
+    }
+
+    // ── UPDATE LOOP ─────────────────────────────────────────────────
     function updateAdventure() {
       if (arena.mode !== "adventure" || !arena.adventure.active) return;
       const adv = arena.adventure;
       const now = Date.now();
 
-      // Tick damage numbers
       adv.damageNumbers = adv.damageNumbers.filter(d => now - d.startedAt < 1500);
-
-      // Tick particles
       adv.particles = adv.particles.filter(p => now - p.startedAt < p.duration);
 
       if (adv.phase === "vocab") {
-        // Check timer
         const elapsed = now - adv.turnTimerStart;
         adv.turnTimer = Math.max(0, adv.turnDuration - elapsed);
         if (adv.turnTimer <= 0) {
-          // Time's up — mark unanswered heroes as failed
           for (let i = 0; i < adv.heroes.length; i++) {
             if (!adv.answerResults.find(r => r.heroIndex === i)) {
               adv.answerResults.push({ heroIndex: i, correct: false });
@@ -4406,13 +4786,14 @@
           advStartActionSelect();
         }
       } else if (adv.phase === "playerTurn") {
-        // Animate player attacks sequentially
         if (adv.playerAttackAnim > 0) {
           adv.playerAttackAnim--;
-          if (adv.playerAttackAnim === 15) {
-            // Apply damage at mid-animation
+          const ap = advGetHeroAnimPhase(adv.playerAttackAnim);
+          // Apply damage at the moment of impact
+          if (ap.phase === "impact" && ap.t < 0.15) {
             const hero = adv.heroes[adv.playerAttackHero];
-            if (hero && hero.actionChoice) {
+            if (hero && hero.actionChoice && !hero._actionApplied) {
+              hero._actionApplied = true;
               advApplyHeroAction(adv.playerAttackHero, hero.actionChoice);
             }
           }
@@ -4422,27 +4803,28 @@
           for (let i = adv.playerAttackHero + 1; i < adv.heroes.length; i++) {
             if (adv.heroes[i].actionChoice && adv.heroes[i].hp > 0) {
               adv.playerAttackHero = i;
-              adv.playerAttackAnim = 30;
+              adv.playerAttackAnim = ADV_ANIM_TOTAL;
+              adv.heroes[i]._actionApplied = false;
               found = true;
               break;
             }
           }
           if (!found) {
-            // All player actions done — boss turn
             adv.phase = "enemyTurn";
-            adv.bossAttackAnim = 45;
+            adv.bossAttackAnim = ADV_BOSS_ANIM_TOTAL;
             adv.bossAttackTarget = advPickBossTarget();
+            adv._bossActionApplied = false;
           }
         }
       } else if (adv.phase === "enemyTurn") {
         if (adv.bossAttackAnim > 0) {
           adv.bossAttackAnim--;
-          if (adv.bossAttackAnim === 20) {
-            // Boss deals damage
+          const bp = advGetBossAnimPhase(adv.bossAttackAnim);
+          if (bp.phase === "impact" && bp.t < 0.15 && !adv._bossActionApplied) {
+            adv._bossActionApplied = true;
             advApplyBossAttack();
           }
         } else {
-          // Check win/loss
           if (adv.boss.hp <= 0) {
             adv.phase = "victory";
             adv.flashEffect = { color: "#fde68a", startedAt: now, duration: 2000 };
@@ -4450,7 +4832,6 @@
             adv.phase = "defeat";
             adv.flashEffect = { color: "#ef4444", startedAt: now, duration: 2000 };
           } else {
-            // Next round
             advStartVocabPhase();
           }
         }
@@ -4466,8 +4847,7 @@
       adv.answerText = "";
       adv.answerResults = [];
       adv.actionMenuHero = -1;
-      for (const h of adv.heroes) h.actionChoice = null;
-      // Pick next word
+      for (const h of adv.heroes) { h.actionChoice = null; h.defending = false; }
       if (adv.wordQueue.length === 0 && adv.wrongQueue.length > 0) {
         adv.wordQueue = [...adv.wrongQueue].sort(() => Math.random() - 0.5);
         adv.wrongQueue = [];
@@ -4481,7 +4861,6 @@
       const adv = arena.adventure;
       adv.phase = "actionSelect";
       adv.actionMenuHero = -1;
-      // Auto-advance: find first hero who answered correctly and needs to pick action
       advNextActionHero();
     }
 
@@ -4494,7 +4873,6 @@
           return;
         }
       }
-      // No more heroes to pick — start player turn animations
       adv.phase = "playerTurn";
       adv.playerAttackHero = -1;
       adv.playerAttackAnim = 0;
@@ -4505,20 +4883,36 @@
       const hero = adv.heroes[heroIdx];
       if (!hero || hero.hp <= 0) return;
       const now = Date.now();
+      const bossCenter = ADV_BOSS_X + 100;
 
       if (action === "attack") {
         const dmg = 15 + Math.floor(Math.random() * 10);
         adv.boss.hp = Math.max(0, adv.boss.hp - dmg);
-        adv.damageNumbers.push({ x: ADV_BOSS_X + 60, y: 100 + Math.random() * 40, text: `-${dmg}`, color: "#fff", startedAt: now });
-        adv.particles.push({ x: ADV_BOSS_X + 80, y: 160, color: "#fde68a", startedAt: now, duration: 400 });
+        adv.damageNumbers.push({ x: bossCenter, y: 100 + Math.random() * 60, text: `-${dmg}`, color: "#fff", startedAt: now });
+        // Slash particles
+        for (let i = 0; i < 8; i++) {
+          adv.particles.push({
+            x: bossCenter + (Math.random() - 0.5) * 60,
+            y: 140 + (Math.random() - 0.5) * 40,
+            color: i % 2 ? "#fde68a" : "#fff",
+            startedAt: now, duration: 350 + Math.random() * 200,
+          });
+        }
       } else if (action === "heal") {
         const heal = 20 + Math.floor(Math.random() * 10);
-        // Heal the hero with lowest HP
         let target = adv.heroes.filter(h => h.hp > 0).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
         if (target) {
           target.hp = Math.min(target.maxHp, target.hp + heal);
           const tIdx = adv.heroes.indexOf(target);
-          adv.damageNumbers.push({ x: ADV_HERO_X + 60, y: 100 + tIdx * 80, text: `+${heal}`, color: "#22c55e", startedAt: now });
+          const heroY = advGetHeroY(tIdx, adv.heroes.length);
+          adv.damageNumbers.push({ x: ADV_HERO_HOME_X + 40, y: heroY, text: `+${heal}`, color: "#22c55e", startedAt: now });
+          for (let i = 0; i < 6; i++) {
+            adv.particles.push({
+              x: ADV_HERO_HOME_X + 30 + Math.random() * 40,
+              y: heroY + 20 + Math.random() * 40,
+              color: "#40ff80", startedAt: now + i * 60, duration: 600,
+            });
+          }
         }
       } else if (action === "defend") {
         hero.defending = true;
@@ -4527,8 +4921,16 @@
           hero.specialCharge = 0;
           const dmg = 40 + Math.floor(Math.random() * 20);
           adv.boss.hp = Math.max(0, adv.boss.hp - dmg);
-          adv.damageNumbers.push({ x: ADV_BOSS_X + 60, y: 80, text: `-${dmg}!`, color: "#fbbf24", startedAt: now });
-          adv.flashEffect = { color: "#fbbf24", startedAt: now, duration: 300 };
+          adv.damageNumbers.push({ x: bossCenter, y: 80, text: `-${dmg}!`, color: "#fbbf24", startedAt: now });
+          adv.flashEffect = { color: "#fbbf24", startedAt: now, duration: 400 };
+          for (let i = 0; i < 14; i++) {
+            adv.particles.push({
+              x: bossCenter + (Math.random() - 0.5) * 120,
+              y: 120 + (Math.random() - 0.5) * 80,
+              color: ["#fbbf24", "#f59e0b", "#fff", "#fde68a"][i % 4],
+              startedAt: now, duration: 500 + Math.random() * 300,
+            });
+          }
         }
       }
     }
@@ -4551,137 +4953,211 @@
         target.defending = false;
       }
       target.hp = Math.max(0, target.hp - dmg);
-      adv.damageNumbers.push({
-        x: ADV_HERO_X + 60,
-        y: 100 + adv.bossAttackTarget * 80,
-        text: `-${dmg}`,
-        color: "#ef4444",
-        startedAt: now,
-      });
-      adv.particles.push({ x: ADV_HERO_X + 60, y: 120 + adv.bossAttackTarget * 80, color: "#ef4444", startedAt: now, duration: 400 });
-      // Increment special charge for all alive heroes
+      const heroY = advGetHeroY(adv.bossAttackTarget, adv.heroes.length);
+      adv.damageNumbers.push({ x: ADV_HERO_HOME_X + 40, y: heroY, text: `-${dmg}`, color: "#ef4444", startedAt: now });
+      for (let i = 0; i < 6; i++) {
+        adv.particles.push({
+          x: ADV_HERO_HOME_X + 20 + Math.random() * 50,
+          y: heroY + 20 + Math.random() * 40,
+          color: "#ef4444", startedAt: now, duration: 400,
+        });
+      }
       for (const h of adv.heroes) {
         if (h.hp > 0) h.specialCharge = Math.min(3, (h.specialCharge || 0) + 1);
       }
     }
 
+    function advGetHeroY(idx, total) {
+      const spacing = 90;
+      const startY = ADV_GROUND_Y - 120;
+      return startY + idx * spacing - (total - 1) * spacing / 2;
+    }
+
+    // ── DRAW MAIN SCENE ─────────────────────────────────────────────
     function drawAdventureMode() {
       const adv = arena.adventure;
       const w = canvas.width, h = canvas.height;
 
-      // Dark RPG background
+      // Dark RPG background with gradient
       const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, "#0a0a1a");
-      grad.addColorStop(0.6, "#1a1a3e");
-      grad.addColorStop(1, "#0f1520");
+      grad.addColorStop(0, "#06060f");
+      grad.addColorStop(0.5, "#0e1428");
+      grad.addColorStop(1, "#0a1018");
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
-      // Ground
-      ctx.fillStyle = "#1a2a1a";
+      // Ground with texture
+      ctx.fillStyle = "#141e14";
       ctx.fillRect(0, ADV_GROUND_Y, w, h - ADV_GROUND_Y);
-      ctx.fillStyle = "#2a3a2a";
-      ctx.fillRect(0, ADV_GROUND_Y, w, 3);
+      ctx.fillStyle = "#1c2e1c";
+      ctx.fillRect(0, ADV_GROUND_Y, w, 2);
+      ctx.fillStyle = "#0e180e";
+      ctx.fillRect(0, ADV_GROUND_Y + 2, w, 1);
+      // Ground pixel texture
+      for (let gx = 0; gx < w; gx += 16) {
+        if ((gx * 7) % 48 < 16) {
+          ctx.fillStyle = "#182818";
+          ctx.fillRect(gx, ADV_GROUND_Y + 6 + (gx % 20), 8, 4);
+        }
+      }
 
-      // Draw heroes (left side)
-      const heroSpacing = 80;
-      const heroStartY = ADV_GROUND_Y - 128;
-      for (let i = 0; i < adv.heroes.length; i++) {
+      const heroCount = adv.heroes.length;
+
+      // ── Draw heroes ──
+      for (let i = 0; i < heroCount; i++) {
         const hero = adv.heroes[i];
-        const hx = ADV_HERO_X;
-        const hy = heroStartY - (adv.heroes.length - 1 - i) * heroSpacing + i * heroSpacing;
-        const isAttacking = adv.phase === "playerTurn" && adv.playerAttackHero === i && adv.playerAttackAnim > 0;
-        const attackOffsetX = isAttacking ? Math.sin(adv.playerAttackAnim * 0.3) * 40 : 0;
+        const homeX = ADV_HERO_HOME_X;
+        const homeY = advGetHeroY(i, heroCount);
+        let drawX = homeX;
+        let drawY = homeY;
+        let heroPose = "idle";
 
-        if (hero.hp > 0) {
-          drawAdventureHero(hx + attackOffsetX, hy, i, arena.phase * 50, hero.defending);
-        } else {
-          // Dead hero — draw fallen
-          ctx.save();
-          ctx.globalAlpha = 0.4;
-          ctx.translate(hx + 20, hy + 100);
-          ctx.rotate(Math.PI / 2);
-          ctx.translate(-(hx + 20), -(hy + 100));
-          drawAdventureHero(hx, hy, i, 0, false);
-          ctx.restore();
+        if (hero.hp <= 0) {
+          heroPose = "dead";
+        } else if (hero.defending) {
+          heroPose = "defend";
         }
 
-        // HP bar below hero
-        drawAdvHpBar(hx - 10, hy + 29 * ADV_PS, 140, 14, hero.hp, hero.maxHp, "#22c55e");
+        // Player turn animations
+        if (adv.phase === "playerTurn" && adv.playerAttackHero === i && adv.playerAttackAnim > 0 && hero.hp > 0) {
+          const ap = advGetHeroAnimPhase(adv.playerAttackAnim);
+          const action = hero.actionChoice;
+          if (action === "attack" || action === "special") {
+            if (ap.phase === "charge") {
+              // Ease-out run toward boss
+              const t = 1 - Math.pow(1 - ap.t, 2);
+              drawX = homeX + (ADV_ATTACK_TARGET_X - homeX) * t;
+              heroPose = "walk";
+            } else if (ap.phase === "swing") {
+              drawX = ADV_ATTACK_TARGET_X;
+              heroPose = "attack";
+            } else if (ap.phase === "impact") {
+              drawX = ADV_ATTACK_TARGET_X;
+              heroPose = "idle";
+            } else {
+              // Return: ease-in run back
+              const t = ap.t * ap.t;
+              drawX = ADV_ATTACK_TARGET_X + (homeX - ADV_ATTACK_TARGET_X) * t;
+              heroPose = "walk";
+            }
+          } else if (action === "heal") {
+            heroPose = "cast";
+          } else if (action === "defend") {
+            heroPose = "defend";
+          }
+        }
+
+        // Boss attack — hero recoils on impact
+        if (adv.phase === "enemyTurn" && adv.bossAttackTarget === i && adv.bossAttackAnim > 0 && hero.hp > 0) {
+          const bp = advGetBossAnimPhase(adv.bossAttackAnim);
+          if (bp.phase === "impact") {
+            heroPose = "hurt";
+          }
+        }
+
+        drawAdventureHero(drawX, drawY, i, arena.phase * 50, heroPose);
+
+        // HP bar
+        drawAdvHpBar(homeX - 10, homeY + 29 * ADV_PS, 140, 14, hero.hp, hero.maxHp, "#22c55e");
 
         // Name
         ctx.save();
         ctx.font = "bold 12px sans-serif";
-        ctx.fillStyle = hero.hp > 0 ? "#fff" : "#666";
+        ctx.fillStyle = hero.hp > 0 ? "#ddd" : "#555";
         ctx.textAlign = "center";
-        ctx.fillText(hero.name, hx + 50, hy + 29 * ADV_PS + 28);
+        ctx.fillText(hero.name, homeX + 40, homeY + 29 * ADV_PS + 28);
 
-        // Special charge indicator
+        // Special charge pips
         if (hero.hp > 0) {
           const charge = hero.specialCharge || 0;
           for (let c = 0; c < 3; c++) {
-            ctx.fillStyle = c < charge ? "#fbbf24" : "#333";
-            ctx.fillRect(hx + 20 + c * 16, hy + 29 * ADV_PS + 32, 12, 4);
+            ctx.fillStyle = c < charge ? "#fbbf24" : "#222";
+            ctx.fillRect(homeX + 10 + c * 18, homeY + 29 * ADV_PS + 33, 14, 5);
+            if (c < charge) {
+              ctx.fillStyle = "#ffe060";
+              ctx.fillRect(homeX + 10 + c * 18, homeY + 29 * ADV_PS + 33, 14, 2);
+            }
           }
         }
         ctx.restore();
 
-        // Highlight current action-select hero
+        // Selection highlight
         if (adv.phase === "actionSelect" && adv.actionMenuHero === i) {
           ctx.save();
           ctx.strokeStyle = "#fbbf24";
           ctx.lineWidth = 2;
-          ctx.setLineDash([4, 4]);
-          ctx.strokeRect(hx - 15, hy - 5, 160, 145);
+          const pulse = Math.sin(arena.phase * 3) * 0.3 + 0.7;
+          ctx.globalAlpha = pulse;
+          ctx.setLineDash([6, 4]);
+          ctx.strokeRect(homeX - 15, homeY - 5, 160, 150);
           ctx.setLineDash([]);
           ctx.restore();
         }
       }
 
-      // Draw boss (right side)
+      // ── Draw boss ──
       if (adv.boss) {
+        const bossHomeX = ADV_BOSS_X;
         const bossY = ADV_GROUND_Y - adv.boss.size;
-        const bossAttackOffset = adv.phase === "enemyTurn" && adv.bossAttackAnim > 20 ? -Math.sin((45 - adv.bossAttackAnim) * 0.2) * 60 : 0;
-        drawAdventureBoss(ADV_BOSS_X + bossAttackOffset, bossY, adv.boss.id, arena.phase * 50, adv.boss.hp / adv.boss.maxHp);
-        // Boss HP bar
-        drawAdvHpBar(ADV_BOSS_X - 20, ADV_GROUND_Y + 10, 300, 18, adv.boss.hp, adv.boss.maxHp, "#ef4444");
+        let bossDrawX = bossHomeX;
+
+        if (adv.phase === "enemyTurn" && adv.bossAttackAnim > 0) {
+          const bp = advGetBossAnimPhase(adv.bossAttackAnim);
+          const targetX = ADV_HERO_HOME_X + 80;
+          if (bp.phase === "windup") {
+            bossDrawX = bossHomeX + bp.t * 30; // pull back
+          } else if (bp.phase === "strike") {
+            const t = 1 - Math.pow(1 - bp.t, 3);
+            bossDrawX = bossHomeX + 30 - (bossHomeX + 30 - targetX) * t; // lunge forward
+          } else if (bp.phase === "impact") {
+            bossDrawX = targetX;
+          } else {
+            const t = bp.t * bp.t;
+            bossDrawX = targetX + (bossHomeX - targetX) * t; // return
+          }
+        }
+
+        drawAdventureBoss(bossDrawX, bossY, adv.boss.id, arena.phase * 50, adv.boss.hp / adv.boss.maxHp);
+        drawAdvHpBar(bossHomeX - 30, ADV_GROUND_Y + 10, 280, 18, adv.boss.hp, adv.boss.maxHp, "#ef4444");
       }
 
-      // Draw damage numbers
+      // ── Damage numbers ──
       for (const dn of adv.damageNumbers) {
         const age = Date.now() - dn.startedAt;
         const alpha = Math.max(0, 1 - age / 1500);
-        const floatY = dn.y - age * 0.04;
+        const floatY = dn.y - age * 0.05;
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.font = "bold 22px sans-serif";
-        ctx.fillStyle = dn.color;
+        ctx.font = "bold 24px sans-serif";
         ctx.textAlign = "center";
+        ctx.shadowColor = "#000";
+        ctx.shadowBlur = 3;
+        ctx.fillStyle = dn.color;
         ctx.fillText(dn.text, dn.x, floatY);
+        ctx.shadowBlur = 0;
         ctx.restore();
       }
 
-      // Draw particles
+      // ── Particles ──
       for (const p of adv.particles) {
         const age = Date.now() - p.startedAt;
+        if (age < 0) continue; // delayed particles
         const alpha = Math.max(0, 1 - age / p.duration);
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
-        const spread = age * 0.1;
-        for (let i = 0; i < 6; i++) {
-          const angle = (i / 6) * Math.PI * 2 + age * 0.01;
-          ctx.fillRect(p.x + Math.cos(angle) * spread, p.y + Math.sin(angle) * spread, 6, 6);
-        }
+        const spread = age * 0.12;
+        const angle = (p.x * 3 + p.y * 7) % (Math.PI * 2) + age * 0.008;
+        ctx.fillRect(p.x + Math.cos(angle) * spread, p.y + Math.sin(angle) * spread - age * 0.02, 5, 5);
         ctx.restore();
       }
 
-      // Flash effect
+      // ── Flash effect ──
       if (adv.flashEffect) {
         const age = Date.now() - adv.flashEffect.startedAt;
         if (age < adv.flashEffect.duration) {
           ctx.save();
-          ctx.globalAlpha = Math.max(0, 0.3 * (1 - age / adv.flashEffect.duration));
+          ctx.globalAlpha = Math.max(0, 0.35 * (1 - age / adv.flashEffect.duration));
           ctx.fillStyle = adv.flashEffect.color;
           ctx.fillRect(0, 0, w, h);
           ctx.restore();
@@ -4689,8 +5165,6 @@
       }
 
       // ── UI OVERLAYS ──
-
-      // Top center: Glosa / timer / round info
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -4706,22 +5180,22 @@
         ctx.strokeStyle = "#555";
         ctx.strokeRect(barX, barY, barW, barH);
 
-        // Timer text
         ctx.font = "bold 18px sans-serif";
         ctx.fillStyle = timerRatio > 0.3 ? "#fff" : "#ef4444";
         ctx.fillText(`⏱ ${(adv.turnTimer / 1000).toFixed(1)}s`, w / 2, 50);
 
-        // Glosa word
         if (adv.currentGlosa) {
           ctx.font = "bold 28px sans-serif";
           ctx.fillStyle = "#fde68a";
-          const questionText = adv.currentGlosa.sv;
-          ctx.fillText(questionText, w / 2, 85);
+          ctx.shadowColor = "#000";
+          ctx.shadowBlur = 4;
+          ctx.fillText(adv.currentGlosa.sv, w / 2, 85);
+          ctx.shadowBlur = 0;
         }
 
-        // Answer input display
-        ctx.fillStyle = "#0f172a";
+        // Answer input
         const inputW = 280, inputH = 36, inputX = w / 2 - inputW / 2, inputY = 105;
+        ctx.fillStyle = "#0a0f1e";
         ctx.fillRect(inputX, inputY, inputW, inputH);
         ctx.strokeStyle = "#3b82f6";
         ctx.lineWidth = 2;
@@ -4730,9 +5204,8 @@
         ctx.fillStyle = "#fff";
         ctx.fillText(adv.answerText + (Math.floor(Date.now() / 500) % 2 === 0 ? "│" : ""), w / 2, inputY + inputH / 2);
 
-        // Round number
         ctx.font = "12px sans-serif";
-        ctx.fillStyle = "#888";
+        ctx.fillStyle = "#666";
         ctx.fillText(`Runda ${adv.roundNumber}`, w / 2, 155);
 
       } else if (adv.phase === "actionSelect") {
@@ -4740,15 +5213,17 @@
         if (hero) {
           ctx.font = "bold 20px sans-serif";
           ctx.fillStyle = "#fde68a";
+          ctx.shadowColor = "#000";
+          ctx.shadowBlur = 3;
           ctx.fillText(`${hero.name} — Välj action:`, w / 2, 40);
+          ctx.shadowBlur = 0;
 
-          // Action buttons
           adv.actionBtnBounds = [];
           const actions = [
-            { id: "attack", label: "⚔️ Attack", color: "#dc2626" },
-            { id: "heal", label: "💚 Heal", color: "#16a34a" },
-            { id: "defend", label: "🛡️ Defend", color: "#2563eb" },
-            { id: "special", label: "⚡ Special", color: hero.specialCharge >= 3 ? "#eab308" : "#444", enabled: hero.specialCharge >= 3 },
+            { id: "attack", label: "⚔️ Attack", color: "#dc2626", key: "1" },
+            { id: "heal", label: "💚 Heal", color: "#16a34a", key: "2" },
+            { id: "defend", label: "🛡️ Defend", color: "#2563eb", key: "3" },
+            { id: "special", label: "⚡ Special", color: hero.specialCharge >= 3 ? "#eab308" : "#333", enabled: hero.specialCharge >= 3, key: "4" },
           ];
           const btnW = 140, btnH = 44, gap = 16;
           const totalW = actions.length * btnW + (actions.length - 1) * gap;
@@ -4758,43 +5233,48 @@
             const bx = startX + i * (btnW + gap);
             const by = 60;
             const act = actions[i];
-            // Button bg
-            ctx.fillStyle = act.enabled === false ? "#222" : act.color;
+            ctx.fillStyle = act.enabled === false ? "#1a1a1a" : act.color;
             ctx.fillRect(bx, by, btnW, btnH);
-            // Border
-            ctx.strokeStyle = "#fff";
+            ctx.strokeStyle = act.enabled === false ? "#333" : "#fff";
             ctx.lineWidth = 1;
             ctx.strokeRect(bx, by, btnW, btnH);
-            // Label
-            ctx.font = "bold 16px sans-serif";
-            ctx.fillStyle = act.enabled === false ? "#666" : "#fff";
-            ctx.fillText(act.label, bx + btnW / 2, by + btnH / 2);
-
+            ctx.font = "bold 15px sans-serif";
+            ctx.fillStyle = act.enabled === false ? "#555" : "#fff";
+            ctx.fillText(act.label, bx + btnW / 2, by + btnH / 2 - 4);
+            ctx.font = "10px sans-serif";
+            ctx.fillStyle = act.enabled === false ? "#444" : "#aaa";
+            ctx.fillText(`[${act.key}]`, bx + btnW / 2, by + btnH / 2 + 14);
             adv.actionBtnBounds.push({ x: bx, y: by, w: btnW, h: btnH, action: act.id, enabled: act.enabled !== false });
           }
         }
       } else if (adv.phase === "playerTurn") {
         ctx.font = "bold 22px sans-serif";
         ctx.fillStyle = "#22c55e";
+        ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
         ctx.fillText("⚔️ Spelarnas tur!", w / 2, 40);
+        ctx.shadowBlur = 0;
       } else if (adv.phase === "enemyTurn") {
         ctx.font = "bold 22px sans-serif";
         ctx.fillStyle = "#ef4444";
-        const boss = adv.boss;
-        ctx.fillText(`${boss ? boss.name : "Boss"} attackerar!`, w / 2, 40);
+        ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+        ctx.fillText(`${adv.boss ? adv.boss.name : "Boss"} attackerar!`, w / 2, 40);
+        ctx.shadowBlur = 0;
       } else if (adv.phase === "victory") {
         ctx.font = "bold 36px sans-serif";
         ctx.fillStyle = "#fde68a";
-        ctx.fillText("🎉 VICTORY!", w / 2, h / 2 - 20);
+        ctx.shadowColor = "#000"; ctx.shadowBlur = 6;
+        ctx.fillText("VICTORY!", w / 2, h / 2 - 20);
+        ctx.shadowBlur = 0;
         ctx.font = "18px sans-serif";
         ctx.fillStyle = "#fff";
         ctx.fillText("Bossen är besegrad!", w / 2, h / 2 + 20);
-        // Draw menu/play again buttons
         advDrawEndButtons(w, h);
       } else if (adv.phase === "defeat") {
         ctx.font = "bold 36px sans-serif";
         ctx.fillStyle = "#ef4444";
-        ctx.fillText("💀 DEFEAT", w / 2, h / 2 - 20);
+        ctx.shadowColor = "#000"; ctx.shadowBlur = 6;
+        ctx.fillText("DEFEAT", w / 2, h / 2 - 20);
+        ctx.shadowBlur = 0;
         ctx.font = "18px sans-serif";
         ctx.fillStyle = "#fff";
         ctx.fillText("Alla hjältar har fallit...", w / 2, h / 2 + 20);
@@ -4802,7 +5282,7 @@
       }
       ctx.restore();
 
-      // Menu button (top-left)
+      // Menu button
       ctx.save();
       const mbx = 10, mby = 10, mbw = 60, mbh = 28;
       ctx.fillStyle = "#1e293b";
@@ -4829,14 +5309,14 @@
       ctx.strokeRect(bx1, by, btnW, btnH);
       ctx.font = "bold 14px sans-serif";
       ctx.fillStyle = "#fff";
-      ctx.fillText("🔄 Igen", bx1 + btnW / 2, by + btnH / 2);
+      ctx.fillText("Igen", bx1 + btnW / 2, by + btnH / 2);
 
       ctx.fillStyle = "#1e293b";
       ctx.fillRect(bx2, by, btnW, btnH);
       ctx.strokeStyle = "#fff";
       ctx.strokeRect(bx2, by, btnW, btnH);
       ctx.fillStyle = "#fff";
-      ctx.fillText("📋 Meny", bx2 + btnW / 2, by + btnH / 2);
+      ctx.fillText("Meny", bx2 + btnW / 2, by + btnH / 2);
 
       adv.endBtnBounds = [
         { x: bx1, y: by, w: btnW, h: btnH, action: "adventurePlayAgain" },
