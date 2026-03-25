@@ -272,6 +272,7 @@
     { id: "t90", name: "T90 Tank", color: "#4b5d3e", imageUrl: "/images/bosses/t90.gif", difficulty: 4, difficultyLabel: "Svår" },
     { id: "shelly", name: "Shelly", color: "#8c6c4a", imageUrl: "/images/bosses/shelly.gif", difficulty: 5, difficultyLabel: "Mycket svår" },
     { id: "reaper", name: "Liemannen", color: "#262626", imageUrl: "/images/bosses/reaper.gif", difficulty: 6, difficultyLabel: "Extrem" },
+    { id: "epstein", name: "Epstein", color: "#1a1a2e", imageUrl: "/images/bosses/epstein.png", difficulty: 7, difficultyLabel: "???", lang: "spanish" },
   ];
 
   const botRoster = bossRoster.map((boss) => ({
@@ -470,6 +471,9 @@
       { id: "dino", name: "Chrome Dino", icon: "🦕", skulls: 5, accuracy: 0.85, spawnMs: 2500,
         theme: "dino", army: ["grunt", "knight", "archer", "knight", "grunt", "knight", "archer", "knight", "knight", "boss"],
         colors: { armor: "#3a3a3a", armorLight: "#5a5a5a", helmet: "#2a2a2a", helmetLight: "#4a4a4a", shield: "#1a1a1a", shieldLight: "#3a3a3a", boots: "#1a1a1a", crest: "#808080" } },
+      { id: "epstein", name: "Epstein", icon: "🏝️", skulls: 6, accuracy: 0.75, spawnMs: 2800, lang: "spanish",
+        theme: "zombie", army: ["grunt", "knight", "grunt", "archer", "knight", "grunt", "knight", "archer", "knight", "boss"],
+        colors: { armor: "#1a1a2e", armorLight: "#2a2a4e", helmet: "#0f0f1e", helmetLight: "#1f1f3e", shield: "#141428", shieldLight: "#24244e", boots: "#0a0a14", crest: "#4040a0" } },
     ];
 
     bossRoster.forEach((boss) => {
@@ -837,7 +841,9 @@
       ctx.fillStyle = "#506880"; ctx.font = "bold 9px monospace"; ctx.textAlign = "left";
       ctx.fillText("VÄLJ BOSS:", bossX, listY - 4);
 
-      SIEGE_BOSSES.forEach((boss, i) => {
+      const menuLang = normalizeLanguage(appState.selectedLanguage);
+      const visibleBosses = SIEGE_BOSSES.filter(b => !b.lang || b.lang === menuLang);
+      visibleBosses.forEach((boss, i) => {
         const by = listY + i * 34;
         const sel = boss.id === m.selectedBossId;
         ctx.fillStyle = sel ? "#3a1a40" : "rgba(20,15,25,0.6)";
@@ -10156,9 +10162,14 @@
     syncAnswerLanguageFromCurrentWeek();
   }
 
+  function visibleBossRoster() {
+    const lang = normalizeLanguage(appState.selectedLanguage);
+    return bossRoster.filter((b) => !b.lang || b.lang === lang);
+  }
+
   function buildBossOptions() {
     elements.bossSelect.innerHTML = "";
-    bossRoster.forEach((boss) => {
+    visibleBossRoster().forEach((boss) => {
       const option = document.createElement("option");
       option.value = boss.id;
       option.textContent = `${boss.name} (${boss.difficultyLabel})`;
@@ -10447,6 +10458,7 @@
         appState.selectedLanguage = normalizeLanguage(elements.appLanguageSelect.value || "english");
         saveSelectedLanguage();
         buildSelectOptions();
+        buildBossOptions();
         saveSelectedWeek();
         buildLeaderboardWeekOptions();
         renderCastleTree();
