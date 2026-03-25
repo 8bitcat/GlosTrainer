@@ -99,6 +99,7 @@ public sealed class VocabDatabaseInitializer
         }
 
         await EnsureRequiredWeekDataAsync(ct);
+        await SeedJapaneseWeeksAsync(ct);
     }
 
     private async Task EnsureLocalAuthSchemaAsync(CancellationToken ct)
@@ -340,6 +341,116 @@ END
             {
                 pref.LastSelectedWeekId = null;
             }
+        }
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task SeedJapaneseWeeksAsync(CancellationToken ct)
+    {
+        // Only seed once — check if any Japanese weeks exist
+        var hasJapanese = await _db.Weeks.AnyAsync(x => x.Language == "japanese", ct);
+        if (hasJapanese) return;
+
+        var weeks = new List<(string name, List<(string sv, string en)> words)>
+        {
+            ("Hiragana 1 - Vokaler (a i u e o)", new()
+            {
+                ("あ", "a"), ("い", "i"), ("う", "u"), ("え", "e"), ("お", "o"),
+            }),
+            ("Hiragana 2 - K-raden (ka ki ku ke ko)", new()
+            {
+                ("か", "ka"), ("き", "ki"), ("く", "ku"), ("け", "ke"), ("こ", "ko"),
+            }),
+            ("Hiragana 3 - S-raden (sa shi su se so)", new()
+            {
+                ("さ", "sa"), ("し", "shi"), ("す", "su"), ("せ", "se"), ("そ", "so"),
+            }),
+            ("Hiragana 4 - T-raden (ta chi tsu te to)", new()
+            {
+                ("た", "ta"), ("ち", "chi"), ("つ", "tsu"), ("て", "te"), ("と", "to"),
+            }),
+            ("Hiragana 5 - N-raden (na ni nu ne no)", new()
+            {
+                ("な", "na"), ("に", "ni"), ("ぬ", "nu"), ("ね", "ne"), ("の", "no"),
+            }),
+            ("Hiragana 6 - H-raden (ha hi fu he ho)", new()
+            {
+                ("は", "ha"), ("ひ", "hi"), ("ふ", "fu"), ("へ", "he"), ("ほ", "ho"),
+            }),
+            ("Hiragana 7 - M-raden (ma mi mu me mo)", new()
+            {
+                ("ま", "ma"), ("み", "mi"), ("む", "mu"), ("め", "me"), ("も", "mo"),
+            }),
+            ("Hiragana 8 - Y-raden + W-raden + N (ya yu yo wa wo n)", new()
+            {
+                ("や", "ya"), ("ゆ", "yu"), ("よ", "yo"),
+                ("わ", "wa"), ("を", "wo"), ("ん", "n"),
+            }),
+            ("Hiragana 9 - R-raden (ra ri ru re ro)", new()
+            {
+                ("ら", "ra"), ("り", "ri"), ("る", "ru"), ("れ", "re"), ("ろ", "ro"),
+            }),
+            ("Hiragana 10 - Alla hiragana", new()
+            {
+                ("あ", "a"), ("い", "i"), ("う", "u"), ("え", "e"), ("お", "o"),
+                ("か", "ka"), ("き", "ki"), ("く", "ku"), ("け", "ke"), ("こ", "ko"),
+                ("さ", "sa"), ("し", "shi"), ("す", "su"), ("せ", "se"), ("そ", "so"),
+                ("た", "ta"), ("ち", "chi"), ("つ", "tsu"), ("て", "te"), ("と", "to"),
+                ("な", "na"), ("に", "ni"), ("ぬ", "nu"), ("ね", "ne"), ("の", "no"),
+                ("は", "ha"), ("ひ", "hi"), ("ふ", "fu"), ("へ", "he"), ("ほ", "ho"),
+                ("ま", "ma"), ("み", "mi"), ("む", "mu"), ("め", "me"), ("も", "mo"),
+                ("や", "ya"), ("ゆ", "yu"), ("よ", "yo"),
+                ("ら", "ra"), ("り", "ri"), ("る", "ru"), ("れ", "re"), ("ろ", "ro"),
+                ("わ", "wa"), ("を", "wo"), ("ん", "n"),
+            }),
+            ("Japanska 11 - Hälsningar & vardagsfraser", new()
+            {
+                ("こんにちは", "konnichiwa"), ("ありがとう", "arigatou"),
+                ("さようなら", "sayounara"), ("おはよう", "ohayou"),
+                ("すみません", "sumimasen"), ("はい", "hai"),
+                ("いいえ", "iie"), ("おやすみ", "oyasumi"),
+                ("いただきます", "itadakimasu"), ("ごちそうさま", "gochisousama"),
+            }),
+            ("Japanska 12 - Siffror 1-10", new()
+            {
+                ("いち", "ichi"), ("に", "ni"), ("さん", "san"),
+                ("し", "shi"), ("ご", "go"), ("ろく", "roku"),
+                ("しち", "shichi"), ("はち", "hachi"), ("きゅう", "kyuu"), ("じゅう", "juu"),
+            }),
+            ("Japanska 13 - Familj & människor", new()
+            {
+                ("おかあさん", "okaasan"), ("おとうさん", "otousan"),
+                ("おにいさん", "oniisan"), ("おねえさん", "oneesan"),
+                ("ともだち", "tomodachi"), ("せんせい", "sensei"),
+                ("こども", "kodomo"), ("おとこ", "otoko"),
+                ("おんな", "onna"), ("ひと", "hito"),
+            }),
+            ("Japanska 14 - Mat & dryck", new()
+            {
+                ("みず", "mizu"), ("おちゃ", "ocha"), ("ごはん", "gohan"),
+                ("さかな", "sakana"), ("にく", "niku"), ("たまご", "tamago"),
+                ("くだもの", "kudamono"), ("やさい", "yasai"),
+                ("パン", "pan"), ("ぎゅうにゅう", "gyuunyuu"),
+            }),
+            ("Japanska 15 - Djur & natur", new()
+            {
+                ("ねこ", "neko"), ("いぬ", "inu"), ("さかな", "sakana"),
+                ("とり", "tori"), ("はな", "hana"), ("き", "ki"),
+                ("やま", "yama"), ("かわ", "kawa"),
+                ("うみ", "umi"), ("そら", "sora"),
+            }),
+        };
+
+        foreach (var (name, wordList) in weeks)
+        {
+            var week = new WeekRecord
+            {
+                WeekName = name,
+                Language = "japanese",
+                Words = wordList.Select(w => new WordRecord { Sv = w.sv, En = w.en }).ToList()
+            };
+            _db.Weeks.Add(week);
         }
 
         await _db.SaveChangesAsync(ct);

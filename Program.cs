@@ -1609,6 +1609,7 @@ static string NormalizeAppLanguage(string? value)
         "spanska" => "spanish",
         "tyska" => "german",
         "franska" => "french",
+        "japanska" => "japanese",
         "" => "english",
         _ => normalized
     };

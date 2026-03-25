@@ -6370,6 +6370,7 @@
       spanska: "spanish",
       tyska: "german",
       franska: "french",
+      japanska: "japanese",
     };
     return aliases[normalized] || normalized;
   }
@@ -6382,6 +6383,7 @@
       spanish: "Spanska",
       german: "Tyska",
       french: "Franska",
+      japanese: "Japanska",
     };
     return names[normalized] || normalized;
   }
@@ -6477,19 +6479,37 @@
       spanish: ["\u00e1", "\u00e9", "\u00ed", "\u00f3", "\u00fa", "\u00fc", "\u00f1", "\u00bf", "\u00a1"],
       french: ["\u00e0", "\u00e2", "\u00e7", "\u00e8", "\u00e9", "\u00ea", "\u00eb", "\u00ee", "\u00ef", "\u00f4", "\u00f9", "\u00fb", "\u00fc", "\u0153"],
       german: ["\u00e4", "\u00f6", "\u00fc", "\u00df"],
+      japanese: [
+        "\u3042","\u3044","\u3046","\u3048","\u304a", // a i u e o
+        "\u304b","\u304d","\u304f","\u3051","\u3053", // ka ki ku ke ko
+        "\u3055","\u3057","\u3059","\u305b","\u305d", // sa shi su se so
+        "\u305f","\u3061","\u3064","\u3066","\u3068", // ta chi tsu te to
+        "\u306a","\u306b","\u306c","\u306d","\u306e", // na ni nu ne no
+        "\u306f","\u3072","\u3075","\u3078","\u307b", // ha hi fu he ho
+        "\u307e","\u307f","\u3080","\u3081","\u3082", // ma mi mu me mo
+        "\u3084","\u3086","\u3088",                     // ya yu yo
+        "\u3089","\u308a","\u308b","\u308c","\u308d", // ra ri ru re ro
+        "\u308f","\u3092","\u3093",                     // wa wo n
+      ],
     };
-    const chars = charSets[lang];
+    // Japanese: only show hiragana picker when answer is hiragana (flipped direction)
+    let chars = charSets[lang];
+    if (lang === "japanese" && !appState.flippedDirection) chars = null;
     if (!chars) {
       elements.specialCharsRow.style.display = "none";
       return;
     }
     elements.specialCharsRow.style.display = "flex";
+    elements.specialCharsRow.style.flexWrap = "wrap";
     elements.specialCharsRow.innerHTML = "";
+    const isJapanese = lang === "japanese";
     chars.forEach((ch) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = ch;
-      btn.style.cssText = "min-width:32px;height:32px;padding:0 6px;font-size:1.05rem;font-weight:700;border:1px solid #b8d2e9;border-radius:8px;background:#f1f5f9;color:#1e293b;cursor:pointer;";
+      btn.style.cssText = isJapanese
+        ? "min-width:28px;height:30px;padding:0 3px;font-size:1.1rem;font-weight:700;border:1px solid #b8d2e9;border-radius:6px;background:#f1f5f9;color:#1e293b;cursor:pointer;"
+        : "min-width:32px;height:32px;padding:0 6px;font-size:1.05rem;font-weight:700;border:1px solid #b8d2e9;border-radius:8px;background:#f1f5f9;color:#1e293b;cursor:pointer;";
       btn.addEventListener("mousedown", (e) => { e.preventDefault(); });
       btn.addEventListener("click", () => {
         const inp = elements.answerInput;
@@ -8194,16 +8214,32 @@
       spanish: ["á","é","í","ó","ú","ü","ñ","¿","¡"],
       french: ["à","â","ç","è","é","ê","ë","î","ï","ô","ù","û","ü","œ"],
       german: ["ä","ö","ü","ß"],
+      japanese: [
+        "あ","い","う","え","お",
+        "か","き","く","け","こ",
+        "さ","し","す","せ","そ",
+        "た","ち","つ","て","と",
+        "な","に","ぬ","ね","の",
+        "は","ひ","ふ","へ","ほ",
+        "ま","み","む","め","も",
+        "や","ゆ","よ",
+        "ら","り","る","れ","ろ",
+        "わ","を","ん",
+      ],
     };
     const chars = charSets[lang];
     if (!chars) { elements.siegeSpecialCharsRow.style.display = "none"; return; }
     elements.siegeSpecialCharsRow.style.display = "flex";
+    elements.siegeSpecialCharsRow.style.flexWrap = "wrap";
     elements.siegeSpecialCharsRow.innerHTML = "";
+    const isJapanese = lang === "japanese";
     chars.forEach(ch => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = ch;
-      btn.style.cssText = "padding:2px 6px;font-size:13px;font-weight:700;font-family:monospace;background:rgba(15,23,42,0.8);color:#f0f0f0;border:1px solid #475569;border-radius:4px;cursor:pointer;";
+      btn.style.cssText = isJapanese
+        ? "padding:2px 4px;font-size:14px;font-weight:700;background:rgba(15,23,42,0.8);color:#f0f0f0;border:1px solid #475569;border-radius:4px;cursor:pointer;"
+        : "padding:2px 6px;font-size:13px;font-weight:700;font-family:monospace;background:rgba(15,23,42,0.8);color:#f0f0f0;border:1px solid #475569;border-radius:4px;cursor:pointer;";
       btn.addEventListener("click", () => {
         if (!elements.siegeAnswerInput) return;
         const inp = elements.siegeAnswerInput;
@@ -10590,6 +10626,7 @@
         appState.flippedDirection = !appState.flippedDirection;
         renderFlipButton();
         renderQuestionLabel();
+        renderSpecialChars();
         if (state.currentWord) {
           elements.questionWord.textContent = questionTextForWord(state.currentWord);
         }
