@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.8.1";
+  const GAME_VERSION = "1.9.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -480,6 +480,23 @@
       image.crossOrigin = "anonymous";
       image.src = boss.imageUrl;
       arena.images[boss.id] = image;
+    });
+
+    // Adventure mode FFRK boss sprites
+    const ADV_BOSS_SPRITES = {
+      oiia:     "/images/bosses/adventure/shadow.png",
+      keyboard: "/images/bosses/adventure/kadaj.png",
+      grumpy:   "/images/bosses/adventure/yazoo.png",
+      klara:    "/images/bosses/adventure/adel.png",
+      nyan:     "/images/bosses/adventure/sephiroth.png",
+      dino:     "/images/bosses/adventure/bahamut.png",
+    };
+    // Preload adventure boss images
+    Object.entries(ADV_BOSS_SPRITES).forEach(([id, url]) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = url;
+      arena.images["adv_" + id] = img;
     });
 
     function getApproachRatio() {
@@ -4582,7 +4599,10 @@
     function drawAdventureBoss(x, y, bossId, frame, hpRatio) {
       const boss = SIEGE_BOSSES.find(b => b.id === bossId) || SIEGE_BOSSES[0];
       const rosterBoss = bossRoster.find(b => b.id === bossId) || bossRoster[0];
-      const image = arena.images[bossId];
+      // Prefer adventure FFRK sprite, fall back to regular boss image
+      const advImage = arena.images["adv_" + bossId];
+      const advReady = advImage && advImage.complete && advImage.naturalWidth > 0;
+      const image = advReady ? advImage : arena.images[bossId];
       const imageReady = image && image.complete && image.naturalWidth > 0;
 
       const bob = Math.sin(frame * 0.03) * 4;
