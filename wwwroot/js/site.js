@@ -4820,7 +4820,7 @@
       const bossCenter = ADV_BOSS_X + 100;
 
       if (action === "attack") {
-        const dmg = 25 + Math.floor(Math.random() * 15);
+        const dmg = 15 + Math.floor(Math.random() * 10);
         adv.boss.hp = Math.max(0, adv.boss.hp - dmg);
         adv.damageNumbers.push({ x: bossCenter, y: 100 + Math.random() * 60, text: `-${dmg}`, color: "#fff", startedAt: now });
         // Slash particles
@@ -4853,7 +4853,7 @@
       } else if (action === "special") {
         if (hero.specialCharge >= 3) {
           hero.specialCharge = 0;
-          const dmg = 55 + Math.floor(Math.random() * 25);
+          const dmg = 45 + Math.floor(Math.random() * 20);
           adv.boss.hp = Math.max(0, adv.boss.hp - dmg);
           adv.damageNumbers.push({ x: bossCenter, y: 80, text: `-${dmg}!`, color: "#fbbf24", startedAt: now });
           adv.flashEffect = { color: "#fbbf24", startedAt: now, duration: 400 };
