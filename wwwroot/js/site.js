@@ -1750,6 +1750,64 @@
       if (hpRatio > 0) siegePx(gx, gy - 3, Math.max(1, Math.round(8 * hpRatio)), 1, hpRatio > 0.5 ? "#20c020" : hpRatio > 0.25 ? "#e0c020" : "#e02020");
     }
 
+    function drawDeathKnight(gx, gy, direction, walkFrame, attackFrame, hp, maxHp) {
+      const ps = SIEGE_PS;
+      const isAtk = attackFrame > 0;
+      const bob = Math.sin(walkFrame / 4) * ps * 0.5;
+      // Shadow (bigger)
+      siegePx(gx - 1, gy + 12, 10, 1, "rgba(0,0,0,0.35)");
+      // Legs — heavy stomping walk
+      const lp = Math.floor(walkFrame / 6) % 2;
+      siegePx(gx + 1 + lp, gy + 10, 2, 2, "#0a0a0a");       // left boot
+      siegePx(gx + 5 + (1-lp), gy + 10, 2, 2, "#0a0a0a");   // right boot
+      siegePx(gx + 1, gy + 8, 2, 2, "#1a1a2a");              // left leg
+      siegePx(gx + 5, gy + 8, 2, 2, "#1a1a2a");              // right leg
+      // Body — massive black armor
+      ctx.fillStyle = "#1a1a2a";
+      ctx.fillRect((gx) * ps, (gy + 2) * ps + bob, 8 * ps, 6 * ps);
+      ctx.fillStyle = "#2a2a3a";
+      ctx.fillRect((gx + 1) * ps, (gy + 2) * ps + bob, 6 * ps, 2 * ps); // highlight
+      ctx.fillStyle = "#0a0a15";
+      ctx.fillRect((gx) * ps, (gy + 7) * ps + bob, 8 * ps, ps);         // belt
+      // Pauldrons (shoulder armor)
+      siegePx(gx - 1, gy + 2, 2, 2, "#2a2a3a");
+      siegePx(gx + 7, gy + 2, 2, 2, "#2a2a3a");
+      // Helmet — dark with red visor
+      ctx.fillStyle = "#1a1a2a";
+      ctx.fillRect((gx + 1) * ps, (gy - 2) * ps + bob, 6 * ps, 4 * ps);
+      ctx.fillStyle = "#2a2a3a";
+      ctx.fillRect((gx + 2) * ps, (gy - 2) * ps + bob, 4 * ps, ps);     // top highlight
+      // Red glowing visor
+      ctx.fillStyle = "#c02020";
+      ctx.fillRect((gx + 2) * ps, (gy) * ps + bob, 4 * ps, ps);
+      // Horns
+      siegePx(gx, gy - 3, 1, 2, "#2a2a3a");
+      siegePx(gx + 7, gy - 3, 1, 2, "#2a2a3a");
+      // Two-handed broadsword
+      const swordBaseX = direction > 0 ? gx + 7 : gx - 4;
+      if (isAtk) {
+        // Sword swung forward
+        ctx.fillStyle = "#808898";
+        ctx.fillRect(swordBaseX * ps, (gy - 1) * ps + bob, (direction > 0 ? 4 : -4) * ps, ps);
+        ctx.fillRect(swordBaseX * ps, (gy) * ps + bob, (direction > 0 ? 4 : -4) * ps, ps);
+        ctx.fillStyle = "#c0c8d8";
+        ctx.fillRect((swordBaseX + direction * 3) * ps, (gy - 1) * ps + bob, ps, 2 * ps); // tip
+      } else {
+        // Sword resting (vertical)
+        ctx.fillStyle = "#808898";
+        ctx.fillRect((swordBaseX + direction) * ps, (gy - 4) * ps + bob, ps, 8 * ps);
+        ctx.fillStyle = "#c0c8d8";
+        ctx.fillRect((swordBaseX + direction) * ps, (gy - 4) * ps + bob, ps, 2 * ps);     // tip
+        // Guard
+        ctx.fillStyle = "#d4af37";
+        ctx.fillRect((swordBaseX) * ps, (gy + 3) * ps + bob, 3 * ps * (direction > 0 ? 1 : -1) || ps, ps);
+      }
+      // HP bar
+      const hpRatio = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx, gy - 5, 8, 1, "#1a1a1a");
+      if (hpRatio > 0) siegePx(gx, gy - 5, Math.max(1, Math.round(8 * hpRatio)), 1, hpRatio > 0.5 ? "#8020c0" : hpRatio > 0.25 ? "#e0c020" : "#e02020");
+    }
+
     let enemySpawnCount = 0;
     let playerSpawnCount = 0;
 
@@ -1988,11 +2046,10 @@
       if (hr > 0) siegePx(gx, gy - 1, Math.max(1, Math.round(16 * hr)), 1, hr > 0.5 ? "#20c020" : "#e02020");
     }
 
-    function spawnSiegeSoldier(team) {
+    function spawnSiegeSoldier(team, overrideType) {
       const s = arena.siege;
       const isEnemy = team !== "player";
       const count = isEnemy ? ++enemySpawnCount : ++playerSpawnCount;
-      // Unit type: every 10th = knight, every 7th = archer, every 5th = nyan
       let unitType = "soldier";
       let unitHp = SIEGE_SOLDIER_MAX_HP;
       if (isEnemy) {
@@ -2005,10 +2062,11 @@
         else if (unitType === "archer") unitHp = Math.floor(SIEGE_SOLDIER_MAX_HP * 0.6);
         else if (unitType === "ambulance") unitHp = SIEGE_SOLDIER_MAX_HP * 2;
         else if (unitType === "boss") unitHp = SIEGE_SOLDIER_MAX_HP * 5;
-      } else {
-        // Player army — humans only
-        if (count % 10 === 0) { unitType = "knight"; unitHp = SIEGE_SOLDIER_MAX_HP * 3; }
-        else if (count % 7 === 0) { unitType = "archer"; unitHp = Math.floor(SIEGE_SOLDIER_MAX_HP * 0.6); }
+      } else if (overrideType) {
+        unitType = overrideType;
+        if (unitType === "knight") unitHp = SIEGE_SOLDIER_MAX_HP * 3;
+        else if (unitType === "archer") unitHp = Math.floor(SIEGE_SOLDIER_MAX_HP * 1.5);
+        else if (unitType === "deathknight") unitHp = SIEGE_SOLDIER_MAX_HP * 6;
       }
       const soldier = {
         x: team === "player" ? SIEGE_SOLDIER_SPAWN_LEFT : SIEGE_SOLDIER_SPAWN_RIGHT,
@@ -2048,13 +2106,7 @@
       if (allUnits.some(u => u.unitType === "knight" && u.state === "walk") && s.frameCount % 15 === 0) siegeAudio.playSfx("gallop");
       // Dino roar handled in combat below (only on attack)
 
-      // Auto-spawn for solo play only
-      if (!s.isGroupFight) {
-        if (now - s.lastPlayerSpawnMs >= s.spawnIntervalMs && s.playerSoldiers.length < 25) {
-          spawnSiegeSoldier("player");
-          s.lastPlayerSpawnMs = now;
-        }
-      }
+      // Player soldiers only spawn on correct answers — no auto-spawn
       // Boss AI — answers glosas on timer (solo play)
       if (!s.isGroupFight && now - s.bossLastAnswerMs >= s.bossSpawnMs) {
         s.bossLastAnswerMs = now;
@@ -2558,6 +2610,8 @@
           ctx.strokeStyle = "#c0a060"; ctx.lineWidth = 1;
           ctx.beginPath(); ctx.moveTo(bx + 5 * Math.cos(-0.8), by + 5 * Math.sin(-0.8));
           ctx.lineTo(bx + 5 * Math.cos(0.8), by + 5 * Math.sin(0.8)); ctx.stroke();
+        } else if (sol.unitType === "deathknight") {
+          drawDeathKnight(sol.x, SIEGE_GROUND_Y - 14, sol.direction, sol.walkFrame, sol.attackFrame, sol.hp, sol.maxHp);
         } else if (sol.unitType === "knight") {
           drawPixelKnight(sol.x, SIEGE_GROUND_Y - 13, sol.direction, sol.walkFrame, sol.attackFrame, sol.colors, sol.hp, sol.maxHp);
         } else {
@@ -2928,17 +2982,14 @@
         arena.siege.charBtnBounds = [];
         if (siegeFullSet && !s.gameOver) {
           // For Japanese: pick answer chars + random distractors, then shuffle
-          // For others: show all (small set anyway)
           let siegeChars = siegeFullSet;
           if (siegeLang === "japanese" && state.currentWord) {
             const answer = siegeFlipped ? String(state.currentWord.sv || "") : String(state.currentWord.en || "");
             const answerChars = [...new Set([...answer])];
             const distractors = siegeFullSet.filter(c => !answerChars.includes(c));
-            // Pick enough distractors to fill ~12 buttons total
             const numDistractors = Math.max(4, 12 - answerChars.length);
             const shuffled = [...distractors].sort(() => Math.random() - 0.5);
             siegeChars = [...answerChars, ...shuffled.slice(0, numDistractors)];
-            // Use a seeded shuffle based on current word so it's stable per word
             if (!arena.siege._charShuffle || arena.siege._charShuffleWord !== answer) {
               arena.siege._charShuffleWord = answer;
               arena.siege._charShuffle = [...siegeChars].sort(() => Math.random() - 0.5);
@@ -2948,25 +2999,60 @@
           const btnW = siegeLang === "japanese" ? 28 : 26;
           const btnH = 24;
           const gap = 3;
-          const cols = Math.floor(boxW / (btnW + gap));
+          const arrowW = 24;
+          const innerW = boxW - arrowW * 2 - gap * 2;
+          const perPage = Math.floor(innerW / (btnW + gap));
+          const totalPages = Math.ceil(siegeChars.length / perPage);
+          if (!arena.siege._charPage) arena.siege._charPage = 0;
+          if (arena.siege._charPage >= totalPages) arena.siege._charPage = 0;
+          const page = arena.siege._charPage;
+          const pageChars = siegeChars.slice(page * perPage, (page + 1) * perPage);
           const startY = boxY + boxH + 4;
-          siegeChars.forEach((ch, i) => {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            const bx = boxX + col * (btnW + gap);
-            const by = startY + row * (btnH + gap);
+
+          // Left arrow
+          if (totalPages > 1) {
+            const ax = boxX, ay = startY;
+            ctx.fillStyle = page > 0 ? "rgba(30,50,80,0.9)" : "rgba(15,23,42,0.4)";
+            ctx.fillRect(ax, ay, arrowW, btnH);
+            ctx.strokeStyle = "#475569"; ctx.lineWidth = 1; ctx.strokeRect(ax, ay, arrowW, btnH);
+            ctx.fillStyle = page > 0 ? "#f0f0f0" : "#555";
+            ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.fillText("◀", ax + arrowW / 2, ay + btnH / 2);
+            arena.siege.charBtnBounds.push({ x: ax, y: ay, w: arrowW, h: btnH, action: "prevPage" });
+          }
+
+          // Char buttons
+          const charsX = boxX + arrowW + gap;
+          pageChars.forEach((ch, i) => {
+            const bx = charsX + i * (btnW + gap);
+            const by = startY;
             ctx.fillStyle = "rgba(15,23,42,0.85)";
             ctx.fillRect(bx, by, btnW, btnH);
-            ctx.strokeStyle = "#475569";
-            ctx.lineWidth = 1;
-            ctx.strokeRect(bx, by, btnW, btnH);
+            ctx.strokeStyle = "#475569"; ctx.lineWidth = 1; ctx.strokeRect(bx, by, btnW, btnH);
             ctx.fillStyle = "#f0f0f0";
             ctx.font = siegeLang === "japanese" ? "bold 15px sans-serif" : "bold 12px monospace";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
+            ctx.textAlign = "center"; ctx.textBaseline = "middle";
             ctx.fillText(ch, bx + btnW / 2, by + btnH / 2);
             arena.siege.charBtnBounds.push({ x: bx, y: by, w: btnW, h: btnH, ch });
           });
+
+          // Right arrow
+          if (totalPages > 1) {
+            const ax = boxX + boxW - arrowW, ay = startY;
+            ctx.fillStyle = page < totalPages - 1 ? "rgba(30,50,80,0.9)" : "rgba(15,23,42,0.4)";
+            ctx.fillRect(ax, ay, arrowW, btnH);
+            ctx.strokeStyle = "#475569"; ctx.lineWidth = 1; ctx.strokeRect(ax, ay, arrowW, btnH);
+            ctx.fillStyle = page < totalPages - 1 ? "#f0f0f0" : "#555";
+            ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.fillText("▶", ax + arrowW / 2, ay + btnH / 2);
+            arena.siege.charBtnBounds.push({ x: ax, y: ay, w: arrowW, h: btnH, action: "nextPage" });
+          }
+
+          // Page indicator
+          if (totalPages > 1) {
+            ctx.fillStyle = "#666"; ctx.font = "9px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+            ctx.fillText(`${page + 1}/${totalPages}`, boxX + boxW / 2, startY + btnH + 12);
+          }
           ctx.textBaseline = "alphabetic";
         }
 
@@ -5888,10 +5974,10 @@
         arena.siege.answeredWords++;
         if (correct) arena.siege.correctWords++;
       },
-      siegeSpawnPlayerSoldier() {
+      siegeSpawnPlayerSoldier(overrideType) {
         if (arena.mode !== "siege" || arena.siege.gameOver) return;
         if (arena.siege.playerSoldiers.length < 25) {
-          spawnSiegeSoldier("player");
+          spawnSiegeSoldier("player", overrideType);
         }
       },
       siegeSpawnEnemySoldier() {
@@ -5900,9 +5986,13 @@
           spawnSiegeSoldier("enemy");
         }
       },
+      siegeCharPageStep(dir) {
+        arena.siege._charPage = Math.max(0, (arena.siege._charPage || 0) + dir);
+      },
       setSiegeGlosa(text) {
         arena.siege.glosaText = text || null;
         arena.siege._charShuffle = null; // reset char button shuffle for new word
+        arena.siege._charPage = 0;
       },
       setSiegeFeedback(text, color, sub, durationMs) {
         const now = Date.now();
@@ -6199,6 +6289,8 @@
           if (arena.siege.charBtnBounds) {
             for (const btn of arena.siege.charBtnBounds) {
               if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+                if (btn.action === "prevPage") return { action: "siegeCharPage", dir: -1 };
+                if (btn.action === "nextPage") return { action: "siegeCharPage", dir: 1 };
                 return { action: "siegeCharInsert", ch: btn.ch };
               }
             }
@@ -7869,6 +7961,7 @@
   }
 
   let siegeFlipped = false; // false = show sv, answer en (DEFAULT). true = show en, answer sv.
+  let siegeCorrectCount = 0;
 
   function showSiegeGlosa() {
     const word = pickSiegeWord();
@@ -7888,6 +7981,7 @@
 
   function onSiegeCorrect() {
     state.streak += 1;
+    siegeCorrectCount = (siegeCorrectCount || 0) + 1;
     const xpGain = 18;
     const coinGain = 6;
     grantXp(xpGain);
@@ -7900,8 +7994,14 @@
     }
 
     if (bossFightEngine) {
-      bossFightEngine.siegeSpawnPlayerSoldier();
-      bossFightEngine.setSiegeFeedback("RÄTT", "#22c55e", `+${xpGain} XP  +${coinGain} coins`, 3000);
+      // Streak-based soldier type
+      let soldierType = "soldier";
+      let streakMsg = "";
+      if (state.streak >= 7) { soldierType = "deathknight"; streakMsg = " ⚔️ DEATH KNIGHT!"; }
+      else if (state.streak >= 5) { soldierType = "archer"; streakMsg = " 🏹 Archer!"; }
+      else if (state.streak >= 3) { soldierType = "knight"; streakMsg = " 🐴 Knight!"; }
+      bossFightEngine.siegeSpawnPlayerSoldier(soldierType);
+      bossFightEngine.setSiegeFeedback("RÄTT", "#22c55e", `+${xpGain} XP  +${coinGain} coins${streakMsg}`, 3000);
       // Broadcast to opponent in group fights
       if (bossFightEngine.getSiegeState().isGroupFight) {
         const team = getLocalGroupTeam() || "A";
@@ -7918,7 +8018,6 @@
     siegeWordAnswered(false);
     if (bossFightEngine) {
       bossFightEngine.siegeTrackAnswer(false);
-      bossFightEngine.siegeSpawnEnemySoldier();
       bossFightEngine.setSiegeFeedback("FEL", "#ef4444", `Rätt svar: ${expectedSiegeAnswer()}`, 3500);
       // Broadcast miss
       if (bossFightEngine.getSiegeState().isGroupFight) {
@@ -8143,6 +8242,8 @@
       if (bossFightEngine) bossFightEngine.adventureSelectAction(hit.actionId);
     } else if (hit.action === "adventurePlayAgain") {
       startAdventureGame();
+    } else if (hit.action === "siegeCharPage") {
+      if (bossFightEngine) bossFightEngine.siegeCharPageStep(hit.dir);
     } else if (hit.action === "siegeCharInsert") {
       if (bossFightEngine) bossFightEngine.siegeAnswerType(hit.ch);
     } else if (hit.action === "flipSiegeLanguage") {
@@ -8189,6 +8290,7 @@
   function startSiegeGame(countdownSec = 0, countdownEndMs = 0) {
     siegeFlipped = false; // Always start SV→EN
     siegeCompletedRounds = 0;
+    siegeCorrectCount = 0;
     // Try to get words, fall back to finding the week directly
     let words = currentWords();
     if (!words.length && appState.selectedWeekId) {
