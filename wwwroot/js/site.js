@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.8.0";
+  const GAME_VERSION = "1.8.1";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -4578,131 +4578,72 @@
       advPx(x + 9*s, y + 6*s, 1, 1, p.eye);
     }
 
-    // ── FF2 BOSS SPRITE ─────────────────────────────────────────────
+    // ── BOSS SPRITE (uses actual boss images from /images/bosses/) ──
     function drawAdventureBoss(x, y, bossId, frame, hpRatio) {
       const boss = SIEGE_BOSSES.find(b => b.id === bossId) || SIEGE_BOSSES[0];
-      const c = boss.colors;
-      const s = 5;
-      const bob = Math.sin(frame * 0.03) * 3;
-      const bY = y + bob;
-      const dmg = hpRatio < 0.3 && Math.sin(frame * 0.2) > 0.4;
+      const rosterBoss = bossRoster.find(b => b.id === bossId) || bossRoster[0];
+      const image = arena.images[bossId];
+      const imageReady = image && image.complete && image.naturalWidth > 0;
 
-      // Shadow
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      const bob = Math.sin(frame * 0.03) * 4;
+      const bY = y + bob;
+      const dmgFlash = hpRatio < 0.3 && Math.sin(frame * 0.2) > 0.4;
+
+      // Target draw size (256–300px tall, aspect-ratio preserved)
+      const targetH = 260;
+      let drawW = targetH;
+      let drawH = targetH;
+      if (imageReady) {
+        const aspect = image.naturalWidth / image.naturalHeight;
+        drawW = targetH * aspect;
+        drawH = targetH;
+        // Cap width so it doesn't overflow
+        if (drawW > 300) { drawW = 300; drawH = drawW / aspect; }
+      }
+      const centerX = x + 100; // center of boss area
+
+      // Shadow on ground
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
       ctx.beginPath();
-      ctx.ellipse(x + 20*s, y + 48*s, 18*s, 3*s, 0, 0, Math.PI * 2);
+      ctx.ellipse(centerX, y + drawH + 10, drawW * 0.45, 8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // ── Feet / legs ──
-      const lBob = Math.sin(frame * 0.05) * 2 * s;
-      ctx.fillStyle = dmg ? "#ff6666" : c.boots;
-      ctx.fillRect(x + 6*s,  bY + 40*s + lBob, 10*s, 7*s);   // left leg
-      ctx.fillRect(x + 24*s, bY + 40*s - lBob, 10*s, 7*s);   // right leg
-      // Feet
-      ctx.fillRect(x + 4*s,  bY + 45*s + lBob, 13*s, 3*s);
-      ctx.fillRect(x + 23*s, bY + 45*s - lBob, 13*s, 3*s);
-      // Knee guards
-      ctx.fillStyle = c.armorLight;
-      ctx.fillRect(x + 8*s,  bY + 40*s + lBob, 6*s, 3*s);
-      ctx.fillRect(x + 26*s, bY + 40*s - lBob, 6*s, 3*s);
-
-      // ── Body / torso ──
-      ctx.fillStyle = dmg ? "#ff8888" : c.armor;
-      ctx.fillRect(x + 4*s, bY + 18*s, 32*s, 22*s);
-      // Chest plate
-      ctx.fillStyle = c.armorLight;
-      ctx.fillRect(x + 4*s, bY + 18*s, 32*s, 5*s);
-      // Shoulder pauldrons
-      ctx.fillStyle = dmg ? "#ff8888" : c.armor;
-      ctx.fillRect(x, bY + 16*s, 8*s, 8*s);        // left pauldron
-      ctx.fillRect(x + 32*s, bY + 16*s, 8*s, 8*s); // right pauldron
-      ctx.fillStyle = c.armorLight;
-      ctx.fillRect(x + 1*s, bY + 16*s, 6*s, 3*s);
-      ctx.fillRect(x + 33*s, bY + 16*s, 6*s, 3*s);
-      // Pauldron spikes
-      ctx.fillStyle = c.crest;
-      ctx.fillRect(x - 1*s, bY + 14*s, 3*s, 4*s);
-      ctx.fillRect(x + 38*s, bY + 14*s, 3*s, 4*s);
-      // Belt / waist
-      ctx.fillStyle = c.crest;
-      ctx.fillRect(x + 4*s, bY + 36*s, 32*s, 3*s);
-      ctx.fillStyle = "#d4af37";
-      ctx.fillRect(x + 16*s, bY + 36*s, 8*s, 3*s); // buckle
-      // Armor detail — dark lines
-      ctx.fillStyle = c.armorLight;
-      ctx.fillRect(x + 14*s, bY + 23*s, 12*s, 2*s);
-      ctx.fillStyle = "#0002";
-      ctx.fillRect(x + 4*s, bY + 38*s, 32*s, 1*s);
-
-      // ── Arms ──
-      ctx.fillStyle = dmg ? "#ff8888" : c.armor;
-      ctx.fillRect(x - 2*s, bY + 24*s, 5*s, 14*s);   // left arm
-      ctx.fillRect(x + 37*s, bY + 24*s, 5*s, 14*s);  // right arm
-      // Gauntlets
-      ctx.fillStyle = c.armorLight;
-      ctx.fillRect(x - 2*s, bY + 24*s, 5*s, 3*s);
-      ctx.fillRect(x + 37*s, bY + 24*s, 5*s, 3*s);
-      // Hands
-      ctx.fillStyle = c.boots;
-      ctx.fillRect(x - 2*s, bY + 36*s, 4*s, 3*s);
-      ctx.fillRect(x + 38*s, bY + 36*s, 4*s, 3*s);
-
-      // ── Weapon: great axe (right hand) ──
-      ctx.fillStyle = "#706050";
-      ctx.fillRect(x + 40*s, bY + 10*s, 2*s, 30*s);   // handle
-      ctx.fillStyle = "#b0b8c0";
-      ctx.fillRect(x + 42*s, bY + 10*s, 8*s, 6*s);    // blade
-      ctx.fillRect(x + 42*s, bY + 16*s, 6*s, 4*s);
-      ctx.fillStyle = "#d0d8e0";
-      ctx.fillRect(x + 43*s, bY + 11*s, 6*s, 3*s);    // highlight
-      ctx.fillStyle = "#888";
-      ctx.fillRect(x + 42*s, bY + 19*s, 4*s, 1*s);    // blade shadow
-
-      // ── Shield (left hand) ──
-      ctx.fillStyle = c.shield;
-      ctx.fillRect(x - 6*s, bY + 22*s, 7*s, 14*s);
-      ctx.fillStyle = c.shieldLight;
-      ctx.fillRect(x - 5*s, bY + 22*s, 5*s, 4*s);
-      ctx.fillStyle = c.shieldLight;
-      ctx.fillRect(x - 4*s, bY + 28*s, 3*s, 4*s);    // emblem
-      ctx.fillStyle = "#d4af37";
-      ctx.fillRect(x - 3*s, bY + 29*s, 1*s, 2*s);    // gem
-
-      // ── Head / helmet ──
-      ctx.fillStyle = dmg ? "#ff8888" : c.helmet;
-      ctx.fillRect(x + 8*s, bY + 4*s, 24*s, 14*s);
-      ctx.fillStyle = c.helmetLight;
-      ctx.fillRect(x + 8*s, bY + 4*s, 24*s, 4*s);
-      // Visor slit
-      ctx.fillStyle = "#000";
-      ctx.fillRect(x + 10*s, bY + 10*s, 20*s, 3*s);
-      // Eyes glowing inside visor
-      ctx.fillStyle = "#ff2020";
-      ctx.fillRect(x + 13*s, bY + 10*s, 4*s, 2*s);
-      ctx.fillRect(x + 25*s, bY + 10*s, 4*s, 2*s);
-      ctx.fillStyle = "#ffcc00";
-      ctx.fillRect(x + 14*s, bY + 11*s, 2*s, 1*s);
-      ctx.fillRect(x + 26*s, bY + 11*s, 2*s, 1*s);
-
-      // Horns / crest
-      ctx.fillStyle = c.crest;
-      ctx.fillRect(x + 6*s,  bY, 4*s, 6*s);       // left horn
-      ctx.fillRect(x + 30*s, bY, 4*s, 6*s);       // right horn
-      ctx.fillRect(x + 5*s,  bY - 2*s, 3*s, 3*s); // left tip
-      ctx.fillRect(x + 31*s, bY - 2*s, 3*s, 3*s); // right tip
-      // Central crest
-      ctx.fillRect(x + 16*s, bY + 1*s, 8*s, 4*s);
-      ctx.fillStyle = c.armorLight;
-      ctx.fillRect(x + 17*s, bY + 2*s, 6*s, 2*s);
-
-      // Boss name
       ctx.save();
-      ctx.font = "bold 16px sans-serif";
+      // Damage flash — red tint overlay
+      if (dmgFlash) {
+        ctx.globalAlpha = 0.6;
+      }
+
+      if (imageReady) {
+        // Draw the actual boss image
+        ctx.imageSmoothingEnabled = false; // keep pixel art crisp
+        ctx.drawImage(image, centerX - drawW / 2, bY, drawW, drawH);
+      } else {
+        // Fallback: colored rectangle with boss icon
+        ctx.fillStyle = rosterBoss.color || "#444";
+        ctx.fillRect(centerX - drawW / 2, bY, drawW, drawH);
+        ctx.font = "80px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(boss.icon || "?", centerX, bY + drawH / 2);
+      }
+
+      // Damage red overlay
+      if (dmgFlash) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = "#ff0000";
+        ctx.fillRect(centerX - drawW / 2, bY, drawW, drawH);
+      }
+      ctx.restore();
+
+      // Boss name above
+      ctx.save();
+      ctx.font = "bold 18px sans-serif";
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
       ctx.shadowColor = "#000";
-      ctx.shadowBlur = 4;
-      ctx.fillText(boss.name, x + 20*s, bY - 6*s);
+      ctx.shadowBlur = 5;
+      ctx.fillText(rosterBoss.name || boss.name, centerX, bY - 12);
       ctx.shadowBlur = 0;
       ctx.restore();
     }
