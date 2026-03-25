@@ -347,16 +347,7 @@ END
 
     private async Task EnsureRequiredWeekDataAsync(CancellationToken ct)
     {
-        var spanishWeeks = await _db.Weeks
-            .Where(x => x.WeekName.ToLower().Contains("spanish"))
-            .ToListAsync(ct);
-        if (spanishWeeks.Count > 0)
-        {
-            _db.Weeks.RemoveRange(spanishWeeks);
-            await _db.SaveChangesAsync(ct);
-        }
-
-        const string week10Id = "week10-something-wrong";
+        // Fix weeks that have no language set
         var weeksWithoutLanguage = await _db.Weeks.Where(x => string.IsNullOrWhiteSpace(x.Language)).ToListAsync(ct);
         foreach (var weekRow in weeksWithoutLanguage)
         {
@@ -366,49 +357,5 @@ END
         {
             await _db.SaveChangesAsync(ct);
         }
-
-        var week10 = await _db.Weeks
-            .Include(x => x.Words)
-            .FirstOrDefaultAsync(x => x.Id == week10Id || x.WeekName.Contains("Vecka 10") || x.WeekName.Contains("Week 10"), ct);
-
-        if (week10 is null)
-        {
-            week10 = new WeekRecord
-            {
-                Id = week10Id,
-                WeekName = "Vecka 10 - Something's wrong",
-                Language = "english",
-            };
-            _db.Weeks.Add(week10);
-        }
-        else
-        {
-            week10.WeekName = "Vecka 10 - Something's wrong";
-            week10.Language = "english";
-            week10.Words.Clear();
-        }
-
-        var words = new List<WordRecord>
-        {
-            new() { Sv = "orolig", En = "worried" },
-            new() { Sv = "hals", En = "neck" },
-            new() { Sv = "Vad står på?", En = "What’s the matter?" },
-            new() { Sv = "mage", En = "stomach" },
-            new() { Sv = "ögon", En = "eyes" },
-            new() { Sv = "betala", En = "pay" },
-            new() { Sv = "försvinna", En = "disappear" },
-            new() { Sv = "ledtråd", En = "clue" },
-            new() { Sv = "springa till skogen", En = "run to the woods" },
-            new() { Sv = "Har du ont i huvudet?", En = "Does your head hurt?" },
-            new() { Sv = "Känner du dig sjuk?", En = "Do you feel sick?" },
-            new() { Sv = "Känner du dig ok?", En = "Are you all right?" },
-        };
-
-        foreach (var word in words)
-        {
-            week10.Words.Add(word);
-        }
-
-        await _db.SaveChangesAsync(ct);
     }
 }

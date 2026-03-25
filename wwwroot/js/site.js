@@ -8440,6 +8440,12 @@
     const available = Array.isArray(appState.availableLanguages) && appState.availableLanguages.length
       ? appState.availableLanguages.map((x) => normalizeLanguage(x))
       : ["english"];
+    // Sort English first, then alphabetical
+    available.sort((a, b) => {
+      if (a === "english") return -1;
+      if (b === "english") return 1;
+      return a.localeCompare(b);
+    });
     elements.appLanguageSelect.innerHTML = "";
     available.forEach((language) => {
       const option = document.createElement("option");
