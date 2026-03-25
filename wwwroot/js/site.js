@@ -4734,7 +4734,7 @@
       const bossCenter = ADV_BOSS_X + 100;
 
       if (action === "attack") {
-        const dmg = 15 + Math.floor(Math.random() * 10);
+        const dmg = 25 + Math.floor(Math.random() * 15);
         adv.boss.hp = Math.max(0, adv.boss.hp - dmg);
         adv.damageNumbers.push({ x: bossCenter, y: 100 + Math.random() * 60, text: `-${dmg}`, color: "#fff", startedAt: now });
         // Slash particles
@@ -4747,7 +4747,7 @@
           });
         }
       } else if (action === "heal") {
-        const heal = 20 + Math.floor(Math.random() * 10);
+        const heal = 30 + Math.floor(Math.random() * 15);
         let target = adv.heroes.filter(h => h.hp > 0).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
         if (target) {
           target.hp = Math.min(target.maxHp, target.hp + heal);
@@ -4767,7 +4767,7 @@
       } else if (action === "special") {
         if (hero.specialCharge >= 3) {
           hero.specialCharge = 0;
-          const dmg = 40 + Math.floor(Math.random() * 20);
+          const dmg = 55 + Math.floor(Math.random() * 25);
           adv.boss.hp = Math.max(0, adv.boss.hp - dmg);
           adv.damageNumbers.push({ x: bossCenter, y: 80, text: `-${dmg}!`, color: "#fbbf24", startedAt: now });
           adv.flashEffect = { color: "#fbbf24", startedAt: now, duration: 400 };
@@ -4795,7 +4795,7 @@
       const target = adv.heroes[adv.bossAttackTarget];
       if (!target || target.hp <= 0) return;
       const now = Date.now();
-      let dmg = 12 + Math.floor(Math.random() * 8) + adv.roundNumber * 2;
+      let dmg = 10 + Math.floor(Math.random() * 8) + Math.min(adv.roundNumber, 8);
       if (target.defending) {
         dmg = Math.floor(dmg / 2);
         target.defending = false;
