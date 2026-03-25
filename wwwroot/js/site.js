@@ -499,6 +499,19 @@
       arena.images["adv_" + id] = img;
     });
 
+    // Adventure hero sprites (Cloud FFRK)
+    const ADV_HERO_SPRITES = {
+      idle:  "/images/players/adventure/cloud-idle.png",
+      body:  "/images/players/adventure/cloud-body.png",
+      sword: "/images/players/adventure/cloud-sword.png",
+    };
+    Object.entries(ADV_HERO_SPRITES).forEach(([key, url]) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = url;
+      arena.images["hero_" + key] = img;
+    });
+
     function getApproachRatio() {
       const startX = 730;
       const targetX = 145;
@@ -4222,383 +4235,169 @@
       ctx.fillRect(x, y, w * ADV_PS, h * ADV_PS);
     }
 
-    // ── FF2 HERO SPRITE ─────────────────────────────────────────────
-    // 16×28 pixel grid, scaled by ADV_PS (=4) → 64×112 canvas pixels
-    // pose: "idle" | "walk" | "attack" | "defend" | "hurt" | "dead" | "cast"
-    const ADV_HERO_PALETTES = [
-      { hair: "#e8c030", hairD: "#b89820", skin: "#ffd5a0", skinD: "#d4a878", eye: "#204080",
-        armor: "#2050c0", armorL: "#3878e8", armorD: "#183890", belt: "#c0a030",
-        boots: "#604020", bootsL: "#785030", cape: "#1840a0", capeD: "#102870",
-        sword: "#d0d8e8", swordH: "#f0f4ff", swordD: "#a0a8b8", guard: "#d4af37", guardD: "#b08c20",
-        shield: "#6080c0", shieldL: "#80a0e0", shieldD: "#405890", shieldGem: "#e04040",
-        pants: "#3050a0", pantsL: "#4068c0" },
-      { hair: "#c03828", hairD: "#902818", skin: "#ffe0c0", skinD: "#d4b898", eye: "#206020",
-        armor: "#18802a", armorL: "#28b848", armorD: "#106018", belt: "#a08020",
-        boots: "#2a4018", bootsL: "#386028", cape: "#106028", capeD: "#083818",
-        sword: "#d0d8e8", swordH: "#f0f4ff", swordD: "#a0a8b8", guard: "#c09030", guardD: "#907020",
-        shield: "#408050", shieldL: "#60a070", shieldD: "#306040", shieldGem: "#40a0e0",
-        pants: "#1a5a2a", pantsL: "#28784a" },
-      { hair: "#7848c0", hairD: "#583098", skin: "#fdd5b1", skinD: "#d4a888", eye: "#c02020",
-        armor: "#b82020", armorL: "#e04848", armorD: "#881818", belt: "#c0c040",
-        boots: "#401010", bootsL: "#582020", cape: "#901818", capeD: "#601010",
-        sword: "#d0d8e8", swordH: "#f0f4ff", swordD: "#a0a8b8", guard: "#d0a020", guardD: "#a08018",
-        shield: "#a04040", shieldL: "#c06060", shieldD: "#803030", shieldGem: "#40e040",
-        pants: "#801818", pantsL: "#a03030" },
-      { hair: "#e88020", hairD: "#b86018", skin: "#fde0c8", skinD: "#d4b8a0", eye: "#4020a0",
-        armor: "#6030b0", armorL: "#8850d8", armorD: "#482088", belt: "#d0b040",
-        boots: "#301048", bootsL: "#482060", cape: "#502098", capeD: "#381068",
-        sword: "#d0d8e8", swordH: "#f0f4ff", swordD: "#a0a8b8", guard: "#c0a830", guardD: "#988020",
-        shield: "#7048a0", shieldL: "#9068c0", shieldD: "#503880", shieldGem: "#e0c040",
-        pants: "#482088", pantsL: "#6030a8" },
-    ];
+    // ── CLOUD FFRK SPRITE HERO ──────────────────────────────────────
+    // Uses pre-rendered Cloud sprite images instead of pixel art
+    // Sprite draw size: scaled to match ~64×112 canvas area (16×28 @ ADV_PS=4)
+    const ADV_HERO_W = 80;   // draw width on canvas
+    const ADV_HERO_H = 100;  // draw height on canvas
+
+    function _heroImgReady(key) {
+      const img = arena.images["hero_" + key];
+      return img && img.complete && img.naturalWidth > 0 ? img : null;
+    }
 
     function drawAdventureHero(x, y, heroIndex, frame, pose) {
-      const p = ADV_HERO_PALETTES[heroIndex % ADV_HERO_PALETTES.length];
       const s = ADV_PS;
-      const bob = pose === "idle" ? Math.sin(frame * 0.06) * 2 : 0;
-      const bY = y + bob; // base Y with idle bob
+      const cx = x + 8 * s;  // center X of old 16px sprite area
 
       // Shadow on ground
       ctx.fillStyle = "rgba(0,0,0,0.22)";
       ctx.beginPath();
-      ctx.ellipse(x + 8 * s, y + 28 * s, 7 * s, 1.5 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, y + 28 * s, 7 * s, 1.5 * s, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      // Sprite anchor: center-bottom aligned to ground (y + 28*s)
+      const groundY = y + 28 * s;
+      const drawW = ADV_HERO_W;
+      const drawH = ADV_HERO_H;
+      const drawX = cx - drawW / 2;
+      const drawBaseY = groundY - drawH;
+
       if (pose === "dead") {
+        const idleImg = _heroImgReady("idle");
+        if (!idleImg) return;
         ctx.save();
         ctx.globalAlpha = 0.35;
-        ctx.translate(x + 8 * s, y + 20 * s);
+        ctx.translate(cx, groundY - drawH / 2);
         ctx.rotate(Math.PI / 2);
-        ctx.translate(-(x + 8 * s), -(y + 20 * s));
-        drawHeroIdle(x, y, p, s, 0);
+        ctx.drawImage(idleImg, -drawW / 2, -drawH / 2, drawW, drawH);
         ctx.restore();
         return;
       }
-      if (pose === "defend") { drawHeroDefend(x, bY, p, s, frame); return; }
-      if (pose === "attack") { drawHeroAttack(x, bY, p, s, frame); return; }
-      if (pose === "cast")   { drawHeroCast(x, bY, p, s, frame); return; }
+
+      if (pose === "attack") {
+        _drawHeroAttackSprite(cx, groundY, drawW, drawH, frame);
+        return;
+      }
+
       if (pose === "hurt") {
-        // Hurt flash — jitter left/right
+        const idleImg = _heroImgReady("idle");
+        if (!idleImg) return;
         const jx = Math.sin(frame * 1.2) * 4;
         ctx.save();
         if (Math.floor(frame * 0.5) % 2) ctx.globalAlpha = 0.5;
-        drawHeroIdle(x + jx, bY, p, s, frame);
+        ctx.drawImage(idleImg, drawX + jx, drawBaseY, drawW, drawH);
         ctx.restore();
         return;
       }
-      if (pose === "walk") { drawHeroWalk(x, bY, p, s, frame); return; }
-      // Default: idle
-      drawHeroIdle(x, bY, p, s, frame);
+
+      if (pose === "defend") {
+        const idleImg = _heroImgReady("idle");
+        if (!idleImg) return;
+        const pulse = Math.sin(frame * 0.1) * 0.5;
+        // Crouched: draw slightly smaller + lower
+        ctx.save();
+        ctx.drawImage(idleImg, drawX + 2, drawBaseY + 10, drawW - 4, drawH - 10);
+        // Shield glow overlay
+        ctx.globalAlpha = 0.18 + pulse * 0.1;
+        ctx.fillStyle = "#80c0ff";
+        ctx.fillRect(drawX - 4, drawBaseY + 8, drawW + 8, drawH - 6);
+        ctx.restore();
+        return;
+      }
+
+      if (pose === "cast") {
+        const idleImg = _heroImgReady("idle");
+        if (!idleImg) return;
+        ctx.drawImage(idleImg, drawX, drawBaseY, drawW, drawH);
+        // Magic particles above hero
+        const glowPhase = frame * 0.15;
+        for (let i = 0; i < 6; i++) {
+          const angle = glowPhase + (i / 6) * Math.PI * 2;
+          const gx = cx + Math.cos(angle) * 20;
+          const gy = drawBaseY - 10 + Math.sin(angle) * 10;
+          ctx.save();
+          ctx.globalAlpha = 0.5 + Math.sin(glowPhase + i) * 0.3;
+          ctx.fillStyle = i % 2 ? "#80ff80" : "#40c040";
+          ctx.beginPath();
+          ctx.arc(gx, gy, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        return;
+      }
+
+      if (pose === "walk") {
+        const idleImg = _heroImgReady("idle");
+        if (!idleImg) return;
+        // Walk bob: up/down oscillation
+        const walkBob = Math.sin(frame * 0.25) * 3;
+        ctx.drawImage(idleImg, drawX, drawBaseY + walkBob, drawW, drawH);
+        return;
+      }
+
+      // Default: idle — gentle breathing bob
+      const idleImg = _heroImgReady("idle");
+      if (!idleImg) return;
+      const bob = Math.sin(frame * 0.06) * 2;
+      ctx.drawImage(idleImg, drawX, drawBaseY + bob, drawW, drawH);
     }
 
-    function drawHeroIdle(x, y, p, s, frame) {
-      // ── Cape (behind body) ──
-      advPx(x + 10*s, y + 9*s, 4, 15, p.cape);
-      advPx(x + 11*s, y + 10*s, 3, 14, p.capeD);
-      // Cape bottom wave
-      const cWave = Math.sin(frame * 0.04) * s;
-      advPx(x + 10*s, y + 24*s + cWave, 5, 2, p.cape);
+    function _drawHeroAttackSprite(cx, groundY, drawW, drawH, frame) {
+      const bodyImg = _heroImgReady("body");
+      const swordImg = _heroImgReady("sword");
+      const idleImg = _heroImgReady("idle");
 
-      // ── Boots ──
-      advPx(x + 3*s, y + 24*s, 4, 3, p.boots);   // left boot
-      advPx(x + 3*s, y + 24*s, 4, 1, p.bootsL);   // highlight
-      advPx(x + 2*s, y + 26*s, 5, 1, p.boots);     // sole left
-      advPx(x + 9*s, y + 24*s, 4, 3, p.boots);    // right boot
-      advPx(x + 9*s, y + 24*s, 4, 1, p.bootsL);
-      advPx(x + 9*s, y + 26*s, 5, 1, p.boots);
+      // If body/sword not loaded, fall back to idle
+      if (!bodyImg || !swordImg) {
+        if (idleImg) {
+          ctx.drawImage(idleImg, cx - drawW / 2, groundY - drawH, drawW, drawH);
+        }
+        return;
+      }
 
-      // ── Pants / legs ──
-      advPx(x + 4*s, y + 20*s, 3, 4, p.pants);
-      advPx(x + 4*s, y + 20*s, 1, 4, p.pantsL);
-      advPx(x + 9*s, y + 20*s, 3, 4, p.pants);
-      advPx(x + 9*s, y + 20*s, 1, 4, p.pantsL);
+      // Swing phases: wind-up → swing → follow-through
+      const swingPhase = Math.min(1, frame * 0.12);
 
-      // ── Body / armor ──
-      advPx(x + 3*s, y + 11*s, 10, 9, p.armor);
-      advPx(x + 3*s, y + 11*s, 10, 2, p.armorL);   // top highlight
-      advPx(x + 3*s, y + 18*s, 10, 1, p.armorD);   // bottom shadow
-      // Armor detail lines
-      advPx(x + 7*s, y + 13*s, 2, 5, p.armorL);    // center plate
-      advPx(x + 5*s, y + 14*s, 1, 3, p.armorD);    // shadow line
+      // Draw body (leaning forward slightly during attack)
+      const leanX = swingPhase < 0.5 ? swingPhase * 6 : 3;
+      ctx.drawImage(bodyImg, cx - drawW / 2 - leanX, groundY - drawH, drawW, drawH);
 
-      // ── Belt ──
-      advPx(x + 3*s, y + 19*s, 10, 1, p.belt);
+      // Sword: pivot from hero's right shoulder area
+      const pivotX = cx + drawW * 0.15;
+      const pivotY = groundY - drawH * 0.55;
 
-      // ── Left arm + shield ──
-      advPx(x + 1*s, y + 12*s, 2, 7, p.armor);
-      advPx(x + 1*s, y + 12*s, 2, 1, p.armorL);
-      // Shield
-      advPx(x - 1*s, y + 11*s, 3, 8, p.shield);
-      advPx(x - 1*s, y + 11*s, 3, 2, p.shieldL);
-      advPx(x, y + 13*s, 1, 4, p.shieldD);
-      advPx(x, y + 14*s, 1, 2, p.shieldGem);     // gem
+      // Sword angle: raised behind (-2.2 rad) → slashed forward (+1.0 rad)
+      const swordAngle = -2.2 + swingPhase * 3.2;
 
-      // ── Right arm ──
-      advPx(x + 13*s, y + 12*s, 2, 7, p.armor);
-      advPx(x + 13*s, y + 12*s, 2, 1, p.armorL);
-      // Hand
-      advPx(x + 13*s, y + 18*s, 2, 1, p.skin);
+      // Sword dimensions (scale relative to sprite)
+      const swordW = swordImg.naturalWidth * 1.8;
+      const swordH = swordImg.naturalHeight * 1.8;
 
-      // ── Sword (held at rest, pointing down) ──
-      advPx(x + 14*s, y + 14*s, 1, 1, p.guard);    // guard
-      advPx(x + 13*s, y + 14*s, 1, 1, p.guardD);
-      advPx(x + 14*s, y + 8*s,  1, 6, p.sword);    // blade
-      advPx(x + 14*s, y + 7*s,  1, 2, p.swordH);   // tip highlight
-      advPx(x + 14*s, y + 15*s, 1, 3, p.swordD);   // grip
-
-      // ── Head ──
-      advPx(x + 4*s, y + 4*s, 8, 7, p.skin);
-      advPx(x + 4*s, y + 9*s, 8, 1, p.skinD);      // chin shadow
-      advPx(x + 11*s, y + 5*s, 1, 5, p.skinD);     // side shadow
-
-      // ── Hair ──
-      advPx(x + 3*s, y + 2*s, 10, 3, p.hair);
-      advPx(x + 4*s, y + 1*s, 8, 2, p.hair);       // top
-      advPx(x + 3*s, y + 4*s, 2, 5, p.hair);       // left side
-      advPx(x + 11*s, y + 3*s, 2, 4, p.hairD);     // right side shadow
-      // Spikes
-      advPx(x + 4*s, y, 2, 2, p.hair);
-      advPx(x + 8*s, y - 1*s, 2, 2, p.hair);
-      advPx(x + 11*s, y + 1*s, 2, 2, p.hairD);
-
-      // ── Face ──
-      advPx(x + 6*s, y + 6*s, 1, 1, p.eye);        // left eye
-      advPx(x + 9*s, y + 6*s, 1, 1, p.eye);        // right eye
-      advPx(x + 6*s, y + 5*s, 1, 1, p.skinD);      // left brow
-      advPx(x + 9*s, y + 5*s, 1, 1, p.skinD);      // right brow
-      advPx(x + 7*s, y + 8*s, 2, 1, p.skinD);      // mouth
-    }
-
-    function drawHeroWalk(x, y, p, s, frame) {
-      // Walk = idle body but legs alternate
-      const step = Math.floor(frame * 0.3) % 4;
-      const lOff = [0, -1, 0, 1][step] * s;
-      const rOff = [0, 1, 0, -1][step] * s;
-
-      // Cape
-      advPx(x + 10*s, y + 9*s, 4, 15, p.cape);
-      advPx(x + 11*s, y + 10*s, 3, 14, p.capeD);
-      advPx(x + 9*s, y + 24*s, 6, 2, p.cape);
-
-      // Left leg
-      advPx(x + 4*s, y + 20*s + lOff, 3, 4, p.pants);
-      advPx(x + 3*s, y + 24*s + lOff, 4, 3, p.boots);
-      advPx(x + 2*s, y + 26*s + lOff, 5, 1, p.boots);
-      // Right leg
-      advPx(x + 9*s, y + 20*s + rOff, 3, 4, p.pants);
-      advPx(x + 9*s, y + 24*s + rOff, 4, 3, p.boots);
-      advPx(x + 9*s, y + 26*s + rOff, 5, 1, p.boots);
-
-      // Body
-      advPx(x + 3*s, y + 11*s, 10, 9, p.armor);
-      advPx(x + 3*s, y + 11*s, 10, 2, p.armorL);
-      advPx(x + 3*s, y + 18*s, 10, 1, p.armorD);
-      advPx(x + 7*s, y + 13*s, 2, 5, p.armorL);
-      advPx(x + 3*s, y + 19*s, 10, 1, p.belt);
-
-      // Arms bounce
-      advPx(x + 1*s, y + 12*s - lOff, 2, 7, p.armor);
-      advPx(x + 13*s, y + 12*s - rOff, 2, 7, p.armor);
-
-      // Sword
-      advPx(x + 14*s, y + 8*s - rOff, 1, 6, p.sword);
-      advPx(x + 14*s, y + 14*s - rOff, 1, 1, p.guard);
-
-      // Shield
-      advPx(x - 1*s, y + 11*s - lOff, 3, 8, p.shield);
-      advPx(x - 1*s, y + 11*s - lOff, 3, 2, p.shieldL);
-      advPx(x, y + 14*s - lOff, 1, 2, p.shieldGem);
-
-      // Head
-      advPx(x + 4*s, y + 4*s, 8, 7, p.skin);
-      advPx(x + 3*s, y + 2*s, 10, 3, p.hair);
-      advPx(x + 4*s, y + 1*s, 8, 2, p.hair);
-      advPx(x + 3*s, y + 4*s, 2, 5, p.hair);
-      advPx(x + 4*s, y, 2, 2, p.hair);
-      advPx(x + 8*s, y - 1*s, 2, 2, p.hair);
-      advPx(x + 6*s, y + 6*s, 1, 1, p.eye);
-      advPx(x + 9*s, y + 6*s, 1, 1, p.eye);
-    }
-
-    function drawHeroAttack(x, y, p, s, frame) {
-      // Attack pose: sword arm raised and swung, body leaning forward
-      const swingPhase = Math.min(1, frame * 0.12);   // 0→1 over the swing
-
-      // Cape billowing back
-      advPx(x + 12*s, y + 8*s, 5, 16, p.cape);
-      advPx(x + 14*s, y + 10*s, 4, 14, p.capeD);
-
-      // Legs — wide lunge stance
-      advPx(x + 2*s, y + 20*s, 3, 5, p.pants);
-      advPx(x + 1*s, y + 25*s, 4, 2, p.boots);
-      advPx(x, y + 26*s, 5, 1, p.boots);
-      advPx(x + 9*s, y + 21*s, 3, 4, p.pants);
-      advPx(x + 9*s, y + 25*s, 4, 2, p.boots);
-      advPx(x + 9*s, y + 26*s, 5, 1, p.boots);
-
-      // Body (leaning forward slightly)
-      advPx(x + 2*s, y + 11*s, 10, 9, p.armor);
-      advPx(x + 2*s, y + 11*s, 10, 2, p.armorL);
-      advPx(x + 2*s, y + 18*s, 10, 1, p.armorD);
-      advPx(x + 6*s, y + 13*s, 2, 5, p.armorL);
-      advPx(x + 2*s, y + 19*s, 10, 1, p.belt);
-
-      // Left arm + shield (held forward)
-      advPx(x, y + 12*s, 2, 7, p.armor);
-      advPx(x - 2*s, y + 10*s, 3, 9, p.shield);
-      advPx(x - 2*s, y + 10*s, 3, 2, p.shieldL);
-      advPx(x - 1*s, y + 13*s, 1, 2, p.shieldGem);
-
-      // Right arm — swing arc
-      const swordAngle = -1.2 + swingPhase * 2.8; // from raised to slashed down
-      const armBaseX = x + 11*s;
-      const armBaseY = y + 13*s;
-      advPx(armBaseX, armBaseY, 2, 5, p.armor);
-      advPx(armBaseX, armBaseY + 4*s, 2, 1, p.skin); // hand
-
-      // Sword — rotate around arm end
       ctx.save();
-      ctx.translate(armBaseX + s, armBaseY + 5*s);
+      ctx.translate(pivotX, pivotY);
       ctx.rotate(swordAngle);
-      // Blade
-      ctx.fillStyle = p.swordH;
-      ctx.fillRect(-s * 0.5, -10 * s, s, 2 * s);
-      ctx.fillStyle = p.sword;
-      ctx.fillRect(-s * 0.5, -8 * s, s, 6 * s);
-      ctx.fillStyle = p.swordD;
-      ctx.fillRect(s * 0.3, -8 * s, s * 0.5, 6 * s);
-      // Guard
-      ctx.fillStyle = p.guard;
-      ctx.fillRect(-1.5 * s, -1 * s, 3 * s, s);
+      // Draw sword with blade extending away from pivot
+      ctx.drawImage(swordImg, -swordW * 0.15, -swordH * 0.85, swordW, swordH);
       ctx.restore();
 
-      // Slash trail effect (at peak of swing)
-      if (swingPhase > 0.5 && swingPhase < 0.9) {
+      // Slash trail arc (at peak of swing)
+      if (swingPhase > 0.4 && swingPhase < 0.9) {
         ctx.save();
-        ctx.globalAlpha = 0.6 * (1 - (swingPhase - 0.5) / 0.4);
+        ctx.globalAlpha = 0.5 * (1 - (swingPhase - 0.4) / 0.5);
         ctx.strokeStyle = "#e0e8ff";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(armBaseX + s, armBaseY + 5*s, 10 * s, -2.0, -2.0 + swingPhase * 3, false);
+        ctx.arc(pivotX, pivotY, swordH * 0.8, -2.8, -2.8 + swingPhase * 3.5, false);
         ctx.stroke();
         ctx.restore();
       }
-
-      // Head
-      advPx(x + 3*s, y + 4*s, 8, 7, p.skin);
-      advPx(x + 3*s, y + 9*s, 8, 1, p.skinD);
-      // Hair
-      advPx(x + 2*s, y + 2*s, 10, 3, p.hair);
-      advPx(x + 3*s, y + 1*s, 8, 2, p.hair);
-      advPx(x + 2*s, y + 4*s, 2, 5, p.hair);
-      advPx(x + 3*s, y, 2, 2, p.hair);
-      advPx(x + 7*s, y - 1*s, 2, 2, p.hair);
-      // Face — determined expression
-      advPx(x + 5*s, y + 5*s, 2, 1, p.skinD);   // furrowed brow
-      advPx(x + 8*s, y + 5*s, 2, 1, p.skinD);
-      advPx(x + 5*s, y + 6*s, 1, 1, p.eye);
-      advPx(x + 9*s, y + 6*s, 1, 1, p.eye);
-      advPx(x + 6*s, y + 8*s, 3, 1, p.skinD);   // open mouth
-    }
-
-    function drawHeroDefend(x, y, p, s, frame) {
-      // Shield raised high, crouched behind it
-      const pulse = Math.sin(frame * 0.1) * 0.5;
-
-      // Cape
-      advPx(x + 10*s, y + 10*s, 4, 14, p.cape);
-
-      // Legs — crouched
-      advPx(x + 3*s, y + 22*s, 4, 3, p.pants);
-      advPx(x + 9*s, y + 22*s, 4, 3, p.pants);
-      advPx(x + 3*s, y + 25*s, 4, 2, p.boots);
-      advPx(x + 2*s, y + 26*s, 5, 1, p.boots);
-      advPx(x + 9*s, y + 25*s, 4, 2, p.boots);
-      advPx(x + 9*s, y + 26*s, 5, 1, p.boots);
-
-      // Body
-      advPx(x + 3*s, y + 13*s, 10, 9, p.armor);
-      advPx(x + 3*s, y + 13*s, 10, 2, p.armorL);
-      advPx(x + 3*s, y + 21*s, 10, 1, p.belt);
-
-      // BIG SHIELD in front
-      advPx(x - 2*s, y + 6*s, 6, 16, p.shield);
-      advPx(x - 2*s, y + 6*s, 6, 3, p.shieldL);
-      advPx(x - 1*s, y + 9*s, 4, 10, p.shieldD);
-      advPx(x, y + 12*s, 2, 3, p.shieldGem);
-      // Shield glow when recently defending
-      ctx.save();
-      ctx.globalAlpha = 0.15 + pulse * 0.1;
-      ctx.fillStyle = "#80c0ff";
-      ctx.fillRect((x - 2*s), (y + 6*s), 6 * s, 16 * s);
-      ctx.restore();
-
-      // Arms holding shield
-      advPx(x + 1*s, y + 12*s, 2, 6, p.armor);
-
-      // Sword behind shield
-      advPx(x + 13*s, y + 10*s, 1, 8, p.swordD);
-      advPx(x + 13*s, y + 10*s, 1, 1, p.guard);
-
-      // Head (peeking over shield)
-      advPx(x + 4*s, y + 6*s, 8, 7, p.skin);
-      advPx(x + 3*s, y + 4*s, 10, 3, p.hair);
-      advPx(x + 4*s, y + 3*s, 8, 2, p.hair);
-      advPx(x + 3*s, y + 6*s, 2, 4, p.hair);
-      advPx(x + 6*s, y + 8*s, 1, 1, p.eye);
-      advPx(x + 9*s, y + 8*s, 1, 1, p.eye);
-    }
-
-    function drawHeroCast(x, y, p, s, frame) {
-      // Casting pose — arms raised, magic particles
-      // Cape
-      advPx(x + 10*s, y + 9*s, 4, 15, p.cape);
-
-      // Legs
-      advPx(x + 4*s, y + 20*s, 3, 4, p.pants);
-      advPx(x + 9*s, y + 20*s, 3, 4, p.pants);
-      advPx(x + 3*s, y + 24*s, 4, 3, p.boots);
-      advPx(x + 2*s, y + 26*s, 5, 1, p.boots);
-      advPx(x + 9*s, y + 24*s, 4, 3, p.boots);
-      advPx(x + 9*s, y + 26*s, 5, 1, p.boots);
-
-      // Body
-      advPx(x + 3*s, y + 11*s, 10, 9, p.armor);
-      advPx(x + 3*s, y + 11*s, 10, 2, p.armorL);
-      advPx(x + 3*s, y + 19*s, 10, 1, p.belt);
-
-      // Arms RAISED
-      advPx(x + 1*s, y + 8*s, 2, 4, p.armor);
-      advPx(x + 1*s, y + 7*s, 2, 2, p.skin);
-      advPx(x + 13*s, y + 8*s, 2, 4, p.armor);
-      advPx(x + 13*s, y + 7*s, 2, 2, p.skin);
-
-      // Magic glow above hands
-      const glowPhase = frame * 0.15;
-      for (let i = 0; i < 5; i++) {
-        const angle = glowPhase + (i / 5) * Math.PI * 2;
-        const gx = x + 7*s + Math.cos(angle) * 4*s;
-        const gy = y + 2*s + Math.sin(angle) * 2*s;
-        ctx.save();
-        ctx.globalAlpha = 0.5 + Math.sin(glowPhase + i) * 0.3;
-        ctx.fillStyle = i % 2 ? "#80ff80" : "#40c040";
-        ctx.fillRect(gx, gy, s, s);
-        ctx.restore();
-      }
-
-      // Head
-      advPx(x + 4*s, y + 4*s, 8, 7, p.skin);
-      advPx(x + 3*s, y + 2*s, 10, 3, p.hair);
-      advPx(x + 4*s, y + 1*s, 8, 2, p.hair);
-      advPx(x + 3*s, y + 4*s, 2, 5, p.hair);
-      advPx(x + 6*s, y + 6*s, 1, 1, p.eye);
-      advPx(x + 9*s, y + 6*s, 1, 1, p.eye);
     }
 
     // ── BOSS SPRITE (uses actual boss images from /images/bosses/) ──
     function drawAdventureBoss(x, y, bossId, frame, hpRatio) {
       const boss = SIEGE_BOSSES.find(b => b.id === bossId) || SIEGE_BOSSES[0];
-      const rosterBoss = bossRoster.find(b => b.id === bossId) || bossRoster[0];
+      const rosterBoss = bossRoster.find(b => b.id === bossId);
       // Prefer adventure FFRK sprite, fall back to regular boss image
       const advImage = arena.images["adv_" + bossId];
       const advReady = advImage && advImage.complete && advImage.naturalWidth > 0;
@@ -4624,7 +4423,8 @@
           drawW = maxH * aspect;
         }
       }
-      const centerX = x + drawW / 2 + 20; // center boss in available space
+      // Center boss at x position (no extra offset)
+      const centerX = x + drawW / 2;
 
       // Shadow on ground
       ctx.fillStyle = "rgba(0,0,0,0.3)";
@@ -4639,12 +4439,16 @@
       }
 
       if (imageReady) {
-        // Draw the actual boss image
-        ctx.imageSmoothingEnabled = false; // keep pixel art crisp
-        ctx.drawImage(image, centerX - drawW / 2, bY, drawW, drawH);
+        // Draw boss image flipped horizontally (facing left toward heroes)
+        ctx.imageSmoothingEnabled = false;
+        ctx.save();
+        ctx.translate(centerX, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(image, -drawW / 2, bY, drawW, drawH);
+        ctx.restore();
       } else {
         // Fallback: colored rectangle with boss icon
-        ctx.fillStyle = rosterBoss.color || "#444";
+        ctx.fillStyle = (rosterBoss && rosterBoss.color) || "#444";
         ctx.fillRect(centerX - drawW / 2, bY, drawW, drawH);
         ctx.font = "80px sans-serif";
         ctx.textAlign = "center";
@@ -4660,14 +4464,14 @@
       }
       ctx.restore();
 
-      // Boss name above
+      // Boss name above — use SIEGE_BOSSES name (bossRoster doesn't have all bosses)
       ctx.save();
       ctx.font = "bold 18px sans-serif";
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
       ctx.shadowColor = "#000";
       ctx.shadowBlur = 5;
-      ctx.fillText(rosterBoss.name || boss.name, centerX, bY - 12);
+      ctx.fillText(boss.name, centerX, bY - 12);
       ctx.shadowBlur = 0;
       ctx.restore();
     }
