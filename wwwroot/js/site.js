@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.9.0";
+  const GAME_VERSION = "1.9.1";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -4211,9 +4211,9 @@
     // ─── ADVENTURE MODE (FF2-style turn-based RPG) ──────────────────
     const ADV_PS = 4; // pixel scale — each "pixel" = 4×4 canvas pixels
     const ADV_HERO_HOME_X = 120; // heroes' home X (left side)
-    const ADV_BOSS_X = 600; // boss home X (right side)
+    const ADV_BOSS_X = 540; // boss home X (right side)
     const ADV_GROUND_Y = 330; // ground line
-    const ADV_ATTACK_TARGET_X = 480; // where heroes run to when attacking
+    const ADV_ATTACK_TARGET_X = 420; // where heroes run to when attacking
 
     // Pixel helper (canvas coords, scaled by ADV_PS)
     function advPx(x, y, w, h, color) {
@@ -4609,18 +4609,22 @@
       const bY = y + bob;
       const dmgFlash = hpRatio < 0.3 && Math.sin(frame * 0.2) > 0.4;
 
-      // Target draw size (256–300px tall, aspect-ratio preserved)
-      const targetH = 260;
-      let drawW = targetH;
-      let drawH = targetH;
+      // Target draw size — fit within right side of canvas
+      const maxW = 240, maxH = 260;
+      let drawW = maxW;
+      let drawH = maxH;
       if (imageReady) {
         const aspect = image.naturalWidth / image.naturalHeight;
-        drawW = targetH * aspect;
-        drawH = targetH;
-        // Cap width so it doesn't overflow
-        if (drawW > 300) { drawW = 300; drawH = drawW / aspect; }
+        // Fit within maxW × maxH while preserving aspect ratio
+        if (aspect > maxW / maxH) {
+          drawW = maxW;
+          drawH = maxW / aspect;
+        } else {
+          drawH = maxH;
+          drawW = maxH * aspect;
+        }
       }
-      const centerX = x + 100; // center of boss area
+      const centerX = x + drawW / 2 + 20; // center boss in available space
 
       // Shadow on ground
       ctx.fillStyle = "rgba(0,0,0,0.3)";
@@ -5079,7 +5083,7 @@
         }
 
         drawAdventureBoss(bossDrawX, bossY, adv.boss.id, arena.phase * 50, adv.boss.hp / adv.boss.maxHp);
-        drawAdvHpBar(bossHomeX - 30, ADV_GROUND_Y + 10, 280, 18, adv.boss.hp, adv.boss.maxHp, "#ef4444");
+        drawAdvHpBar(bossHomeX, ADV_GROUND_Y + 10, 260, 18, adv.boss.hp, adv.boss.maxHp, "#ef4444");
       }
 
       // ── Damage numbers ──
