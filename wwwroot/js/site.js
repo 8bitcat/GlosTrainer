@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.9.1";
+  const GAME_VERSION = "1.9.2";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -226,6 +226,8 @@
     practiceAnswerLanguage: "english",
     challengeInboxSeenIds: [],
     challengeInboxRenderKey: "",
+    swedishMedia: {},
+    swedishMediaWeekId: "",
   };
 
   function ensureWordsProgressElements() {
@@ -364,6 +366,8 @@
         lastEnemySpawnMs: 0,
         spawnIntervalMs: 5000,
         glosaText: null,
+        imageDataUri: null,
+        _imgEl: null,
         glosaFeedback: null,
         enemyFeed: [],
         gameOver: false,
@@ -433,6 +437,7 @@
         nameEditing: false,
         nameBuffer: "",
         selectedBossId: "oiia",
+        bossScrollOffset: 0,
         pendingChallenges: [],
       },
     };
@@ -474,6 +479,9 @@
       { id: "epstein", name: "Epstein", icon: "🏝️", skulls: 6, accuracy: 0.75, spawnMs: 2800, lang: "spanish",
         theme: "zombie", army: ["grunt", "knight", "grunt", "archer", "knight", "grunt", "knight", "archer", "knight", "boss"],
         colors: { armor: "#1a1a2e", armorLight: "#2a2a4e", helmet: "#0f0f1e", helmetLight: "#1f1f3e", shield: "#141428", shieldLight: "#24244e", boots: "#0a0a14", crest: "#4040a0" } },
+      { id: "t800", name: "T-800", icon: "🤖", skulls: 7, accuracy: 0.80, spawnMs: 2200,
+        theme: "terminator", army: ["t600", "t600", "t1000", "t600", "hk_aerial", "t600", "t1000", "t600", "hk_aerial", "endoskeleton"],
+        colors: { armor: "#3a3a40", armorLight: "#5a5a60", helmet: "#2a2a30", helmetLight: "#4a4a50", shield: "#1a1a20", shieldLight: "#3a3a40", boots: "#1a1a1a", crest: "#c02020" } },
     ];
 
     bossRoster.forEach((boss) => {
@@ -787,7 +795,7 @@
         ctx.lineWidth = 1; ctx.strokeRect(tx, contentY, langTabW, langTabH);
         ctx.fillStyle = sel ? "#f0f0f0" : "#607080";
         ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-        const dn = lang === "english" ? "ENGELSKA" : lang === "spanish" ? "SPANSKA" : lang === "french" ? "FRANSKA" : lang === "german" ? "TYSKA" : lang.toUpperCase();
+        const dn = lang === "english" ? "ENGELSKA" : lang === "spanish" ? "SPANSKA" : lang === "french" ? "FRANSKA" : lang === "german" ? "TYSKA" : lang === "japanese" ? "JAPANSKA" : lang === "swedish" ? "SVENSKA" : lang.toUpperCase();
         ctx.fillText(dn, tx + langTabW / 2, contentY + 13);
         m.buttons.push({ type: "lang", lang, x: tx, y: contentY, w: langTabW, h: langTabH });
       });
@@ -843,7 +851,21 @@
 
       const menuLang = normalizeLanguage(appState.selectedLanguage);
       const visibleBosses = SIEGE_BOSSES.filter(b => !b.lang || b.lang === menuLang);
-      visibleBosses.forEach((boss, i) => {
+      const maxVisibleBosses = Math.floor((canvas.height - listY - 90) / 34);
+      const scrollOffset = m.bossScrollOffset || 0;
+      const canScrollUp = scrollOffset > 0;
+      const canScrollDown = scrollOffset + maxVisibleBosses < visibleBosses.length;
+
+      // Scroll up arrow
+      if (canScrollUp) {
+        const arrowY = listY - 2;
+        ctx.fillStyle = "#506880"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+        ctx.fillText("\u25B2", bossX + bossW / 2, arrowY);
+        m.buttons.push({ type: "bossScrollUp", x: bossX, y: arrowY - 14, w: bossW, h: 16 });
+      }
+
+      const displayBosses = visibleBosses.slice(scrollOffset, scrollOffset + maxVisibleBosses);
+      displayBosses.forEach((boss, i) => {
         const by = listY + i * 34;
         const sel = boss.id === m.selectedBossId;
         ctx.fillStyle = sel ? "#3a1a40" : "rgba(20,15,25,0.6)";
@@ -882,6 +904,40 @@
           px(5, -1, 1, 1, "#ff4060"); // Red cross vertical
           px(4, 0, 3, 1, "#ff4060"); // Red cross horizontal (on cap)
           px(5, -1, 1, 1, "#ff4060"); // Cross top
+        } else if (boss.id === "t800") {
+          // T-800 Endoskeleton skull — iconic chrome skull with red eyes
+          const ix = bossX + 6, iy = by + 4, ps = 2;
+          const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ix + x * ps, iy + y * ps, w * ps, h * ps); };
+          // Skull shape — chrome metal
+          px(2, 0, 7, 1, "#707078"); // top of skull
+          px(1, 1, 9, 1, "#606068"); // forehead
+          px(1, 2, 9, 3, "#505058"); // face area
+          px(2, 5, 7, 2, "#404048"); // jaw
+          px(3, 7, 5, 1, "#383840"); // chin
+          // Forehead highlight
+          px(3, 0, 5, 1, "#808088");
+          px(2, 1, 7, 1, "#707078");
+          // Eye sockets — deep black
+          px(2, 2, 2, 2, "#0a0a0a");
+          px(7, 2, 2, 2, "#0a0a0a");
+          // RED EYES — glowing!
+          px(2, 3, 2, 1, "#ff0000");
+          px(7, 3, 2, 1, "#ff0000");
+          // Eye glow effect
+          ctx.fillStyle = "rgba(255,0,0,0.3)";
+          ctx.beginPath(); ctx.arc(ix + 3 * ps, iy + 3 * ps, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(ix + 8 * ps, iy + 3 * ps, 4, 0, Math.PI * 2); ctx.fill();
+          // Nose hole
+          px(5, 4, 1, 1, "#1a1a1a");
+          // Teeth
+          px(3, 5, 1, 1, "#808088"); px(4, 5, 1, 1, "#909098");
+          px(5, 5, 1, 1, "#808088"); px(6, 5, 1, 1, "#909098");
+          px(7, 5, 1, 1, "#808088");
+          // Jaw line
+          px(3, 6, 5, 1, "#505058");
+          // Chrome shine spots
+          px(3, 1, 1, 1, "#a0a0a8");
+          px(8, 1, 1, 1, "#a0a0a8");
         } else {
           ctx.font = "20px sans-serif"; ctx.textAlign = "left";
           ctx.fillText(boss.icon, bossX + 6, by + 22);
@@ -895,6 +951,14 @@
         ctx.fillText("💀".repeat(boss.skulls || 1), bossX + 32, by + 26);
         m.buttons.push({ type: "selectBoss", bossId: boss.id, x: bossX, y: by, w: bossW, h: 30 });
       });
+
+      // Scroll down arrow
+      if (canScrollDown) {
+        const arrowY = listY + displayBosses.length * 34 + 4;
+        ctx.fillStyle = "#506880"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+        ctx.fillText("\u25BC", bossX + bossW / 2, arrowY);
+        m.buttons.push({ type: "bossScrollDown", x: bossX, y: arrowY - 12, w: bossW, h: 16 });
+      }
 
       // Player name
       const nameY = canvas.height - 54;
@@ -1375,6 +1439,8 @@
           if (btn.type === "lang") return { action: "changeLanguage", lang: btn.lang };
           if (btn.type === "scrollUp") { m.scrollOffset = Math.max(0, m.scrollOffset - 1); return null; }
           if (btn.type === "scrollDown") { m.scrollOffset += 1; return null; }
+          if (btn.type === "bossScrollUp") { m.bossScrollOffset = Math.max(0, (m.bossScrollOffset || 0) - 1); return null; }
+          if (btn.type === "bossScrollDown") { m.bossScrollOffset = (m.bossScrollOffset || 0) + 1; return null; }
           if (btn.type === "selectBoss") { m.selectedBossId = btn.bossId; return null; }
           if (btn.type === "changeName") return { action: "startNameEdit" };
           if (btn.type === "toggleMusic") { siegeAudio.toggleMusic(); return null; }
@@ -1611,6 +1677,376 @@
         siegePx(gx, gy - 2, fillW, 1, barColor);
       }
     }
+
+    // Gunner — military green soldier with big black assault rifle
+    function drawGunner(gx, gy, direction, walkFrame, attackFrame, hp, maxHp, sol) {
+      const d = direction;
+      const isAttacking = attackFrame > 0 && !sol.gunnerReloading;
+      const isReloading = sol.gunnerReloading;
+
+      // Shadow
+      siegePx(gx, gy + 12, 7, 1, "rgba(0,0,0,0.25)");
+
+      // Combat boots — dark, chunky
+      const legPhase = Math.floor(walkFrame / 6) % 4;
+      const bootColor = "#1a1a10";
+      if (isReloading) {
+        // Crouching stance while reloading
+        siegePx(gx + 1, gy + 10, 2, 2, bootColor);
+        siegePx(gx + 4, gy + 10, 2, 2, bootColor);
+      } else if (isAttacking) {
+        siegePx(gx + 1, gy + 10, 2, 2, bootColor);
+        siegePx(gx + 3, gy + 10, 2, 2, bootColor);
+      } else if (legPhase === 0) {
+        siegePx(gx, gy + 10, 2, 2, bootColor);
+        siegePx(gx + 4, gy + 10, 2, 2, bootColor);
+      } else if (legPhase === 1) {
+        siegePx(gx + 1, gy + 10, 2, 2, bootColor);
+        siegePx(gx + 3, gy + 10, 2, 2, bootColor);
+      } else if (legPhase === 2) {
+        siegePx(gx + 2, gy + 10, 2, 2, bootColor);
+        siegePx(gx + 5, gy + 10, 2, 2, bootColor);
+      } else {
+        siegePx(gx + 1, gy + 10, 2, 2, bootColor);
+        siegePx(gx + 4, gy + 10, 2, 2, bootColor);
+      }
+
+      // Pants — olive green camo
+      siegePx(gx + 1, gy + 8, 4, 2, "#3a4a20");
+      siegePx(gx + 2, gy + 8, 1, 1, "#4a5a28"); // camo spot
+
+      // Body — military green vest with pockets
+      siegePx(gx + 1, gy + 4, 5, 4, "#2d3a18");  // dark olive torso
+      siegePx(gx + 1, gy + 4, 5, 1, "#3a4a22");  // lighter top
+      siegePx(gx + 2, gy + 5, 1, 1, "#4a5a28");  // pocket
+      siegePx(gx + 4, gy + 5, 1, 1, "#4a5a28");  // pocket
+      // Ammo belt across chest
+      siegePx(gx + 1, gy + 6, 4, 1, "#1a1a10");
+      siegePx(gx + 2, gy + 6, 1, 1, "#c0a020"); // bullet
+      siegePx(gx + 3, gy + 6, 1, 1, "#c0a020"); // bullet
+
+      // Arms — olive, holding rifle
+      const armY = isReloading ? gy + 5 : gy + 4;
+      siegePx(gx, armY, 1, 3, "#3a4a20");
+      siegePx(gx + 6, armY, 1, 3, "#3a4a20");
+      // Hands — skin color
+      siegePx(d > 0 ? gx + 6 : gx, armY + 2, 1, 1, "#d0a878");
+
+      // Head — face with camo beret
+      siegePx(gx + 1, gy + 1, 4, 3, "#d0a878");  // face
+      // Beret — military green with darker band
+      siegePx(gx, gy, 6, 1, "#2d3a18");           // beret top wide
+      siegePx(gx + 1, gy + 1, 4, 1, "#3a4a22");   // beret band
+      siegePx(d > 0 ? gx + 5 : gx, gy - 1, 1, 1, "#2d3a18"); // beret pom side
+      // Eyes — tough look
+      siegePx(gx + 2, gy + 2, 1, 1, "#1a1a1a");
+      siegePx(gx + 4, gy + 2, 1, 1, "#1a1a1a");
+      // Eyebrows — angry
+      siegePx(gx + 2, gy + 1, 1, 1, "#3a2010");
+      siegePx(gx + 4, gy + 1, 1, 1, "#3a2010");
+
+      // Dog tag
+      siegePx(gx + 3, gy + 4, 1, 1, "#a0a0a0");
+
+      // ── THE GUN ── big black assault rifle
+      const gunX = d > 0 ? gx + 6 : gx - 4;
+      const gunY = gy + 4;
+      if (isReloading) {
+        // Gun angled down during reload
+        siegePx(gunX, gunY + 1, 1, 3, "#0a0a0a");   // body vertical
+        siegePx(gunX + d, gunY + 2, 1, 1, "#1a1a1a"); // mag
+      } else {
+        // Gun horizontal — big black rifle
+        const barrelLen = isAttacking ? 5 : 4;
+        siegePx(gunX, gunY, d * barrelLen, 1, "#0a0a0a");        // barrel
+        siegePx(gunX, gunY + 1, d * 3, 1, "#1a1a1a");            // body
+        siegePx(gunX, gunY - 1, d * 2, 1, "#0a0a0a");            // rail top
+        siegePx(gunX + d * 2, gunY + 1, d * 1, 1, "#2a2a2a");   // grip
+        // Stock
+        siegePx(d > 0 ? gx + 5 : gx + 1, gunY, 1, 2, "#2a1a0a");
+        // Magazine
+        siegePx(gunX + d, gunY + 1, 1, 2, "#1a1a1a");
+      }
+
+      // Muzzle flash when shooting
+      if (isAttacking && attackFrame > 4) {
+        const fx = (gunX + d * (isAttacking ? 5 : 4)) * SIEGE_PS;
+        const fy = gunY * SIEGE_PS;
+        ctx.fillStyle = "#ffaa00";
+        ctx.beginPath(); ctx.arc(fx, fy, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.arc(fx, fy, 2, 0, Math.PI * 2); ctx.fill();
+        // Side sparks
+        ctx.fillStyle = "#ff6600";
+        ctx.fillRect(fx + d * 2, fy - 3, 2, 1);
+        ctx.fillRect(fx + d * 3, fy + 2, 2, 1);
+      }
+
+      // Shell casing ejection when shooting
+      if (isAttacking && attackFrame === 5) {
+        const sx = (gunX + d * 2) * SIEGE_PS;
+        const sy = (gunY - 1) * SIEGE_PS;
+        ctx.fillStyle = "#c0a020";
+        ctx.fillRect(sx, sy - 4, 2, 3);
+      }
+
+      // Reload animation — crouching, magazine swap
+      if (isReloading) {
+        const rx = gx * SIEGE_PS + 3 * SIEGE_PS;
+        const ry = (gy - 2) * SIEGE_PS;
+        // Spinning reload icon
+        const angle = (60 - sol.gunnerReloadFrame) * 0.2;
+        ctx.save();
+        ctx.translate(rx, ry);
+        ctx.rotate(angle);
+        ctx.strokeStyle = "#f59e0b"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 1.5); ctx.stroke();
+        ctx.fillStyle = "#f59e0b";
+        const ax = 4 * Math.cos(Math.PI * 1.5), ay = 4 * Math.sin(Math.PI * 1.5);
+        ctx.beginPath(); ctx.moveTo(ax - 2, ay); ctx.lineTo(ax + 2, ay); ctx.lineTo(ax, ay - 3); ctx.fill();
+        ctx.restore();
+      }
+
+      // Anger/stress speech bubble during reload
+      if (sol.gunnerBubbleFrame > 0) {
+        const bx = gx * SIEGE_PS + 3 * SIEGE_PS + 10;
+        const by = (gy - 3) * SIEGE_PS;
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#333"; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(bx, by, 9, 7, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        // Pointer triangle
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.moveTo(bx - 4, by + 6); ctx.lineTo(bx - 7, by + 12); ctx.lineTo(bx - 1, by + 7);
+        ctx.fill();
+        // Angry text
+        ctx.fillStyle = "#dc2626"; ctx.font = "bold 8px sans-serif"; ctx.textAlign = "center";
+        const symbols = ["#!!", "@#!", "!!@"];
+        const sym = symbols[Math.floor((60 - sol.gunnerBubbleFrame) / 17) % symbols.length];
+        ctx.fillText(sym, bx, by + 3);
+      }
+
+      // HP bar
+      const hpRatio = Math.max(0, hp / Math.max(1, maxHp));
+      const barW = 7;
+      siegePx(gx, gy - 2, barW, 1, "#1a1a1a");
+      if (hpRatio > 0) {
+        const fillW = Math.max(1, Math.round(barW * hpRatio));
+        const barColor = hpRatio > 0.5 ? "#20c020" : hpRatio > 0.25 ? "#e0c020" : "#e02020";
+        siegePx(gx, gy - 2, fillW, 1, barColor);
+      }
+    }
+
+    // ── TERMINATOR UNITS ──────────────────────────────────────
+
+    // T-600: Rubber-skin terminator with plasma rifle
+    function drawT600(gx, gy, direction, walkFrame, attackFrame, hp, maxHp, sol) {
+      const d = direction;
+      const shooting = attackFrame > 0;
+      // Shadow
+      siegePx(gx, gy + 12, 7, 1, "rgba(0,0,0,0.3)");
+      // Boots — heavy metal
+      const lp = Math.floor(walkFrame / 6) % 4;
+      const bootC = "#2a2a2a";
+      if (shooting) { siegePx(gx + 1, gy + 10, 2, 2, bootC); siegePx(gx + 4, gy + 10, 2, 2, bootC); }
+      else if (lp === 0) { siegePx(gx, gy + 10, 2, 2, bootC); siegePx(gx + 4, gy + 10, 2, 2, bootC); }
+      else if (lp === 1) { siegePx(gx + 1, gy + 10, 2, 2, bootC); siegePx(gx + 3, gy + 10, 2, 2, bootC); }
+      else if (lp === 2) { siegePx(gx + 2, gy + 10, 2, 2, bootC); siegePx(gx + 5, gy + 10, 2, 2, bootC); }
+      else { siegePx(gx + 1, gy + 10, 2, 2, bootC); siegePx(gx + 4, gy + 10, 2, 2, bootC); }
+      // Legs — dark metal
+      siegePx(gx + 1, gy + 8, 4, 2, "#3a3a3a");
+      // Torso — grey metallic with dark jacket
+      siegePx(gx + 1, gy + 4, 5, 4, "#2a2a30");
+      siegePx(gx + 2, gy + 4, 3, 1, "#3a3a40"); // chest highlight
+      // Rubber face — uncanny valley
+      siegePx(gx + 1, gy + 1, 4, 3, "#c0a088"); // face
+      siegePx(gx + 1, gy + 0, 4, 1, "#1a1a1a"); // hair
+      siegePx(gx, gy + 0, 1, 2, "#1a1a1a"); // side hair
+      siegePx(gx + 5, gy + 0, 1, 2, "#1a1a1a");
+      // Red eye glow (one side damaged rubber showing red eye)
+      siegePx(gx + 2, gy + 2, 1, 1, "#1a1a1a"); // normal eye
+      siegePx(gx + 4, gy + 2, 1, 1, "#ff0000"); // red terminator eye!
+      // Arms
+      siegePx(gx, gy + 4, 1, 3, "#2a2a30");
+      siegePx(gx + 6, gy + 4, 1, 3, "#2a2a30");
+      // Plasma rifle — glowing blue-white
+      const gunX = d > 0 ? gx + 6 : gx - 3;
+      if (shooting) {
+        siegePx(gunX, gy + 4, d * 4, 1, "#1a1a2a");
+        siegePx(gunX, gy + 3, d * 3, 1, "#2a2a3a");
+        // Plasma glow at muzzle
+        const fx = (gunX + d * 4) * SIEGE_PS;
+        const fy = (gy + 4) * SIEGE_PS;
+        ctx.fillStyle = "#40c0ff";
+        ctx.beginPath(); ctx.arc(fx, fy, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.arc(fx, fy, 1.5, 0, Math.PI * 2); ctx.fill();
+      } else {
+        siegePx(gunX, gy + 4, d * 3, 1, "#1a1a2a");
+        siegePx(gunX, gy + 3, d * 2, 1, "#2a2a3a");
+      }
+      // HP bar
+      const hpR = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx, gy - 2, 7, 1, "#1a1a1a");
+      if (hpR > 0) siegePx(gx, gy - 2, Math.max(1, Math.round(7 * hpR)), 1, hpR > 0.5 ? "#20c020" : hpR > 0.25 ? "#e0c020" : "#e02020");
+    }
+
+    // HK-Aerial: Flying hunter-killer with twin engines and rockets
+    function drawHKAerial(gx, gy, direction, walkFrame, hp, maxHp, sol) {
+      const d = direction;
+      const floatY = Math.sin(walkFrame * 0.08) * 3;
+      const py = gy + floatY;
+      // Shadow on ground
+      ctx.fillStyle = "rgba(0,0,0,0.15)";
+      ctx.fillRect((gx - 1) * SIEGE_PS, (SIEGE_GROUND_Y + 9) * SIEGE_PS, 10 * SIEGE_PS, 1 * SIEGE_PS);
+      // Main body — dark gunmetal
+      siegePx(gx + 1, py + 2, 5, 2, "#2a2a30");
+      siegePx(gx + 2, py + 1, 3, 1, "#3a3a40"); // cockpit dome
+      siegePx(gx + 3, py + 1, 1, 1, "#ff0000"); // red sensor
+      // Wings
+      siegePx(gx - 1, py + 2, 2, 1, "#3a3a40");
+      siegePx(gx + 6, py + 2, 2, 1, "#3a3a40");
+      // Twin engines — with thrust glow
+      siegePx(gx - 1, py + 0, 2, 2, "#404048");
+      siegePx(gx + 6, py + 0, 2, 2, "#404048");
+      // Engine glow
+      const thrustAlpha = 0.5 + Math.sin(walkFrame * 0.3) * 0.3;
+      ctx.fillStyle = `rgba(100,180,255,${thrustAlpha})`;
+      ctx.fillRect((gx - 1) * SIEGE_PS, (py - 1) * SIEGE_PS, 2 * SIEGE_PS, 1 * SIEGE_PS);
+      ctx.fillRect((gx + 6) * SIEGE_PS, (py - 1) * SIEGE_PS, 2 * SIEGE_PS, 1 * SIEGE_PS);
+      // Weapons pods under wings
+      siegePx(gx, py + 3, 1, 1, "#1a1a1a");
+      siegePx(gx + 6, py + 3, 1, 1, "#1a1a1a");
+      // HP bar
+      const hpR = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx, py - 2, 7, 1, "#1a1a1a");
+      if (hpR > 0) siegePx(gx, py - 2, Math.max(1, Math.round(7 * hpR)), 1, hpR > 0.5 ? "#20c020" : hpR > 0.25 ? "#e0c020" : "#e02020");
+    }
+
+    // T-1000: Liquid metal assassin — silver, morphing blade arms
+    function drawT1000(gx, gy, direction, walkFrame, attackFrame, hp, maxHp, sol) {
+      const d = direction;
+      const isAttacking = attackFrame > 0;
+      const morphing = sol.t1000MorphFrame > 0;
+      // Shadow
+      siegePx(gx, gy + 12, 6, 1, "rgba(0,0,0,0.2)");
+      // Legs — silver liquid metal
+      const lp = Math.floor(walkFrame / 5) % 4; // faster walk
+      const legC = "#a0a0b0";
+      if (isAttacking) { siegePx(gx + 1, gy + 10, 2, 2, legC); siegePx(gx + 3, gy + 10, 2, legC === legC ? 2 : 2, legC); }
+      else if (lp === 0) { siegePx(gx, gy + 10, 2, 2, legC); siegePx(gx + 4, gy + 10, 2, 2, legC); }
+      else if (lp === 1) { siegePx(gx + 1, gy + 10, 2, 2, legC); siegePx(gx + 3, gy + 10, 2, 2, legC); }
+      else { siegePx(gx + 2, gy + 10, 2, 2, legC); siegePx(gx + 4, gy + 10, 2, 2, legC); }
+      // Legs
+      siegePx(gx + 1, gy + 8, 4, 2, "#b0b0c0");
+      // Torso — liquid silver, shimmering
+      const shimmer = Math.sin(walkFrame * 0.15) * 15;
+      const bodyR = Math.floor(170 + shimmer), bodyG = Math.floor(170 + shimmer), bodyB = Math.floor(185 + shimmer);
+      const bodyC = `rgb(${bodyR},${bodyG},${bodyB})`;
+      siegePx(gx + 1, gy + 4, 4, 4, bodyC);
+      siegePx(gx + 1, gy + 4, 4, 1, `rgb(${bodyR + 20},${bodyG + 20},${bodyB + 20})`);
+      // Head — silver featureless face
+      siegePx(gx + 1, gy + 1, 4, 3, "#c8c8d0");
+      siegePx(gx + 1, gy + 0, 4, 1, "#b0b0b8"); // short hair
+      // Cold eyes
+      siegePx(gx + 2, gy + 2, 1, 1, "#1a1a2a");
+      siegePx(gx + 4, gy + 2, 1, 1, "#1a1a2a");
+      // Mouth — thin line
+      siegePx(gx + 2, gy + 3, 2, 1, "#9090a0");
+      // Arms — one normal, one blade
+      siegePx(gx, gy + 4, 1, 3, bodyC); // left arm
+      if (isAttacking) {
+        // Blade arm extended — long silver spike
+        const bladeX = d > 0 ? gx + 5 : gx - 3;
+        siegePx(bladeX, gy + 3, d * 4, 1, "#d0d0e0");
+        siegePx(bladeX + d * 3, gy + 3, 1, 1, "#ffffff"); // tip gleam
+        siegePx(bladeX, gy + 4, d * 2, 1, "#b0b0c0");
+      } else {
+        // Normal arm with slight blade hint
+        siegePx(gx + 5, gy + 4, 1, 3, bodyC);
+        siegePx(d > 0 ? gx + 6 : gx - 1, gy + 6, 1, 1, "#d0d0e0"); // blade tip peeking
+      }
+      // Liquid metal regen shimmer when regenerating
+      if (sol.t1000RegenTimer > 0 && sol.t1000RegenTimer % 4 < 2) {
+        ctx.fillStyle = "rgba(200,200,220,0.4)";
+        ctx.fillRect(gx * SIEGE_PS - 2, gy * SIEGE_PS, 8 * SIEGE_PS, 12 * SIEGE_PS);
+      }
+      // HP bar
+      const hpR = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx, gy - 2, 6, 1, "#1a1a1a");
+      if (hpR > 0) siegePx(gx, gy - 2, Math.max(1, Math.round(6 * hpR)), 1, hpR > 0.5 ? "#20c020" : hpR > 0.25 ? "#e0c020" : "#e02020");
+    }
+
+    // Endoskeleton: T-800 chrome skull boss — iconic red eyes, metal frame
+    function drawEndoskeleton(gx, gy, direction, walkFrame, attackFrame, hp, maxHp) {
+      const d = direction;
+      const isAttacking = attackFrame > 0;
+      // This is bigger than normal units — 8px wide, 14px tall
+      // Shadow
+      siegePx(gx - 1, gy + 14, 10, 1, "rgba(0,0,0,0.3)");
+      // Feet — chrome metal
+      const lp = Math.floor(walkFrame / 8) % 4;
+      if (lp === 0) { siegePx(gx, gy + 12, 3, 2, "#404048"); siegePx(gx + 5, gy + 12, 3, 2, "#404048"); }
+      else if (lp === 1) { siegePx(gx + 1, gy + 12, 3, 2, "#404048"); siegePx(gx + 4, gy + 12, 3, 2, "#404048"); }
+      else { siegePx(gx + 2, gy + 12, 3, 2, "#404048"); siegePx(gx + 5, gy + 12, 3, 2, "#404048"); }
+      // Legs — chrome pistons
+      siegePx(gx + 1, gy + 9, 2, 3, "#505058"); siegePx(gx + 5, gy + 9, 2, 3, "#505058");
+      siegePx(gx + 2, gy + 10, 1, 1, "#707078"); // piston highlight
+      siegePx(gx + 5, gy + 10, 1, 1, "#707078");
+      // Torso — chrome ribcage
+      siegePx(gx + 1, gy + 4, 6, 5, "#3a3a40");
+      siegePx(gx + 2, gy + 5, 4, 1, "#505058"); // rib
+      siegePx(gx + 2, gy + 7, 4, 1, "#505058"); // rib
+      siegePx(gx + 3, gy + 4, 2, 1, "#606068"); // chest plate shine
+      // Shoulders — wider than body
+      siegePx(gx, gy + 4, 1, 2, "#505058");
+      siegePx(gx + 7, gy + 4, 1, 2, "#505058");
+      // Arms — chrome hydraulic
+      siegePx(gx - 1, gy + 5, 1, 4, "#404048");
+      siegePx(gx + 8, gy + 5, 1, 4, "#404048");
+      // THE SKULL — iconic T-800
+      siegePx(gx + 1, gy + 0, 6, 4, "#606068"); // skull main
+      siegePx(gx + 2, gy + 0, 4, 1, "#707078"); // forehead shine
+      siegePx(gx + 1, gy + 3, 6, 1, "#505058"); // jaw
+      // Eye sockets — dark
+      siegePx(gx + 2, gy + 1, 1, 2, "#0a0a0a");
+      siegePx(gx + 5, gy + 1, 1, 2, "#0a0a0a");
+      // RED EYES — the iconic glow!
+      const eyeGlow = 0.7 + Math.sin(walkFrame * 0.1) * 0.3;
+      ctx.fillStyle = `rgba(255,0,0,${eyeGlow})`;
+      ctx.fillRect((gx + 2) * SIEGE_PS, (gy + 1) * SIEGE_PS, SIEGE_PS, SIEGE_PS);
+      ctx.fillRect((gx + 5) * SIEGE_PS, (gy + 1) * SIEGE_PS, SIEGE_PS, SIEGE_PS);
+      // Eye glow halo
+      ctx.fillStyle = `rgba(255,40,40,${eyeGlow * 0.3})`;
+      ctx.beginPath(); ctx.arc((gx + 2.5) * SIEGE_PS, (gy + 1.5) * SIEGE_PS, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc((gx + 5.5) * SIEGE_PS, (gy + 1.5) * SIEGE_PS, 4, 0, Math.PI * 2); ctx.fill();
+      // Teeth
+      siegePx(gx + 2, gy + 3, 1, 1, "#808088");
+      siegePx(gx + 3, gy + 3, 1, 1, "#909098");
+      siegePx(gx + 4, gy + 3, 1, 1, "#808088");
+      siegePx(gx + 5, gy + 3, 1, 1, "#909098");
+      // Weapon — heavy minigun
+      const gunBaseX = d > 0 ? gx + 8 : gx - 4;
+      if (isAttacking) {
+        siegePx(gunBaseX, gy + 5, d * 5, 1, "#1a1a1a");
+        siegePx(gunBaseX, gy + 6, d * 5, 1, "#1a1a1a");
+        siegePx(gunBaseX, gy + 4, d * 3, 1, "#2a2a2a");
+        // Rotating barrel hint
+        const rot = (walkFrame * 3) % 4;
+        siegePx(gunBaseX + d * 4, gy + 5 + (rot % 2), 1, 1, "#606068");
+      } else {
+        siegePx(gunBaseX, gy + 5, d * 3, 1, "#1a1a1a");
+        siegePx(gunBaseX, gy + 6, d * 3, 1, "#1a1a1a");
+      }
+      // HP bar — wider for boss
+      const hpR = Math.max(0, hp / Math.max(1, maxHp));
+      siegePx(gx - 1, gy - 2, 10, 1, "#1a1a1a");
+      if (hpR > 0) siegePx(gx - 1, gy - 2, Math.max(1, Math.round(10 * hpR)), 1, hpR > 0.5 ? "#ff2020" : hpR > 0.25 ? "#e0c020" : "#e02020");
+    }
+
+    // ── END TERMINATOR UNITS ─────────────────────────────────
 
     // Nyan Cat — pop-tart body, cat face, rainbow trail
     function drawNyanCat(gx, gy, direction, walkFrame, hp, maxHp) {
@@ -2067,6 +2503,11 @@
         if (unitType === "knight") unitHp = SIEGE_SOLDIER_MAX_HP * 3;
         else if (unitType === "archer") unitHp = Math.floor(SIEGE_SOLDIER_MAX_HP * 1.5);
         else if (unitType === "deathknight") unitHp = SIEGE_SOLDIER_MAX_HP * 6;
+        else if (unitType === "gunner") unitHp = SIEGE_SOLDIER_MAX_HP * 2;
+        else if (unitType === "t600") unitHp = Math.floor(SIEGE_SOLDIER_MAX_HP * 1.2);
+        else if (unitType === "t1000") unitHp = SIEGE_SOLDIER_MAX_HP * 3;
+        else if (unitType === "hk_aerial") unitHp = SIEGE_SOLDIER_MAX_HP * 2;
+        else if (unitType === "endoskeleton") unitHp = SIEGE_SOLDIER_MAX_HP * 8;
       }
       const soldier = {
         x: team === "player" ? SIEGE_SOLDIER_SPAWN_LEFT : SIEGE_SOLDIER_SPAWN_RIGHT,
@@ -2081,6 +2522,21 @@
         team,
         unitType,
         isOiia: unitType === "nyan" || unitType === "boss",
+        // Gunner state
+        gunnerShots: 0,
+        gunnerReloading: false,
+        gunnerReloadFrame: 0,
+        gunnerBubbleFrame: 0,
+        // T-600 state
+        t600Shots: 0,
+        t600Cooldown: 0,
+        // HK-Aerial state
+        hkFloatY: 0,
+        hkFloatDir: 1,
+        hkRocketCooldown: 0,
+        // T-1000 state
+        t1000RegenTimer: 0,
+        t1000MorphFrame: 0,
       };
       if (team === "player") {
         s.playerSoldiers.push(soldier);
@@ -2252,6 +2708,209 @@
       };
       allPlayer.filter(p => p.unitType === "archer").forEach(p => shootArrow(p, allEnemy, "player"));
       allEnemy.filter(e => e.unitType === "archer").forEach(e => shootArrow(e, allPlayer, "enemy"));
+
+      // Gunner — shoots 3 rapid bullets, then reloads with animation + anger bubble
+      if (!s.bullets) s.bullets = [];
+      const updateGunner = (gunner, targets, team) => {
+        if (gunner.unitType !== "gunner" || gunner.state === "dead") return;
+        // Reloading state
+        if (gunner.gunnerReloading) {
+          gunner.gunnerReloadFrame--;
+          gunner.gunnerBubbleFrame = Math.max(0, gunner.gunnerBubbleFrame - 1);
+          if (gunner.gunnerReloadFrame <= 0) {
+            gunner.gunnerReloading = false;
+            gunner.gunnerShots = 0;
+          }
+          return;
+        }
+        gunner.attackCooldown--;
+        const nearest = targets.filter(t => t.state !== "dead").sort((a, b) => Math.abs(a.x - gunner.x) - Math.abs(b.x - gunner.x))[0];
+        if (!nearest) return;
+        const dist = Math.abs(nearest.x - gunner.x);
+        if (dist < 55 && dist > 4 && gunner.attackCooldown <= 0) {
+          gunner.state = "fight";
+          gunner.attackCooldown = 8; // Fast fire rate
+          gunner.attackFrame = 8;
+          gunner.gunnerShots++;
+          const bx = gunner.x * SIEGE_PS + 3 * SIEGE_PS;
+          const by = (SIEGE_GROUND_Y - 6) * SIEGE_PS;
+          const tx = nearest.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ty = (SIEGE_GROUND_Y - 5) * SIEGE_PS;
+          const dx = tx - bx, dy = ty - by;
+          const speed = 7;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          s.bullets.push({
+            x: bx, y: by,
+            vx: (dx / len) * speed,
+            vy: (dy / len) * speed,
+            team, life: 80, dmg: 2,
+          });
+          // After 3 shots, reload
+          if (gunner.gunnerShots >= 3) {
+            gunner.gunnerReloading = true;
+            gunner.gunnerReloadFrame = 60; // ~1 second reload
+            gunner.gunnerBubbleFrame = 50;
+          }
+        } else if (dist >= 55) {
+          if (gunner.state === "fight" && !gunner.target) gunner.state = "walk";
+        }
+      };
+      allPlayer.filter(p => p.unitType === "gunner").forEach(p => updateGunner(p, allEnemy, "player"));
+      allEnemy.filter(e => e.unitType === "gunner").forEach(e => updateGunner(e, allPlayer, "enemy"));
+
+      // Update bullets
+      s.bullets.forEach(b => {
+        b.x += b.vx;
+        b.y += b.vy;
+        b.life--;
+      });
+      // Bullet hit detection
+      s.bullets = s.bullets.filter(b => {
+        if (b.life <= 0) return false;
+        const targets = b.team === "player" ? allEnemy : allPlayer;
+        for (const t of targets) {
+          if (t.state === "dead") continue;
+          const tx = t.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ty = (SIEGE_GROUND_Y - 4) * SIEGE_PS;
+          if (Math.abs(b.x - tx) < 6 && Math.abs(b.y - ty) < 10) {
+            t.hp -= b.dmg;
+            if (t.hp <= 0) { t.state = "dead"; t.deathFrame = 20; }
+            return false;
+          }
+        }
+        return true;
+      });
+
+      // ── TERMINATOR COMBAT ──────────────────────────────
+
+      // T-600: Rapid plasma fire, low damage, long range
+      if (!s.plasma) s.plasma = [];
+      const updateT600 = (t6, targets, team) => {
+        if (t6.unitType !== "t600" || t6.state === "dead") return;
+        t6.t600Cooldown--;
+        const nearest = targets.filter(t => t.state !== "dead").sort((a, b) => Math.abs(a.x - t6.x) - Math.abs(b.x - t6.x))[0];
+        if (!nearest) return;
+        const dist = Math.abs(nearest.x - t6.x);
+        if (dist < 65 && dist > 4 && t6.t600Cooldown <= 0) {
+          t6.state = "fight";
+          t6.t600Cooldown = 6; // Very fast fire rate
+          t6.attackFrame = 6;
+          t6.t600Shots++;
+          const px = t6.x * SIEGE_PS + 3 * SIEGE_PS;
+          const py = (SIEGE_GROUND_Y - 8) * SIEGE_PS;
+          const tx = nearest.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ty = (SIEGE_GROUND_Y - 5) * SIEGE_PS;
+          const dx = tx - px, dy = ty - py;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          s.plasma.push({ x: px, y: py, vx: (dx / len) * 8, vy: (dy / len) * 8, team, life: 60 });
+        } else if (dist >= 65) {
+          if (t6.state === "fight" && !t6.target) t6.state = "walk";
+        }
+      };
+      allEnemy.filter(u => u.unitType === "t600").forEach(u => updateT600(u, allPlayer, "enemy"));
+      allPlayer.filter(u => u.unitType === "t600").forEach(u => updateT600(u, allEnemy, "player"));
+
+      // Update + hit detect plasma bolts
+      s.plasma.forEach(p => { p.x += p.vx; p.y += p.vy; p.life--; });
+      s.plasma = s.plasma.filter(p => {
+        if (p.life <= 0) return false;
+        const targets = p.team === "player" ? allEnemy : allPlayer;
+        for (const t of targets) {
+          if (t.state === "dead") continue;
+          const tx = t.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ty = (SIEGE_GROUND_Y - 4) * SIEGE_PS;
+          if (Math.abs(p.x - tx) < 6 && Math.abs(p.y - ty) < 10) {
+            t.hp -= 2; // 1/6 of normal ~12 damage
+            if (t.hp <= 0) { t.state = "dead"; t.deathFrame = 20; }
+            return false;
+          }
+        }
+        return true;
+      });
+
+      // HK-Aerial: Flies above ground, shoots rockets with splash damage
+      if (!s.rockets) s.rockets = [];
+      if (!s.explosions) s.explosions = [];
+      const updateHKAerial = (hk, targets, team) => {
+        if (hk.unitType !== "hk_aerial" || hk.state === "dead") return;
+        hk.hkRocketCooldown--;
+        // HK floats — doesn't engage in melee, always walks
+        if (hk.target) { hk.target = null; hk.state = "walk"; }
+        // Fire rockets at ground targets
+        if (hk.hkRocketCooldown <= 0 && targets.some(t => t.state !== "dead")) {
+          const groundTargets = targets.filter(t => t.state !== "dead" && t.unitType !== "hk_aerial");
+          if (groundTargets.length === 0) return;
+          // Pick random ground target
+          const tgt = groundTargets[Math.floor(Math.random() * groundTargets.length)];
+          const rx = hk.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ry = (SIEGE_GROUND_Y - 18) * SIEGE_PS;
+          const tx = tgt.x * SIEGE_PS + 3 * SIEGE_PS;
+          const ty = (SIEGE_GROUND_Y - 2) * SIEGE_PS;
+          // Fire 2 rockets
+          for (let i = 0; i < 2; i++) {
+            const offsetX = (i - 0.5) * 6;
+            s.rockets.push({
+              x: rx + offsetX, y: ry, vx: (tx - rx) * 0.04 + (Math.random() - 0.5) * 2,
+              vy: 3 + Math.random(), team, life: 80, splashDmg: 30
+            });
+          }
+          hk.hkRocketCooldown = 90; // Slow fire rate
+          hk.attackFrame = 10;
+        }
+      };
+      allEnemy.filter(u => u.unitType === "hk_aerial").forEach(u => updateHKAerial(u, allPlayer, "enemy"));
+      allPlayer.filter(u => u.unitType === "hk_aerial").forEach(u => updateHKAerial(u, allEnemy, "player"));
+
+      // HK-Aerial: melee units can't hit them — clear targets
+      [...allPlayer, ...allEnemy].forEach(u => {
+        if (u.target && u.target.unitType === "hk_aerial" &&
+            u.unitType !== "archer" && u.unitType !== "gunner" && u.unitType !== "t600") {
+          u.target = null;
+          u.state = "walk";
+        }
+      });
+
+      // Update rockets
+      s.rockets.forEach(r => { r.x += r.vx; r.y += r.vy; r.life--; });
+      s.rockets = s.rockets.filter(r => {
+        if (r.life <= 0) return false;
+        // Hit ground
+        if (r.y >= (SIEGE_GROUND_Y + 8) * SIEGE_PS) {
+          // EXPLOSION with splash damage
+          const targets = r.team === "player" ? allEnemy : allPlayer;
+          const splashRadius = 20;
+          targets.forEach(t => {
+            if (t.state === "dead" || t.unitType === "hk_aerial") return;
+            const tx = t.x * SIEGE_PS + 3 * SIEGE_PS;
+            if (Math.abs(r.x - tx) < splashRadius) {
+              t.hp -= r.splashDmg;
+              if (t.hp <= 0) { t.state = "dead"; t.deathFrame = 20; }
+            }
+          });
+          // Spawn explosion particles
+          s.explosions.push({ x: r.x, y: r.y, frame: 0, maxFrame: 20 });
+          return false;
+        }
+        return true;
+      });
+      // Update explosions
+      s.explosions = s.explosions.filter(e => { e.frame++; return e.frame < e.maxFrame; });
+
+      // T-1000: Regenerates HP slowly, fast melee with blade
+      [...allPlayer, ...allEnemy].filter(u => u.unitType === "t1000" && u.state !== "dead").forEach(u => {
+        u.t1000RegenTimer++;
+        if (u.t1000RegenTimer >= 30) { // Regen every ~0.5s
+          u.t1000RegenTimer = 0;
+          u.hp = Math.min(u.maxHp, u.hp + 1);
+        }
+        // Faster attack speed
+        if (u.attackCooldown > 0) u.attackCooldown = Math.max(0, u.attackCooldown - 1); // double speed attacks
+      });
+
+      // Endoskeleton: Very tough, heavy melee attacks (handled by normal combat)
+      // No special logic needed — just high HP and normal attacks
+
+      // ── END TERMINATOR COMBAT ──────────────────────────
 
       // Nurse piano boss — shoots musical notes from range
       if (!s.notes) s.notes = [];
@@ -2614,6 +3273,16 @@
           drawDeathKnight(sol.x, SIEGE_GROUND_Y - 14, sol.direction, sol.walkFrame, sol.attackFrame, sol.hp, sol.maxHp);
         } else if (sol.unitType === "knight") {
           drawPixelKnight(sol.x, SIEGE_GROUND_Y - 13, sol.direction, sol.walkFrame, sol.attackFrame, sol.colors, sol.hp, sol.maxHp);
+        } else if (sol.unitType === "gunner") {
+          drawGunner(sol.x, SIEGE_GROUND_Y - 12, sol.direction, sol.walkFrame, sol.attackFrame, sol.hp, sol.maxHp, sol);
+        } else if (sol.unitType === "t600") {
+          drawT600(sol.x, SIEGE_GROUND_Y - 12, sol.direction, sol.walkFrame, sol.attackFrame, sol.hp, sol.maxHp, sol);
+        } else if (sol.unitType === "hk_aerial") {
+          drawHKAerial(sol.x, SIEGE_GROUND_Y - 20, sol.direction, sol.walkFrame, sol.hp, sol.maxHp, sol);
+        } else if (sol.unitType === "t1000") {
+          drawT1000(sol.x, SIEGE_GROUND_Y - 12, sol.direction, sol.walkFrame, sol.attackFrame, sol.hp, sol.maxHp, sol);
+        } else if (sol.unitType === "endoskeleton") {
+          drawEndoskeleton(sol.x, SIEGE_GROUND_Y - 15, sol.direction, sol.walkFrame, sol.attackFrame, sol.hp, sol.maxHp);
         } else {
           drawPixelSoldier(
             sol.x, SIEGE_GROUND_Y - 11,
@@ -2726,6 +3395,82 @@
           ctx.fillRect(6, -3, 3, 2);
           ctx.fillRect(6, 1, 3, 2);
           ctx.restore();
+        });
+      }
+
+      // Draw bullets (gunner)
+      if (s.bullets) {
+        s.bullets.forEach(b => {
+          ctx.fillStyle = "#f59e0b";
+          ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI * 2); ctx.fill();
+          // Tracer trail
+          ctx.strokeStyle = "rgba(245,158,11,0.4)"; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx * 2, b.y - b.vy * 2); ctx.stroke();
+        });
+      }
+
+      // Draw plasma bolts (T-600)
+      if (s.plasma) {
+        s.plasma.forEach(p => {
+          ctx.fillStyle = "#40c0ff";
+          ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath(); ctx.arc(p.x, p.y, 1, 0, Math.PI * 2); ctx.fill();
+          // Plasma trail
+          ctx.strokeStyle = "rgba(64,192,255,0.3)"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 3, p.y - p.vy * 3); ctx.stroke();
+        });
+      }
+
+      // Draw rockets (HK-Aerial)
+      if (s.rockets) {
+        s.rockets.forEach(r => {
+          ctx.save();
+          ctx.translate(r.x, r.y);
+          const angle = Math.atan2(r.vy, r.vx);
+          ctx.rotate(angle);
+          // Rocket body
+          ctx.fillStyle = "#3a3a3a";
+          ctx.fillRect(-5, -1.5, 10, 3);
+          // Nose cone — red
+          ctx.fillStyle = "#cc2020";
+          ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(3, -2); ctx.lineTo(3, 2); ctx.closePath(); ctx.fill();
+          // Fins
+          ctx.fillStyle = "#505050";
+          ctx.fillRect(-5, -3, 2, 1);
+          ctx.fillRect(-5, 2, 2, 1);
+          // Exhaust flame
+          const flameLen = 4 + Math.random() * 4;
+          ctx.fillStyle = "#ff8800";
+          ctx.beginPath(); ctx.moveTo(-5, -1); ctx.lineTo(-5 - flameLen, 0); ctx.lineTo(-5, 1); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = "#ffcc00";
+          ctx.beginPath(); ctx.moveTo(-5, -0.5); ctx.lineTo(-5 - flameLen * 0.6, 0); ctx.lineTo(-5, 0.5); ctx.closePath(); ctx.fill();
+          ctx.restore();
+        });
+      }
+
+      // Draw explosions (HK-Aerial rocket impacts)
+      if (s.explosions) {
+        s.explosions.forEach(e => {
+          const progress = e.frame / e.maxFrame;
+          const radius = 8 + progress * 18;
+          const alpha = 1 - progress;
+          // Fireball
+          ctx.fillStyle = `rgba(255,120,20,${alpha * 0.7})`;
+          ctx.beginPath(); ctx.arc(e.x, e.y, radius, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,220,60,${alpha * 0.5})`;
+          ctx.beginPath(); ctx.arc(e.x, e.y, radius * 0.6, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,255,200,${alpha * 0.3})`;
+          ctx.beginPath(); ctx.arc(e.x, e.y, radius * 0.3, 0, Math.PI * 2); ctx.fill();
+          // Debris particles
+          for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 + progress * 2;
+            const dist = radius * 0.8 + progress * 10;
+            const px = e.x + Math.cos(angle) * dist;
+            const py = e.y + Math.sin(angle) * dist - progress * 8;
+            ctx.fillStyle = `rgba(100,100,100,${alpha * 0.6})`;
+            ctx.fillRect(px - 1, py - 1, 3, 3);
+          }
         });
       }
 
@@ -2857,7 +3602,8 @@
       } else if (s.glosaText) {
         ctx.save();
         const textW = 320;
-        const textH = 38;
+        const hasImg = s._imgEl && s._imgEl.complete && s._imgEl.naturalWidth > 0;
+        const textH = hasImg ? 100 : 38;
         const textX = (canvas.width - textW) / 2;
         const textY = 42;
         ctx.fillStyle = "#0f0f1a";
@@ -2866,13 +3612,27 @@
         ctx.fillRect(textX - 1, textY - 1, textW + 2, textH + 2);
         ctx.fillStyle = "rgba(10,16,32,0.88)";
         ctx.fillRect(textX, textY, textW, textH);
-        ctx.fillStyle = "#60a0e0";
-        ctx.font = "bold 9px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("ÖVERSÄTT:", canvas.width / 2, textY + 11);
-        ctx.fillStyle = "#f8fafc";
-        ctx.font = "bold 16px monospace";
-        ctx.fillText(s.glosaText, canvas.width / 2, textY + 30);
+
+        if (hasImg) {
+          // Draw image centered in the box
+          const imgSize = 70;
+          const imgX = (canvas.width - imgSize) / 2;
+          const imgY = textY + 4;
+          ctx.drawImage(s._imgEl, imgX, imgY, imgSize, imgSize);
+          // Label below image
+          ctx.fillStyle = "#60a0e0";
+          ctx.font = "bold 9px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("STAVA ORDET:", canvas.width / 2, textY + imgSize + 16);
+        } else {
+          ctx.fillStyle = "#60a0e0";
+          ctx.font = "bold 9px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("ÖVERSÄTT:", canvas.width / 2, textY + 11);
+          ctx.fillStyle = "#f8fafc";
+          ctx.font = "bold 16px monospace";
+          ctx.fillText(s.glosaText, canvas.width / 2, textY + 30);
+        }
         ctx.restore();
       }
 
@@ -2963,6 +3723,44 @@
           const cursorX = boxX + 58 + ctx.measureText(typed).width + 2;
           ctx.fillStyle = "#60a0e0";
           ctx.fillRect(cursorX, boxY + 5, 10, 16);
+        }
+
+        // Audio replay buttons for Swedish spelling (in siege)
+        if (isSwedishSpellingMode() && state.currentWord && !s.gameOver) {
+          const media = appState.swedishMedia[state.currentWord.sv];
+          if (media) {
+            const abY = boxY + 28;
+            const rbW = 68, rbH = 18;
+            // Replay button
+            const rb1x = boxX + 6;
+            ctx.fillStyle = "#1a3a6a"; ctx.fillRect(rb1x, abY, rbW, rbH);
+            ctx.strokeStyle = "#4080c0"; ctx.lineWidth = 1; ctx.strokeRect(rb1x, abY, rbW, rbH);
+            ctx.fillStyle = "#80c0f0"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+            ctx.fillText("SPELA", rb1x + rbW / 2, abY + 13);
+            m.buttons.push({ type: "audioReplay", x: rb1x, y: abY, w: rbW, h: rbH, audio: media.audio });
+            // Slow replay button
+            const rb2x = rb1x + rbW + 4;
+            ctx.fillStyle = "#3a2a0a"; ctx.fillRect(rb2x, abY, rbW, rbH);
+            ctx.strokeStyle = "#c09020"; ctx.lineWidth = 1; ctx.strokeRect(rb2x, abY, rbW, rbH);
+            ctx.fillStyle = "#f0c040"; ctx.font = "bold 9px monospace";
+            ctx.fillText("LANGSAMT", rb2x + rbW / 2, abY + 13);
+            m.buttons.push({ type: "audioSlow", x: rb2x, y: abY, w: rbW, h: rbH, audio: media.audio });
+            // Speed selector
+            const speeds = [0.5, 0.75, 0.85, 1.0];
+            const spBtnW = 30;
+            let spX = rb2x + rbW + 6;
+            speeds.forEach(spd => {
+              const isSel = Math.abs(swedishAudioSpeed - spd) < 0.01;
+              ctx.fillStyle = isSel ? "#3060b0" : "#1a2030";
+              ctx.fillRect(spX, abY, spBtnW, rbH);
+              ctx.strokeStyle = isSel ? "#60a0f0" : "#304060"; ctx.lineWidth = 1;
+              ctx.strokeRect(spX, abY, spBtnW, rbH);
+              ctx.fillStyle = isSel ? "#fff" : "#80a0c0"; ctx.font = "bold 8px monospace";
+              ctx.fillText(`${spd}x`, spX + spBtnW / 2, abY + 12);
+              m.buttons.push({ type: "audioSpeed", x: spX, y: abY, w: spBtnW, h: rbH, speed: spd });
+              spX += spBtnW + 2;
+            });
+          }
         }
 
         // Special character buttons below SVAR box
@@ -5354,6 +6152,8 @@
       tickProjectiles();
       drawEffects();
       arena.phase += 0.02;
+      // Loading overlay on top of everything
+      drawLoadingOverlay(canvas, ctx);
       requestAnimationFrame(frame);
     }
 
@@ -5994,6 +6794,18 @@
         arena.siege._charShuffle = null; // reset char button shuffle for new word
         arena.siege._charPage = 0;
       },
+      setSiegeImage(dataUri) {
+        arena.siege.imageDataUri = dataUri || null;
+        if (dataUri && !arena.siege._imgEl) {
+          const img = new Image();
+          img.src = dataUri;
+          arena.siege._imgEl = img;
+        } else if (dataUri) {
+          arena.siege._imgEl.src = dataUri;
+        } else {
+          arena.siege._imgEl = null;
+        }
+      },
       setSiegeFeedback(text, color, sub, durationMs) {
         const now = Date.now();
         arena.siege.glosaFeedback = {
@@ -6292,6 +7104,26 @@
                 if (btn.action === "prevPage") return { action: "siegeCharPage", dir: -1 };
                 if (btn.action === "nextPage") return { action: "siegeCharPage", dir: 1 };
                 return { action: "siegeCharInsert", ch: btn.ch };
+              }
+            }
+          }
+          // Audio replay/slow/speed buttons (Swedish spelling)
+          if (m.buttons) {
+            for (const btn of m.buttons) {
+              if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+                if (btn.type === "audioReplay") {
+                  playSwedishAudio(btn.audio);
+                  return null;
+                } else if (btn.type === "audioSlow") {
+                  const saved = swedishAudioSpeed;
+                  swedishAudioSpeed = 0.5;
+                  playSwedishAudio(btn.audio);
+                  swedishAudioSpeed = saved;
+                  return null;
+                } else if (btn.type === "audioSpeed") {
+                  swedishAudioSpeed = btn.speed;
+                  return null;
+                }
               }
             }
           }
@@ -6608,11 +7440,101 @@
     if (!state.currentWord) {
       return "";
     }
+    // Swedish spelling: answer is always the Swedish word
+    if (isSwedishSpellingMode()) {
+      return String(state.currentWord.sv || "");
+    }
     return appState.flippedDirection ? String(state.currentWord.sv || "") : String(state.currentWord.en || "");
+  }
+
+  function isSwedishSpellingMode() {
+    return normalizeLanguage(appState.selectedLanguage) === "swedish";
+  }
+
+  // Loading overlay state for canvas
+  let _loadingOverlay = { active: false, text: "", progress: 0 };
+
+  function drawLoadingOverlay(canvas, ctx) {
+    if (!_loadingOverlay.active) return;
+    const w = canvas.width, h = canvas.height;
+    // Dim background
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
+    ctx.fillRect(0, 0, w, h);
+    // Box
+    const bw = 220, bh = 60;
+    const bx = (w - bw) / 2, by = (h - bh) / 2;
+    ctx.fillStyle = "#0a0f1a";
+    ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+    ctx.strokeStyle = "#4080c0"; ctx.lineWidth = 2;
+    ctx.strokeRect(bx - 2, by - 2, bw + 4, bh + 4);
+    ctx.fillStyle = "#0f1520";
+    ctx.fillRect(bx, by, bw, bh);
+    // Text
+    ctx.fillStyle = "#c0d8f0"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+    ctx.fillText(_loadingOverlay.text || "LADDAR...", w / 2, by + 18);
+    // Progress bar background
+    const pbx = bx + 15, pby = by + 28, pbw = bw - 30, pbh = 14;
+    ctx.fillStyle = "#1a2030";
+    ctx.fillRect(pbx, pby, pbw, pbh);
+    ctx.strokeStyle = "#304060"; ctx.lineWidth = 1;
+    ctx.strokeRect(pbx, pby, pbw, pbh);
+    // Progress fill — animated gradient
+    const pct = Math.min(1, _loadingOverlay.progress);
+    if (pct > 0) {
+      const grad = ctx.createLinearGradient(pbx, 0, pbx + pbw * pct, 0);
+      grad.addColorStop(0, "#2060c0");
+      grad.addColorStop(0.5, "#40a0f0");
+      grad.addColorStop(1, "#60c0ff");
+      ctx.fillStyle = grad;
+      ctx.fillRect(pbx + 1, pby + 1, (pbw - 2) * pct, pbh - 2);
+    }
+    // Animated shine sweep
+    const shine = (Date.now() % 1500) / 1500;
+    const shineX = pbx + shine * pbw;
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(shineX - 10, pby + 1, 20, pbh - 2);
+    // Percentage text
+    ctx.fillStyle = "#e0f0ff"; ctx.font = "bold 9px monospace";
+    ctx.fillText(`${Math.round(pct * 100)}%`, w / 2, pby + 11);
+  }
+
+  async function loadSwedishMedia(weekId) {
+    if (appState.swedishMediaWeekId === weekId) return;
+    _loadingOverlay = { active: true, text: "LADDAR LJUD & BILDER...", progress: 0.1 };
+    try {
+      _loadingOverlay.progress = 0.2;
+      const resp = await fetch(`/api/vocab/weeks/${encodeURIComponent(weekId)}/media`);
+      _loadingOverlay.progress = 0.6;
+      if (!resp.ok) return;
+      const data = await resp.json();
+      _loadingOverlay.progress = 0.8;
+      appState.swedishMedia = {};
+      (data.words || []).forEach(w => {
+        appState.swedishMedia[w.sv] = { image: w.image, audio: w.audio };
+      });
+      appState.swedishMediaWeekId = weekId;
+      _loadingOverlay.progress = 1.0;
+    } catch (e) { /* ignore */ }
+    // Keep loading visible briefly so user sees 100%
+    await new Promise(r => setTimeout(r, 300));
+    _loadingOverlay.active = false;
+  }
+
+  let swedishAudioSpeed = 0.85;
+
+  function playSwedishAudio(audioDataUri) {
+    if (!audioDataUri) return;
+    const audio = new Audio(audioDataUri);
+    audio.playbackRate = swedishAudioSpeed;
+    audio.play().catch(() => {});
   }
 
   function questionTextForWord(word) {
     if (!word) {
+      return "";
+    }
+    // Swedish spelling mode: don't show the word text (image replaces it)
+    if (isSwedishSpellingMode()) {
       return "";
     }
     return appState.flippedDirection ? String(word.en || "") : String(word.sv || "");
@@ -6622,7 +7544,9 @@
     if (!elements.questionLabel) {
       return;
     }
-    if (appState.flippedDirection) {
+    if (isSwedishSpellingMode()) {
+      elements.questionLabel.textContent = "Stava ordet:";
+    } else if (appState.flippedDirection) {
       elements.questionLabel.textContent = `Översätt till svenska:`;
     } else {
       elements.questionLabel.textContent = `Översätt till ${languageDisplayName(appState.practiceAnswerLanguage)}:`;
@@ -6633,6 +7557,12 @@
     if (!elements.flipDirectionButton) {
       return;
     }
+    // Hide flip button for Swedish spelling mode (always spell Swedish)
+    if (isSwedishSpellingMode()) {
+      elements.flipDirectionButton.style.display = "none";
+      return;
+    }
+    elements.flipDirectionButton.style.display = "";
     const lang = languageDisplayName(appState.practiceAnswerLanguage);
     if (appState.flippedDirection) {
       elements.flipDirectionButton.textContent = `Klicka för att välja ordning: ${lang} \u2192 Svenska`;
@@ -6647,6 +7577,7 @@
     const charSets = {
       spanish: ["\u00e1", "\u00e9", "\u00ed", "\u00f3", "\u00fa", "\u00fc", "\u00f1", "\u00bf", "\u00a1"],
       french: ["\u00e0", "\u00e2", "\u00e7", "\u00e8", "\u00e9", "\u00ea", "\u00eb", "\u00ee", "\u00ef", "\u00f4", "\u00f9", "\u00fb", "\u00fc", "\u0153"],
+      swedish: ["\u00e5", "\u00e4", "\u00f6"],
       german: ["\u00e4", "\u00f6", "\u00fc", "\u00df"],
       japanese: [
         "\u3042","\u3044","\u3046","\u3048","\u304a", // a i u e o
@@ -6667,7 +7598,10 @@
     // Exception: Japanese normal = hiragana→romaji (answer=romaji, no chars needed)
     //            Japanese flipped = romaji→hiragana (answer=hiragana, chars needed)
     let chars = null;
-    if (lang === "japanese") {
+    if (lang === "swedish") {
+      // Swedish spelling: always show å ä ö
+      chars = charSets.swedish;
+    } else if (lang === "japanese") {
       chars = appState.flippedDirection ? charSets.japanese : null;
     } else {
       chars = appState.flippedDirection ? null : charSets[lang];
@@ -7378,7 +8312,7 @@
   }
 
   function updateGroupBattlePrep() {
-    if (bossFightEngine && ((bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) || (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()))) return;
+    if (bossFightEngine && ((bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) || (bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) || (bossFightEngine.isAdventureMode && bossFightEngine.isAdventureMode()))) return;
     if (!appState.groupBattle.active) {
       return;
     }
@@ -7507,6 +8441,38 @@
     renderQuestionLabel();
     elements.answerInput.value = "";
     elements.hintText.textContent = "";
+
+    // Swedish spelling mode: show image + play audio
+    const audioRow = document.getElementById("audioControlsRow");
+    const replayBtn = document.getElementById("replayAudioBtn");
+    const replaySlowBtn = document.getElementById("replaySlowBtn");
+    if (isSwedishSpellingMode() && word) {
+      const media = appState.swedishMedia[word.sv];
+      if (media) {
+        elements.questionWord.textContent = "";
+        const img = document.createElement("img");
+        img.src = media.image;
+        img.alt = "Stava ordet";
+        img.style.cssText = "max-width:180px;max-height:180px;border-radius:12px;margin:8px auto;display:block;";
+        elements.questionWord.appendChild(img);
+        playSwedishAudio(media.audio);
+        if (audioRow) audioRow.style.display = "flex";
+        if (replayBtn) replayBtn.onclick = () => playSwedishAudio(media.audio);
+        if (replaySlowBtn) replaySlowBtn.onclick = () => {
+          const saved = swedishAudioSpeed;
+          swedishAudioSpeed = 0.5;
+          playSwedishAudio(media.audio);
+          swedishAudioSpeed = saved;
+        };
+      } else {
+        const hint = (word.en && word.en.toLowerCase() !== word.sv.toLowerCase()) ? word.en : "Generera media i admin";
+        elements.questionWord.textContent = hint;
+        if (audioRow) audioRow.style.display = "none";
+      }
+    } else {
+      if (audioRow) audioRow.style.display = "none";
+    }
+
     if (word && shouldFocus) {
       elements.answerInput.focus();
     }
@@ -7946,6 +8912,7 @@
       }
     }
     initSiegeWordQueue();
+    state.streak = 0; // Reset streak on new round
     return siegeWordQueue.length > 0 ? siegeWordQueue[0] : null;
   }
 
@@ -7968,14 +8935,30 @@
     if (!word) return;
     state.currentWord = word;
     if (bossFightEngine) {
-      const showText = siegeFlipped ? String(word.en || "") : String(word.sv || "");
-      bossFightEngine.setSiegeGlosa(showText);
+      if (isSwedishSpellingMode()) {
+        // Swedish spelling in siege: show image + audio, answer is Swedish word
+        const media = appState.swedishMedia[word.sv];
+        const hintText = (word.en && word.en.toLowerCase() !== word.sv.toLowerCase()) ? word.en : "?";
+        bossFightEngine.setSiegeGlosa(hintText);
+        if (media) {
+          bossFightEngine.setSiegeImage(media.image);
+          playSwedishAudio(media.audio);
+        } else {
+          bossFightEngine.setSiegeImage(null);
+        }
+      } else {
+        const showText = siegeFlipped ? String(word.en || "") : String(word.sv || "");
+        bossFightEngine.setSiegeGlosa(showText);
+        bossFightEngine.setSiegeImage(null);
+      }
     }
     renderSiegeSpecialChars();
   }
 
   function expectedSiegeAnswer() {
     if (!state.currentWord) return "";
+    // Swedish spelling: answer is always the Swedish word
+    if (isSwedishSpellingMode()) return String(state.currentWord.sv || "");
     return siegeFlipped ? String(state.currentWord.sv || "") : String(state.currentWord.en || "");
   }
 
@@ -7994,12 +8977,13 @@
     }
 
     if (bossFightEngine) {
-      // Streak-based soldier type
+      // Streak milestones: special soldier spawns ONCE at exact streak count
       let soldierType = "soldier";
       let streakMsg = "";
-      if (state.streak >= 7) { soldierType = "deathknight"; streakMsg = " ⚔️ DEATH KNIGHT!"; }
-      else if (state.streak >= 5) { soldierType = "archer"; streakMsg = " 🏹 Archer!"; }
-      else if (state.streak >= 3) { soldierType = "knight"; streakMsg = " 🐴 Knight!"; }
+      if (state.streak === 10) { soldierType = "gunner"; streakMsg = " 🔫 GUNNER!"; }
+      else if (state.streak === 7) { soldierType = "deathknight"; streakMsg = " ⚔️ DEATH KNIGHT!"; }
+      else if (state.streak === 5) { soldierType = "archer"; streakMsg = " 🏹 Archer!"; }
+      else if (state.streak === 3) { soldierType = "knight"; streakMsg = " 🐴 Knight!"; }
       bossFightEngine.siegeSpawnPlayerSoldier(soldierType);
       bossFightEngine.setSiegeFeedback("RÄTT", "#22c55e", `+${xpGain} XP  +${coinGain} coins${streakMsg}`, 3000);
       // Broadcast to opponent in group fights
@@ -8134,7 +9118,12 @@
           appState.practiceAnswerLanguage = week.language || "english";
         }
       }
-      startSiegeGame();
+      // Pre-load Swedish media before starting siege
+      if (isSwedishSpellingMode() && appState.selectedWeekId) {
+        loadSwedishMedia(appState.selectedWeekId).then(() => startSiegeGame());
+      } else {
+        startSiegeGame();
+      }
     } else if (hit.action === "startAdventure") {
       const menuWeekId = bossFightEngine.getMenuSelectedWeekId ? bossFightEngine.getMenuSelectedWeekId() : appState.selectedWeekId;
       if (menuWeekId) {
@@ -8315,9 +9304,15 @@
       appState.duel.active = false;
       appState.groupBattle.active = false;
       appState.groupBattle.finishing = false;
+      appState.groupBattle.prepEndsAtMs = 0;
+      appState.duel.prepEndsAtMs = 0;
       if (appState.groupBattle.botTimerId) {
         window.clearInterval(appState.groupBattle.botTimerId);
         appState.groupBattle.botTimerId = 0;
+      }
+      // Clear stale group invite so solo siege doesn't think it's a group fight
+      if (appState.groupInvite && appState.groupInvite.current && appState.groupInvite.current.status !== "Active") {
+        appState.groupInvite.current = null;
       }
 
       const selectedBoss = bossFightEngine.getMenuState?.()?.selectedBossId || "oiia";
@@ -8383,8 +9378,10 @@
       state.bossMode = false;
       state.fortressMode = false;
       appState.duel.active = false;
+      appState.duel.prepEndsAtMs = 0;
       appState.groupBattle.active = false;
       appState.groupBattle.finishing = false;
+      appState.groupBattle.prepEndsAtMs = 0;
       if (appState.groupBattle.botTimerId) {
         window.clearInterval(appState.groupBattle.botTimerId);
         appState.groupBattle.botTimerId = 0;
@@ -8411,6 +9408,7 @@
     if (!elements.siegeSpecialCharsRow) return;
     const lang = normalizeLanguage(appState.practiceAnswerLanguage || appState.selectedLanguage || "english");
     const charSets = {
+      swedish: ["å","ä","ö"],
       spanish: ["á","é","í","ó","ú","ü","ñ","¿","¡"],
       french: ["à","â","ç","è","é","ê","ë","î","ï","ô","ù","û","ü","œ"],
       german: ["ä","ö","ü","ß"],
@@ -8429,7 +9427,9 @@
     };
     // Same direction logic as regular mode but using siegeFlipped
     let chars = null;
-    if (lang === "japanese") {
+    if (lang === "swedish") {
+      chars = charSets.swedish; // Always show å ä ö
+    } else if (lang === "japanese") {
       chars = siegeFlipped ? charSets.japanese : null;
     } else {
       chars = siegeFlipped ? null : charSets[lang];
@@ -10779,6 +11779,10 @@
       renderStats();
       await loadLeaderboard();
       renderCastleTree();
+      // Load Swedish media if this is a Swedish week
+      if (isSwedishSpellingMode() && appState.selectedWeekId) {
+        await loadSwedishMedia(appState.selectedWeekId);
+      }
       setQuestion(pickWord());
       const week = currentWeek();
       pushLog(`Vecka bytt till ${week ? week.weekName : "okand"}.`);
@@ -10786,6 +11790,21 @@
 
     elements.weekSelect.addEventListener("change", async () => {
       await onWeekChanged();
+    });
+
+    // Audio speed toggle buttons
+    document.querySelectorAll(".speed-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        swedishAudioSpeed = parseFloat(btn.dataset.speed) || 1.0;
+        document.querySelectorAll(".speed-btn").forEach(b => {
+          b.style.background = "transparent";
+          b.style.color = "";
+          b.classList.remove("active");
+        });
+        btn.style.background = "#3b82f6";
+        btn.style.color = "#fff";
+        btn.classList.add("active");
+      });
     });
 
     // Week prev/next arrow buttons
@@ -11243,10 +12262,8 @@
       ensureWordsProgressElements();
       bossFightEngine = createBossFightEngine(elements.bossFightCanvas);
       window.__engine = bossFightEngine;
-      await loadAuthStatus();
+      await Promise.all([loadAuthStatus(), loadData(), loadPlayers()]);
       loadSelectedLanguage();
-      await loadData();
-      await loadPlayers();
       await ensureGuestDisplayName();
       if (!appState.auth.isAuthenticated && !appState.selectedUserId) {
         appState.selectedUserId = "guest";
@@ -11261,64 +12278,65 @@
       renderFlipButton();
       renderSpecialChars();
       renderWeeksOverview();
-      await loadLeaderboard();
-      try { await loadWeekStats(); } catch {}
+      await Promise.all([loadLeaderboard(), loadWeekStats().catch(() => {})]);
       renderCastleTree();
       applyAuthUi();
       loadState();
       hookEvents();
       showCanvasMenu();
-      try { await sendHeartbeat(); } catch {}
-      try { await loadOnlineUsers(); } catch {}
-      try { await pollChallengeInbox(); } catch {}
-      try { await pollGroupFightCurrent(); } catch {}
-      try { await refreshDuelState(); } catch {}
+      // Non-critical background calls — fire in parallel, don't block UI
+      Promise.all([
+        sendHeartbeat().catch(() => {}),
+        loadOnlineUsers().catch(() => {}),
+        pollChallengeInbox().catch(() => {}),
+        pollGroupFightCurrent().catch(() => {}),
+        refreshDuelState().catch(() => {}),
+      ]);
+      // UI update loops — client-side only, no server calls
       window.setInterval(() => {
         if (state.bossMode || state.fortressMode || appState.groupBattle.active || appState.duel.active) {
           updateBars();
         }
-        // Keep menu stats fresh
         if (bossFightEngine && bossFightEngine.isMenuMode && bossFightEngine.isMenuMode()) {
           updateMenuStats();
         }
-      }, 100);
+      }, 500);
       window.setInterval(() => {
         updateDuelPrepOverlay();
         updateGroupBattlePrep();
-      }, 200);
-      // Fast event polling during siege for multiplayer sync
+      }, 1000);
+      // Multiplayer event polling — only when actively in a group fight
       window.setInterval(async () => {
-        if (bossFightEngine && bossFightEngine.isSiegeMode && bossFightEngine.isSiegeMode()) {
-          const invite = appState.groupInvite?.current;
-          if (invite && invite.id && invite.status === "Active") {
-            try { await pollGroupFightEvents(); } catch {}
-          }
+        if (!bossFightEngine || !bossFightEngine.isSiegeMode || !bossFightEngine.isSiegeMode()) return;
+        const invite = appState.groupInvite?.current;
+        if (invite && invite.id && invite.status === "Active") {
+          try { await pollGroupFightEvents(); } catch {}
         }
-      }, 500);
+      }, 2000);
+      // Heartbeat + presence — every 30s (was 15s)
       window.setInterval(async () => {
         try { await sendHeartbeat(); } catch {}
         try { await loadOnlineUsers(); } catch {}
         try { await loadWeekStats(); } catch {}
-      }, 15000);
+      }, 30000);
+      // Challenge inbox + group fight — every 5s (was 1s)
       window.setInterval(async () => {
         try { await pollChallengeInbox(); } catch {}
         try { await pollGroupFightCurrent(); } catch {}
         if (!appState.duel.active) {
           try { await refreshDuelState(); } catch {}
         }
-      }, 1000);
+      }, 5000);
+      // Group battle events — every 2s when active (was 350ms)
       window.setInterval(async () => {
-        if (!appState.groupBattle.active) {
-          return;
-        }
+        if (!appState.groupBattle.active) return;
         try { await pollGroupFightEvents(); } catch {}
-      }, 350);
+      }, 2000);
+      // Duel state — every 2s when active (was 250ms)
       window.setInterval(async () => {
-        if (!appState.duel.active || !appState.duel.matchId) {
-          return;
-        }
+        if (!appState.duel.active || !appState.duel.matchId) return;
         try { await refreshDuelState(); } catch {}
-      }, 250);
+      }, 2000);
       renderStats();
       setQuestion(null, { focus: false, emptyText: "Välj en vecka och börja svara på glosorna." });
       pushLog("GlosTrainer är redo.");
