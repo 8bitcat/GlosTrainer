@@ -417,6 +417,7 @@
       },
       bootStartMs: performance.now(),
       bootDone: false,
+      bootDataReady: false,
       menu: {
         weeks: [],
         languages: [],
@@ -667,7 +668,8 @@
         const barY = startY + bootLines.length * lineH + 16;
         const barW = w - 48;
         const barH = 14;
-        const progress = Math.min(1, (elapsed - 400) / (BOOT_DURATION - 600));
+        const animProgress = Math.min(1, (elapsed - 400) / (BOOT_DURATION - 600));
+        const progress = arena.bootDataReady ? animProgress : Math.min(0.95, animProgress);
 
         ctx.globalAlpha = 1;
         ctx.fillStyle = "#003300";
@@ -6101,7 +6103,7 @@
       updateAdventure();
       if (arena.mode === "boot") {
         drawBootMode();
-        if (performance.now() - arena.bootStartMs > BOOT_DURATION) {
+        if (performance.now() - arena.bootStartMs > BOOT_DURATION && arena.bootDataReady) {
           arena.bootDone = true;
           arena.mode = "menu";
         }
@@ -7045,7 +7047,11 @@
         arena.mode = "boot";
         arena.bootStartMs = performance.now();
         arena.bootDone = false;
+        arena.bootDataReady = false;
         arena.siege.active = false;
+      },
+      setBootDataReady() {
+        arena.bootDataReady = true;
       },
       showMenu() {
         arena.mode = "menu";
@@ -9040,6 +9046,7 @@
     siegeAudio.startMusic();
     if (!hasBooted) {
       hasBooted = true;
+      bossFightEngine.setBootDataReady();
     } else {
       bossFightEngine.showMenu();
     }
