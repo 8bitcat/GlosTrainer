@@ -69,6 +69,7 @@
     adminLink: document.getElementById("adminLink"),
     weeksOverview: document.getElementById("weeksOverview"),
     weekStatsContainer: document.getElementById("weekStatsContainer"),
+    weekStatsWeekSelect: document.getElementById("weekStatsWeekSelect"),
     leaderboardList: document.getElementById("leaderboardList"),
     leaderboardWeekSelect: document.getElementById("leaderboardWeekSelect"),
     onlineUsersList: document.getElementById("onlineUsersList"),
@@ -10469,6 +10470,84 @@
     if (!elements.weekStatsContainer) {
       return;
     }
+    const PERFECT_PASS = 3;
+
+    function renderWeekStats(week) {
+      const container = elements.weekStatsContainer;
+      container.innerHTML = "";
+      if (!week) {
+        container.innerHTML = "<p style='color:#64748b;font-size:.9rem;'>Välj en vecka ovan.</p>";
+        return;
+      }
+      const users = Array.isArray(week.users) ? week.users : [];
+      if (!users.length) {
+        container.innerHTML = "<p style='color:#64748b;font-size:.9rem;'>Ingen har sparat framsteg för denna vecka.</p>";
+        return;
+      }
+      const passed = users.filter(u => (u.perfectCount || 0) >= PERFECT_PASS);
+      const inProgress = users.filter(u => (u.perfectCount || 0) < PERFECT_PASS);
+
+      function avatarHtml(u) {
+        const url = escapeHtml(u.avatarUrl || "");
+        return url ? `<img src="${url}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;border:1px solid #b8d2e9;" />` : "";
+      }
+
+      const passedWrap = document.createElement("div");
+      passedWrap.style.cssText = "margin-bottom:1.1rem;";
+      const passedHeader = document.createElement("div");
+      passedHeader.style.cssText = "display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;";
+      passedHeader.innerHTML = `<span style="background:#16a34a;color:#fff;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:.2rem .55rem;border-radius:99px;">✓ Klarat</span>` +
+        `<span style="font-size:.8rem;color:#64748b;">${passed.length} av ${users.length} elever</span>`;
+      passedWrap.append(passedHeader);
+
+      if (!passed.length) {
+        const none = document.createElement("p");
+        none.style.cssText = "margin:0;font-size:.85rem;color:#94a3b8;";
+        none.textContent = `Ingen har klarat än (behöver ${PERFECT_PASS} perfekta körningar).`;
+        passedWrap.append(none);
+      } else {
+        passed.forEach(u => {
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;align-items:center;padding:.4rem .5rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:.35rem;gap:.5rem;";
+          const pc = u.perfectCount || 0;
+          row.innerHTML = `<span style="font-size:1.3rem;line-height:1;">🏆</span>` +
+            `${avatarHtml(u)}<span style="flex:1;font-weight:600;font-size:.9rem;">${escapeHtml(u.userName)}</span>` +
+            `<span style="font-size:.78rem;color:#15803d;font-weight:700;background:#dcfce7;padding:.15rem .45rem;border-radius:99px;">${pc}x perfekt</span>`;
+          passedWrap.append(row);
+        });
+      }
+      container.append(passedWrap);
+
+      if (inProgress.length) {
+        const progWrap = document.createElement("div");
+        const progHeader = document.createElement("div");
+        progHeader.style.cssText = "display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;";
+        progHeader.innerHTML = `<span style="background:#64748b;color:#fff;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:.2rem .55rem;border-radius:99px;">På gång</span>`;
+        progWrap.append(progHeader);
+
+        inProgress.forEach(u => {
+          const pc = u.perfectCount || 0;
+          const pct = Number(u.percent || 0);
+          const barColor = pct >= 100 ? "#16a34a" : pct >= 50 ? "#eab308" : "#ef4444";
+          const perfBarW = Math.round((pc / PERFECT_PASS) * 100);
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;align-items:center;padding:.35rem .5rem;border-bottom:1px solid #e9f0f7;gap:.5rem;";
+          row.innerHTML =
+            `${avatarHtml(u)}<span style="flex:1;font-size:.88rem;">${escapeHtml(u.userName)}</span>` +
+            `<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:80px;">` +
+            `<span style="font-size:.75rem;color:#64748b;">${u.correctCount}/${u.totalWords} glosor</span>` +
+            `<span style="display:inline-block;width:70px;height:5px;background:#e2e8f0;border-radius:3px;"><span style="display:block;height:100%;width:${Math.min(100, pct)}%;background:${barColor};border-radius:3px;"></span></span>` +
+            `</span>` +
+            `<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:72px;margin-left:.5rem;">` +
+            `<span style="font-size:.75rem;color:#64748b;">${pc}/${PERFECT_PASS} perfekt</span>` +
+            `<span style="display:inline-block;width:60px;height:5px;background:#e2e8f0;border-radius:3px;"><span style="display:block;height:100%;width:${perfBarW}%;background:#6366f1;border-radius:3px;"></span></span>` +
+            `</span>`;
+          progWrap.append(row);
+        });
+        container.append(progWrap);
+      }
+    }
+
     try {
       const response = await fetch("/api/vocab/week-stats");
       if (!response.ok) {
@@ -10477,87 +10556,55 @@
       }
       const data = await response.json();
       const items = Array.isArray(data.items) ? data.items : [];
-      // Feed to canvas menu
+
       if (bossFightEngine && bossFightEngine.setMenuData) {
         bossFightEngine.setMenuData({
           weekStats: items.map(wk => {
-            const players = Array.isArray(wk.players) ? wk.players : [];
-            const totalCorrect = players.reduce((s, p) => s + (p.totalCorrect || 0), 0);
-            const totalWords = Math.max(1, wk.totalWords || 1) * Math.max(1, players.length);
+            const users = Array.isArray(wk.users) ? wk.users : [];
+            const totalCorrect = users.reduce((s, u) => s + (u.correctCount || 0), 0);
+            const totalWords = Math.max(1, wk.totalWords || 1) * Math.max(1, users.length);
             const pct = totalCorrect / totalWords;
             return {
               weekName: wk.weekName || "Vecka",
               correct: totalCorrect,
               total: totalWords,
-              xp: players.reduce((s, p) => s + (p.totalXp || 0), 0),
+              xp: 0,
               trophy: pct >= 1 ? "gold" : pct >= 0.8 ? "silver" : pct >= 0.5 ? "bronze" : null,
             };
           }),
         });
       }
+
       if (!items.length) {
         elements.weekStatsContainer.innerHTML = "<p>Ingen statistik än.</p>";
         return;
       }
-      elements.weekStatsContainer.innerHTML = "";
-      items.forEach((week) => {
-        const section = document.createElement("div");
-        section.style.cssText = "margin-bottom:1rem;";
 
-        const header = document.createElement("h4");
-        header.style.cssText = "margin:0 0 .3rem 0;font-size:.95rem;";
-        header.textContent = `${week.weekName} (${week.totalWords} glosor) — ${languageDisplayName(week.language)}`;
-        section.append(header);
-
-        const users = Array.isArray(week.users) ? week.users : [];
-        if (!users.length) {
-          const empty = document.createElement("p");
-          empty.style.cssText = "margin:0;font-size:.85rem;color:#64748b;";
-          empty.textContent = "Ingen har sparat framsteg än.";
-          section.append(empty);
-        } else {
-          const table = document.createElement("table");
-          table.style.cssText = "width:100%;border-collapse:collapse;font-size:.85rem;";
-          const thead = document.createElement("thead");
-          thead.innerHTML = "<tr><th style='text-align:left;padding:.25rem .4rem;border-bottom:1px solid #d6e4f3;'>Namn</th><th style='text-align:right;padding:.25rem .4rem;border-bottom:1px solid #d6e4f3;'>Klarade</th><th style='text-align:right;padding:.25rem .4rem;border-bottom:1px solid #d6e4f3;'>%</th><th style='text-align:center;padding:.25rem .4rem;border-bottom:1px solid #d6e4f3;'>Pokaler</th></tr>";
-          table.append(thead);
-          const tbody = document.createElement("tbody");
-          users.forEach((u) => {
-            const tr = document.createElement("tr");
-            const pct = Number(u.percent || 0);
-            const pc = u.perfectCount || 0;
-            const barColor = pct >= 100 ? "#16a34a" : pct >= 50 ? "#eab308" : "#ef4444";
-            const trophies = [
-              { need: 1, label: "Trä", bg: "#d4a574", tint: "sepia(60%) saturate(30%) brightness(90%)" },
-              { need: 3, label: "Brons", bg: "#cd7f32", tint: "sepia(80%) saturate(200%) hue-rotate(-10deg) brightness(85%)" },
-              { need: 5, label: "Silver", bg: "#c0c0c0", tint: "saturate(0%) brightness(130%)" },
-              { need: 10, label: "Guld", bg: "#ffd700", tint: "sepia(60%) saturate(500%) hue-rotate(10deg) brightness(105%)" },
-            ];
-            let trophyHtml = "";
-            trophies.forEach((t) => {
-              const achieved = pc >= t.need;
-              const progressPct = achieved ? 100 : Math.round((pc / t.need) * 100);
-              const trophyOpacity = achieved ? "1" : "0.3";
-              trophyHtml += `<span title="${t.label} (${t.need}x 100%) — ${achieved ? 'Klar!' : progressPct + '%'}" style="display:inline-flex;flex-direction:column;align-items:center;margin:0 6px;font-size:1rem;line-height:1;">` +
-                `<span style="font-size:1.6rem;filter:${t.tint};opacity:${trophyOpacity};">\uD83C\uDFC6</span>` +
-                `<span style="display:inline-block;width:32px;height:6px;background:#e2e8f0;border-radius:3px;margin-top:2px;"><span style="display:block;height:100%;width:${progressPct}%;background:${t.bg};border-radius:3px;"></span></span>` +
-                `<span style="font-size:.7rem;color:${t.bg};font-weight:700;margin-top:1px;">${achieved ? t.label : progressPct + '%'}</span>` +
-                `</span>`;
-            });
-            const safeAvatarUrl = escapeHtml(u.avatarUrl);
-            const safeUserName = escapeHtml(u.userName);
-            const avatarImg = safeAvatarUrl ? `<img src="${safeAvatarUrl}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;border:1px solid #b8d2e9;" />` : "";
-            tr.innerHTML = `<td style="padding:.25rem .4rem;">${avatarImg}${safeUserName}</td>` +
-              `<td style="text-align:right;padding:.25rem .4rem;">${u.correctCount}/${u.totalWords}</td>` +
-              `<td style="text-align:right;padding:.25rem .4rem;"><span style="display:inline-block;width:40px;height:8px;background:#e2e8f0;border-radius:4px;vertical-align:middle;margin-right:4px;"><span style="display:block;height:100%;width:${Math.min(100, pct)}%;background:${barColor};border-radius:4px;"></span></span>${pct}%</td>` +
-              `<td style="text-align:center;padding:.25rem .4rem;">${trophyHtml}</td>`;
-            tbody.append(tr);
-          });
-          table.append(tbody);
-          section.append(table);
+      if (elements.weekStatsWeekSelect) {
+        const sel = elements.weekStatsWeekSelect;
+        const current = sel.value;
+        sel.innerHTML = "";
+        items.forEach(wk => {
+          const opt = document.createElement("option");
+          opt.value = wk.weekId;
+          const wkUsers = Array.isArray(wk.users) ? wk.users : [];
+          const passedCount = wkUsers.filter(u => (u.perfectCount || 0) >= PERFECT_PASS).length;
+          opt.textContent = wk.weekName + (passedCount ? " ✓ " + passedCount + " klarat" : "");
+          sel.append(opt);
+        });
+        if (current && items.some(w => w.weekId === current)) {
+          sel.value = current;
         }
-        elements.weekStatsContainer.append(section);
-      });
+        sel.onchange = () => {
+          const week = items.find(w => w.weekId === sel.value);
+          renderWeekStats(week || null);
+        };
+      }
+
+      const selId = elements.weekStatsWeekSelect ? elements.weekStatsWeekSelect.value : null;
+      const firstWeek = selId ? items.find(w => w.weekId === selId) : items[0];
+      renderWeekStats(firstWeek || null);
+
     } catch {
       elements.weekStatsContainer.innerHTML = "<p>Kunde inte ladda veckostatistik.</p>";
     }

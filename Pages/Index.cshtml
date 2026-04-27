@@ -113,6 +113,16 @@
         <button id="flipDirectionButton" type="button" style="display:block;width:100%;padding:.7rem;margin-bottom:.6rem;font-size:1rem;font-weight:800;border:none;border-radius:10px;background:#16a34a;color:#fff;cursor:pointer;">Klicka för att välja ordning: English → Svenska</button>
         <p id="questionLabel" class="question-label" style="display:none;"></p>
         <p class="question-word" id="questionWord">Laddar glosor...</p>
+        <div id="audioControlsRow" style="display:none;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;">
+            <button id="replayAudioBtn" type="button" style="padding:.6rem 1.2rem;font-size:1rem;border:2px solid #3b82f6;border-radius:10px;background:#eff6ff;color:#1d4ed8;cursor:pointer;font-weight:700;">&#128264; Spela upp</button>
+            <button id="replaySlowBtn" type="button" style="padding:.6rem 1.2rem;font-size:1rem;border:2px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#b45309;cursor:pointer;font-weight:700;">&#128034; Langsamt</button>
+            <div id="speedToggle" style="display:inline-flex;align-items:center;gap:2px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:3px;">
+                <button type="button" class="speed-btn" data-speed="0.5" style="padding:5px 10px;font-size:.85rem;border:none;border-radius:6px;cursor:pointer;background:transparent;font-weight:700;">0.5x</button>
+                <button type="button" class="speed-btn" data-speed="0.75" style="padding:5px 10px;font-size:.85rem;border:none;border-radius:6px;cursor:pointer;background:transparent;font-weight:700;">0.75x</button>
+                <button type="button" class="speed-btn" data-speed="0.85" style="padding:5px 10px;font-size:.85rem;border:none;border-radius:6px;cursor:pointer;background:#3b82f6;color:#fff;font-weight:700;">0.85x</button>
+                <button type="button" class="speed-btn" data-speed="1" style="padding:5px 10px;font-size:.85rem;border:none;border-radius:6px;cursor:pointer;background:transparent;font-weight:700;">1x</button>
+            </div>
+        </div>
         <form id="answerForm" autocomplete="off">
             <input id="answerInput" type="text" placeholder="Skriv svaret..." style="font-size:1.15rem;padding:.85rem 1rem;" />
             <button type="submit">Svar</button>
@@ -154,6 +164,7 @@
 
     <section class="card-panel">
         <p class="question-label">Veckostatistik</p>
+        <select id="weekStatsWeekSelect" style="margin-bottom:.75rem;max-width:340px;display:block;"></select>
         <div id="weekStatsContainer"></div>
     </section>
 
