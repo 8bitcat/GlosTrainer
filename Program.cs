@@ -21,6 +21,7 @@ builder.Services.AddScoped<VocabDatabaseInitializer>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<OpenAiVocabParser>();
+builder.Services.AddSingleton<SwedishMediaGenerator>();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -34,6 +35,12 @@ builder.Services.AddAuthentication(options =>
         if (context.Request.Path.StartsWithSegments("/api"))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        }
+
+        if (context.Request.Path.StartsWithSegments("/Teacher"))
+        {
+            context.Response.Redirect("/Auth/TeacherLogin");
             return Task.CompletedTask;
         }
 
@@ -166,22 +173,25 @@ app.MapGet("/api/names/random", async (AppDbContext db, CancellationToken ct) =>
 
 app.MapGet("/api/vocab/data", async (HttpContext httpContext, AppDbContext db, LocalAuthService authService, CancellationToken ct) =>
 {
-    httpContext.Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-    httpContext.Response.Headers["Pragma"] = "no-cache";
+    httpContext.Response.Headers["Cache-Control"] = "public, max-age=15";
     var users = await db.UserProfiles.AsNoTracking()
         .OrderBy(x => x.Name)
         .Select(x => new VocabUser { Id = x.Id, Name = x.Name })
         .ToListAsync(ct);
 
     var weeks = await db.Weeks.AsNoTracking()
-        .Include(x => x.Words)
         .OrderBy(x => x.WeekName)
         .Select(week => new VocabWeek
         {
             Id = week.Id,
             WeekName = week.WeekName,
             Language = string.IsNullOrWhiteSpace(week.Language) ? "english" : week.Language,
-            Words = week.Words.OrderBy(x => x.Id).Select(word => new VocabWord { Sv = word.Sv, En = word.En }).ToList()
+            Words = week.Words.OrderBy(x => x.Id).Select(word => new VocabWord
+            {
+                Sv = word.Sv,
+                En = word.En,
+                HasMedia = word.ImageBase64 != null && word.AudioBase64 != null
+            }).ToList()
         })
         .ToListAsync(ct);
 
@@ -289,52 +299,20 @@ app.MapPost("/api/profile/avatar", async (AvatarSaveRequest request, HttpContext
 app.MapPost("/api/presence/heartbeat", async (HttpContext httpContext, AppDbContext db, LocalAuthService authService, CancellationToken ct) =>
 {
     var account = await authService.GetCurrentUserAsync(httpContext.User, ct);
-    if (account?.UserProfileId is null)
-    {
-        return Results.Unauthorized();
-    }
+    if (account?.UserProfileId is null) return Results.Unauthorized();
 
     var displayName = account.UserProfile?.Name ?? account.Username;
-    var presence = await db.OnlinePresences.FirstOrDefaultAsync(x => x.UserProfileId == account.UserProfileId, ct);
-    if (presence is null)
-    {
-        presence = new OnlinePresence
-        {
-            UserProfileId = account.UserProfileId,
-            DisplayName = displayName,
-            LastSeenUtc = DateTime.UtcNow
-        };
-        db.OnlinePresences.Add(presence);
-    }
-    else
-    {
-        presence.DisplayName = displayName;
-        presence.LastSeenUtc = DateTime.UtcNow;
-    }
-
+    var now = DateTime.UtcNow;
     var sessionId = $"auth:{account.UserProfileId}";
-    var sitePresence = await db.SitePresences.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
-    if (sitePresence is null)
-    {
-        sitePresence = new SitePresence
-        {
-            SessionId = sessionId,
-            DisplayName = displayName,
-            IsAuthenticated = true,
-            UserProfileId = account.UserProfileId,
-            LastSeenUtc = DateTime.UtcNow
-        };
-        db.SitePresences.Add(sitePresence);
-    }
-    else
-    {
-        sitePresence.DisplayName = displayName;
-        sitePresence.IsAuthenticated = true;
-        sitePresence.UserProfileId = account.UserProfileId;
-        sitePresence.LastSeenUtc = DateTime.UtcNow;
-    }
 
-    await db.SaveChangesAsync(ct);
+    // Single MERGE upsert for SitePresences (most important for /api/presence/public)
+    await db.Database.ExecuteSqlRawAsync(@"
+        MERGE INTO [SitePresences] AS T
+        USING (SELECT {0} AS SessionId) AS S ON T.SessionId = S.SessionId
+        WHEN MATCHED THEN UPDATE SET DisplayName = {1}, IsAuthenticated = 1, UserProfileId = {2}, LastSeenUtc = {3}
+        WHEN NOT MATCHED THEN INSERT (SessionId, DisplayName, IsAuthenticated, UserProfileId, LastSeenUtc) VALUES ({0}, {1}, 1, {2}, {3});",
+        sessionId, displayName, account.UserProfileId, now);
+
     return Results.Ok(new { ok = true });
 }).RequireAuthorization();
 
@@ -351,33 +329,19 @@ app.MapPost("/api/presence/guest-heartbeat", async (GuestPresenceHeartbeatReques
         displayName = displayName[..200];
     }
 
-    var row = await db.SitePresences.FirstOrDefaultAsync(x => x.SessionId == sessionId, ct);
-    if (row is null)
-    {
-        row = new SitePresence
-        {
-            SessionId = sessionId,
-            DisplayName = displayName,
-            IsAuthenticated = false,
-            UserProfileId = null,
-            LastSeenUtc = DateTime.UtcNow
-        };
-        db.SitePresences.Add(row);
-    }
-    else
-    {
-        row.DisplayName = displayName;
-        row.IsAuthenticated = false;
-        row.UserProfileId = null;
-        row.LastSeenUtc = DateTime.UtcNow;
-    }
-    await db.SaveChangesAsync(ct);
+    await db.Database.ExecuteSqlRawAsync(@"
+        MERGE INTO [SitePresences] AS T
+        USING (SELECT {0} AS SessionId) AS S ON T.SessionId = S.SessionId
+        WHEN MATCHED THEN UPDATE SET DisplayName = {1}, IsAuthenticated = 0, UserProfileId = NULL, LastSeenUtc = {2}
+        WHEN NOT MATCHED THEN INSERT (SessionId, DisplayName, IsAuthenticated, LastSeenUtc) VALUES ({0}, {1}, 0, {2});",
+        sessionId, displayName, DateTime.UtcNow);
     return Results.Ok(new { ok = true });
 });
 
-app.MapGet("/api/presence/public", async (AppDbContext db, CancellationToken ct) =>
+app.MapGet("/api/presence/public", async (HttpContext httpContext, AppDbContext db, CancellationToken ct) =>
 {
-    var cutoff = DateTime.UtcNow.AddSeconds(-45);
+    httpContext.Response.Headers["Cache-Control"] = "public, max-age=10";
+    var cutoff = DateTime.UtcNow.AddSeconds(-60);
     var users = await db.SitePresences.AsNoTracking()
         .Where(x => x.LastSeenUtc >= cutoff)
         .OrderBy(x => x.DisplayName)
@@ -1555,6 +1519,168 @@ app.MapPost("/api/vocab/ai-parse-upload", async (HttpRequest httpRequest, OpenAi
         return Results.BadRequest(new { error = ex.Message });
     }
 });
+
+// ── Swedish spelling media endpoints ─────────────────────────────────────
+
+app.MapGet("/api/vocab/weeks/{weekId}/media", async (string weekId, AppDbContext db, CancellationToken ct) =>
+{
+    var words = await db.Words.AsNoTracking()
+        .Where(x => x.WeekId == weekId && x.ImageBase64 != null && x.AudioBase64 != null)
+        .Select(x => new { sv = x.Sv, image = x.ImageBase64, audio = x.AudioBase64 })
+        .ToListAsync(ct);
+    return Results.Ok(new { words });
+});
+
+// Get word list with IDs for admin page
+app.MapGet("/api/vocab/weeks/{weekId}/words", async (string weekId, AppDbContext db, CancellationToken ct) =>
+{
+    var words = await db.Words.AsNoTracking()
+        .Where(x => x.WeekId == weekId)
+        .OrderBy(x => x.Id)
+        .Select(x => new
+        {
+            id = x.Id,
+            sv = x.Sv,
+            en = x.En,
+            hasImage = x.ImageBase64 != null,
+            hasAudio = x.AudioBase64 != null,
+            image = x.ImageBase64,
+            audio = x.AudioBase64
+        })
+        .ToListAsync(ct);
+    return Results.Ok(new { words });
+}).RequireAuthorization("AdminOnly");
+
+// Upload manual image/audio for a word
+app.MapPost("/api/vocab/words/{wordId:int}/upload-media", async (HttpRequest httpRequest, int wordId, AppDbContext db, CancellationToken ct) =>
+{
+    var word = await db.Words.FirstOrDefaultAsync(x => x.Id == wordId, ct);
+    if (word is null)
+    {
+        return Results.NotFound(new { error = "Ord hittades inte." });
+    }
+
+    var form = await httpRequest.ReadFormAsync(ct);
+    var imageFile = form.Files.GetFile("image");
+    var audioFile = form.Files.GetFile("audio");
+    var audioBase64Field = form["audioBase64"].FirstOrDefault();
+
+    if (imageFile is not null && imageFile.Length > 0)
+    {
+        await using var ms = new MemoryStream();
+        await imageFile.CopyToAsync(ms, ct);
+        var b64 = Convert.ToBase64String(ms.ToArray());
+        word.ImageBase64 = $"data:{imageFile.ContentType};base64,{b64}";
+    }
+
+    if (audioFile is not null && audioFile.Length > 0)
+    {
+        await using var ms = new MemoryStream();
+        await audioFile.CopyToAsync(ms, ct);
+        var b64 = Convert.ToBase64String(ms.ToArray());
+        word.AudioBase64 = $"data:{audioFile.ContentType};base64,{b64}";
+    }
+    else if (!string.IsNullOrWhiteSpace(audioBase64Field))
+    {
+        // Recorded audio sent as base64 data URI
+        word.AudioBase64 = audioBase64Field;
+    }
+
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(new { word = word.Sv, id = word.Id, hasImage = word.ImageBase64 != null, hasAudio = word.AudioBase64 != null });
+}).RequireAuthorization("AdminOnly").DisableAntiforgery();
+
+app.MapPost("/api/vocab/weeks/{weekId}/generate-media", async (HttpRequest httpRequest, string weekId, AppDbContext db, SwedishMediaGenerator generator, CancellationToken ct) =>
+{
+    var week = await db.Weeks.Include(x => x.Words).FirstOrDefaultAsync(x => x.Id == weekId, ct);
+    if (week is null)
+    {
+        return Results.NotFound(new { error = "Vecka hittades inte." });
+    }
+
+    // Check if a specific word should be force-regenerated
+    string? forceRegenerate = null;
+    try
+    {
+        var body = await httpRequest.ReadFromJsonAsync<JsonElement>(ct);
+        if (body.TryGetProperty("forceRegenerate", out var fr))
+        {
+            forceRegenerate = fr.GetString();
+        }
+    }
+    catch { /* no body or invalid json is fine */ }
+
+    var results = new List<object>();
+    foreach (var word in week.Words)
+    {
+        var shouldForce = !string.IsNullOrWhiteSpace(forceRegenerate) &&
+                          string.Equals(word.Sv, forceRegenerate, StringComparison.OrdinalIgnoreCase);
+
+        if (!shouldForce && !string.IsNullOrWhiteSpace(word.ImageBase64) && !string.IsNullOrWhiteSpace(word.AudioBase64))
+        {
+            results.Add(new { word = word.Sv, status = "skipped", id = word.Id });
+            continue;
+        }
+
+        try
+        {
+            // Auto-translate Swedish word to English if no English description provided
+            var conceptHint = string.IsNullOrWhiteSpace(word.En) || string.Equals(word.Sv.Trim(), word.En.Trim(), StringComparison.OrdinalIgnoreCase)
+                ? await generator.TranslateForImageAsync(word.Sv, ct)
+                : word.En;
+            // Save the English translation back so it can be used as a hint
+            if (string.IsNullOrWhiteSpace(word.En) || string.Equals(word.Sv.Trim(), word.En.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                word.En = conceptHint;
+            }
+            word.ImageBase64 = await generator.GenerateImageAsync(conceptHint, ct);
+            word.AudioBase64 = await generator.GenerateAudioAsync(word.Sv, ct);
+            await db.SaveChangesAsync(ct);
+            results.Add(new { word = word.Sv, status = "generated", id = word.Id });
+        }
+        catch (Exception ex)
+        {
+            results.Add(new { word = word.Sv, status = "error", error = ex.Message, id = word.Id });
+        }
+    }
+
+    return Results.Ok(new { results });
+}).RequireAuthorization("AdminOnly");
+
+app.MapPost("/api/vocab/words/{wordId:int}/regenerate-media", async (int wordId, AppDbContext db, SwedishMediaGenerator generator, CancellationToken ct) =>
+{
+    var word = await db.Words.FirstOrDefaultAsync(x => x.Id == wordId, ct);
+    if (word is null)
+    {
+        return Results.NotFound(new { error = "Ord hittades inte." });
+    }
+
+    var conceptHint = string.IsNullOrWhiteSpace(word.En) || string.Equals(word.Sv.Trim(), word.En.Trim(), StringComparison.OrdinalIgnoreCase)
+        ? await generator.TranslateForImageAsync(word.Sv, ct)
+        : word.En;
+    if (string.IsNullOrWhiteSpace(word.En) || string.Equals(word.Sv.Trim(), word.En.Trim(), StringComparison.OrdinalIgnoreCase))
+    {
+        word.En = conceptHint;
+    }
+    word.ImageBase64 = await generator.GenerateImageAsync(conceptHint, ct);
+    word.AudioBase64 = await generator.GenerateAudioAsync(word.Sv, ct);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new { word = word.Sv, status = "generated", id = word.Id });
+}).RequireAuthorization("AdminOnly");
+
+app.MapDelete("/api/vocab/words/{wordId:int}", async (int wordId, AppDbContext db, CancellationToken ct) =>
+{
+    var word = await db.Words.FirstOrDefaultAsync(x => x.Id == wordId, ct);
+    if (word is null)
+    {
+        return Results.NotFound(new { error = "Ord hittades inte." });
+    }
+
+    db.Words.Remove(word);
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(new { deleted = word.Sv, id = word.Id });
+}).RequireAuthorization("AdminOnly");
 
 app.Run();
 
