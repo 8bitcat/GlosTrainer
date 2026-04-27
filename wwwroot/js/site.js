@@ -436,6 +436,7 @@
         buttons: [],
         leaderboard: [],
         weekStats: [],
+        statsWeekIdx: 0,
         teacherCode: "",
         teacherMsg: "",
         teacherMsgColor: "#00aa00",
@@ -1183,36 +1184,105 @@
     }
 
     function drawStatsTab(m) {
-      const w = canvas.width, contentY = 90;
-      ctx.fillStyle = "#80c0e0"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
-      ctx.fillText("VECKOSTATISTIK", w / 2, contentY);
+      const w = canvas.width, h = canvas.height;
+      const PERFECT_PASS = 3;
       const ws = m.weekStats || [];
-      const itemH = 28, listY = contentY + 14;
-      const maxVis = Math.floor((canvas.height - listY - 20) / itemH);
-      const trophyColors = { gold: "#f0d040", silver: "#c0c0d0", bronze: "#c08040" };
-      ws.slice(0, maxVis).forEach((stat, i) => {
-        const iy = listY + i * itemH;
-        ctx.fillStyle = i % 2 === 0 ? "rgba(20,30,50,0.5)" : "transparent";
-        if (i % 2 === 0) ctx.fillRect(30, iy, w - 60, itemH - 2);
-        ctx.fillStyle = "#b0c0d0"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
-        ctx.fillText(stat.weekName || `Vecka ${i + 1}`, 40, iy + 12);
-        // Trophy
-        if (stat.trophy) {
-          ctx.fillStyle = trophyColors[stat.trophy] || "#808080";
-          ctx.font = "bold 11px monospace";
-          ctx.fillText(stat.trophy === "gold" ? "🏆" : stat.trophy === "silver" ? "🥈" : "🥉", 40, iy + 24);
-        }
-        ctx.textAlign = "right"; ctx.fillStyle = "#60a0d0"; ctx.font = "10px monospace";
-        ctx.fillText(`${stat.correct || 0}/${stat.total || 0} rätt  |  ${stat.xp || 0} XP`, w - 40, iy + 14);
-        // Progress bar
-        const pct = stat.total > 0 ? stat.correct / stat.total : 0;
-        ctx.fillStyle = "#0a1020"; ctx.fillRect(w - 200, iy + 18, 100, 6);
-        ctx.fillStyle = pct >= 1 ? "#f0d040" : pct > 0.7 ? "#30c030" : pct > 0.4 ? "#e0a020" : "#c03030";
-        ctx.fillRect(w - 200, iy + 18, 100 * pct, 6);
-      });
       if (!ws.length) {
         ctx.fillStyle = "#405060"; ctx.font = "12px monospace"; ctx.textAlign = "center";
-        ctx.fillText("Ingen statistik ännu", w / 2, listY + 40);
+        ctx.fillText("Ingen statistik \xe4nnu", w / 2, 140);
+        return;
+      }
+      const idx = Math.max(0, Math.min(m.statsWeekIdx || 0, ws.length - 1));
+      const week = ws[idx];
+      const users = week.users || [];
+      const passed = users.filter(u => (u.perfectCount || 0) >= PERFECT_PASS);
+      const inProgress = users.filter(u => (u.perfectCount || 0) < PERFECT_PASS);
+
+      const navY = 98;
+      if (idx > 0) {
+        ctx.fillStyle = "#1e3a5f";
+        ctx.fillRect(28, navY - 12, 26, 22);
+        ctx.strokeStyle = "#3a6ea0"; ctx.lineWidth = 1; ctx.strokeRect(28, navY - 12, 26, 22);
+        ctx.fillStyle = "#80c0e0"; ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+        ctx.fillText("<", 41, navY + 4);
+        m.buttons.push({ type: "statsWeekPrev", x: 28, y: navY - 12, w: 26, h: 22 });
+      }
+      if (idx < ws.length - 1) {
+        ctx.fillStyle = "#1e3a5f";
+        ctx.fillRect(w - 54, navY - 12, 26, 22);
+        ctx.strokeStyle = "#3a6ea0"; ctx.lineWidth = 1; ctx.strokeRect(w - 54, navY - 12, 26, 22);
+        ctx.fillStyle = "#80c0e0"; ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+        ctx.fillText(">", w - 41, navY + 4);
+        m.buttons.push({ type: "statsWeekNext", x: w - 54, y: navY - 12, w: 26, h: 22 });
+      }
+      ctx.fillStyle = "#80c0e0"; ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+      let weekLabel = week.weekName || "Vecka";
+      const nameMax = w - 140;
+      if (ctx.measureText(weekLabel).width > nameMax) {
+        while (ctx.measureText(weekLabel + "…").width > nameMax && weekLabel.length > 4)
+          weekLabel = weekLabel.slice(0, -1);
+        weekLabel += "…";
+      }
+      ctx.fillText(weekLabel, w / 2, navY + 4);
+      ctx.fillStyle = "#405870"; ctx.font = "9px monospace";
+      ctx.fillText(`${idx + 1} / ${ws.length}`, w / 2, navY + 16);
+
+      let iy = navY + 34;
+
+      ctx.fillStyle = "#16a34a"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
+      ctx.fillText(`✓ KLARAT  —  ${passed.length} av ${users.length} elever`, 34, iy);
+      iy += 4;
+      ctx.fillStyle = "#16a34a"; ctx.fillRect(34, iy, w - 68, 1);
+      iy += 10;
+
+      if (!passed.length) {
+        ctx.fillStyle = "#3a5040"; ctx.font = "10px monospace"; ctx.textAlign = "left";
+        ctx.fillText(`Ingen har klarat \xe4n — kr\xe4ver ${PERFECT_PASS} perfekta k\xf6rningar`, 38, iy);
+        iy += 16;
+      } else {
+        passed.forEach(u => {
+          ctx.fillStyle = "rgba(22,163,74,0.12)";
+          ctx.fillRect(30, iy - 11, w - 60, 17);
+          ctx.fillStyle = "#86efac"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
+          ctx.fillText("🏆 " + u.userName, 38, iy);
+          ctx.fillStyle = "#4ade80"; ctx.font = "10px monospace"; ctx.textAlign = "right";
+          ctx.fillText(`${u.perfectCount}x perfekt`, w - 38, iy);
+          iy += 18;
+        });
+      }
+
+      iy += 6;
+
+      if (inProgress.length && iy < h - 30) {
+        ctx.fillStyle = "#607080"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
+        ctx.fillText("P\xc5 G\xc5NG", 34, iy);
+        iy += 4;
+        ctx.fillStyle = "#405060"; ctx.fillRect(34, iy, w - 68, 1);
+        iy += 10;
+
+        const rowH = 20;
+        const maxRows = Math.floor((h - iy - 10) / rowH);
+        inProgress.slice(0, maxRows).forEach(u => {
+          const pc = u.perfectCount || 0;
+          const pct = Number(u.percent || 0);
+          const barColor = pct >= 100 ? "#16a34a" : pct >= 50 ? "#eab308" : "#ef4444";
+          const perfPct = Math.min(1, pc / PERFECT_PASS);
+          ctx.fillStyle = "#b0c8d8"; ctx.font = "11px monospace"; ctx.textAlign = "left";
+          ctx.fillText(u.userName, 38, iy);
+          const wb = w - 200;
+          ctx.fillStyle = "#0f1a28"; ctx.fillRect(wb, iy - 9, 50, 5);
+          ctx.fillStyle = barColor; ctx.fillRect(wb, iy - 9, 50 * (pct / 100), 5);
+          const pb = w - 140;
+          ctx.fillStyle = "#0f1a28"; ctx.fillRect(pb, iy - 9, 50, 5);
+          ctx.fillStyle = "#6366f1"; ctx.fillRect(pb, iy - 9, 50 * perfPct, 5);
+          ctx.fillStyle = "#506070"; ctx.font = "9px monospace"; ctx.textAlign = "right";
+          ctx.fillText(`${pc}/${PERFECT_PASS}`, w - 38, iy);
+          iy += rowH;
+        });
+        if (inProgress.length > maxRows) {
+          ctx.fillStyle = "#405060"; ctx.font = "9px monospace"; ctx.textAlign = "center";
+          ctx.fillText(`+ ${inProgress.length - maxRows} till...`, w / 2, iy);
+        }
       }
     }
 
@@ -1596,6 +1666,8 @@
           if (btn.type === "startFight") return { action: "startFight" };
           if (btn.type === "acceptChallenge") return { action: "acceptChallenge", challengeId: btn.challengeId };
           if (btn.type === "declineChallenge") return { action: "declineChallenge", challengeId: btn.challengeId };
+          if (btn.type === "statsWeekPrev") { m.statsWeekIdx = Math.max(0, (m.statsWeekIdx || 0) - 1); return null; }
+          if (btn.type === "statsWeekNext") { m.statsWeekIdx = Math.min((m.weekStats || []).length - 1, (m.statsWeekIdx || 0) + 1); return null; }
           if (btn.type === "authLogin") return { action: "navigate", url: "/Auth/Login" };
         }
       }
@@ -10559,19 +10631,18 @@
 
       if (bossFightEngine && bossFightEngine.setMenuData) {
         bossFightEngine.setMenuData({
-          weekStats: items.map(wk => {
-            const users = Array.isArray(wk.users) ? wk.users : [];
-            const totalCorrect = users.reduce((s, u) => s + (u.correctCount || 0), 0);
-            const totalWords = Math.max(1, wk.totalWords || 1) * Math.max(1, users.length);
-            const pct = totalCorrect / totalWords;
-            return {
-              weekName: wk.weekName || "Vecka",
-              correct: totalCorrect,
-              total: totalWords,
-              xp: 0,
-              trophy: pct >= 1 ? "gold" : pct >= 0.8 ? "silver" : pct >= 0.5 ? "bronze" : null,
-            };
-          }),
+          weekStats: items.map(wk => ({
+            weekId: wk.weekId,
+            weekName: wk.weekName || "Vecka",
+            totalWords: wk.totalWords || 0,
+            users: (wk.users || []).map(u => ({
+              userName: u.userName,
+              perfectCount: u.perfectCount || 0,
+              correctCount: u.correctCount || 0,
+              totalWords: u.totalWords || 0,
+              percent: u.percent || 0,
+            })),
+          })),
         });
       }
 
