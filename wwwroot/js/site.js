@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.9.2";
+  const GAME_VERSION = "1.9.3";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -228,6 +228,9 @@
     challengeInboxRenderKey: "",
     swedishMedia: {},
     swedishMediaWeekId: "",
+    _mathMode: false,
+    _mathExercises: [],
+    _selectedMathCategoryId: null,
   };
 
   function ensureWordsProgressElements() {
@@ -369,6 +372,7 @@
         imageDataUri: null,
         _imgEl: null,
         glosaFeedback: null,
+        columnMath: null, // {rows: [{digits:[], type:"carry"|"operand"|"answer"}], cursorRow, cursorCol, operator, commaPos}
         enemyFeed: [],
         gameOver: false,
         winner: null,
@@ -440,6 +444,9 @@
         selectedBossId: "oiia",
         bossScrollOffset: 0,
         pendingChallenges: [],
+        playSubTab: "sprak",
+        selectedMathCategoryId: null,
+        mathScrollOffset: 0,
       },
     };
 
@@ -782,6 +789,33 @@
 
     function drawPlayTab(m) {
       const w = canvas.width, contentY = 90;
+
+      // Sub-tabs: SPRAK | MATTE
+      const subTabW = 80, subTabH = 18;
+      const subTabs = [{ id: "sprak", label: "SPRAK" }, { id: "matte", label: "MATTE" }];
+      subTabs.forEach((st, i) => {
+        const tx = 20 + i * (subTabW + 3);
+        const sel = st.id === (m.playSubTab || "sprak");
+        ctx.fillStyle = sel ? "#2050c0" : "#0f1a2a";
+        ctx.fillRect(tx, contentY, subTabW, subTabH);
+        ctx.strokeStyle = sel ? "#4080f0" : "#1a2a40";
+        ctx.lineWidth = 1; ctx.strokeRect(tx, contentY, subTabW, subTabH);
+        ctx.fillStyle = sel ? "#f0f0f0" : "#607080";
+        ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+        ctx.fillText(st.label, tx + subTabW / 2, contentY + 13);
+        m.buttons.push({ type: "playSubTab", subTab: st.id, x: tx, y: contentY, w: subTabW, h: subTabH });
+      });
+
+      const subContentY = contentY + subTabH + 6;
+      if ((m.playSubTab || "sprak") === "sprak") {
+        drawPlayTabSprak(m, subContentY);
+      } else {
+        drawPlayTabMatte(m, subContentY);
+      }
+    }
+
+    function drawPlayTabSprak(m, contentY) {
+      const w = canvas.width;
       const half = Math.floor(w / 2);
 
       // Language selector
@@ -1023,6 +1057,102 @@
       ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
       ctx.fillText("🗡 ADVENTURE", btnX2 + btnW / 2, btnY + 24);
       m.buttons.push({ type: "startAdventure", x: btnX2, y: btnY, w: btnW, h: btnH });
+    }
+
+    function drawPlayTabMatte(m, contentY) {
+      const w = canvas.width;
+      const half = Math.floor(w / 2);
+      const categories = getMathCategories();
+
+      // Left column: Math category list
+      const listX = 20, listY = contentY + 20, listW = half - 30, itemH = 22;
+      const maxVis = Math.min(10, Math.floor((canvas.height - listY - 60) / itemH));
+
+      ctx.fillStyle = "#506880"; ctx.font = "bold 9px monospace"; ctx.textAlign = "left";
+      ctx.fillText("VALJ KATEGORI:", listX, listY - 4);
+
+      ctx.fillStyle = "rgba(10,16,32,0.8)";
+      ctx.fillRect(listX, listY, listW, maxVis * itemH + 4);
+      ctx.strokeStyle = "#1a3050"; ctx.lineWidth = 1;
+      ctx.strokeRect(listX, listY, listW, maxVis * itemH + 4);
+
+      const si = Math.max(0, Math.min(m.mathScrollOffset || 0, categories.length - maxVis));
+      const ei = Math.min(categories.length, si + maxVis);
+      for (let i = si; i < ei; i++) {
+        const cat = categories[i], iy = listY + 2 + (i - si) * itemH;
+        const sel = cat.id === m.selectedMathCategoryId;
+        ctx.fillStyle = sel ? "#1a3870" : "transparent";
+        if (sel) ctx.fillRect(listX + 2, iy, listW - 4, itemH - 2);
+        if (sel) { ctx.strokeStyle = "#4080f0"; ctx.lineWidth = 1; ctx.strokeRect(listX + 2, iy, listW - 4, itemH - 2); }
+        ctx.fillStyle = sel ? "#f0f0f0" : "#b0c0d0";
+        ctx.font = sel ? "bold 10px monospace" : "10px monospace"; ctx.textAlign = "left";
+        ctx.fillText(`${cat.icon || ""} ${cat.name} (${cat.exercises.length})`, listX + 6, iy + 14);
+        m.buttons.push({ type: "mathCategory", categoryId: cat.id, x: listX, y: iy, w: listW, h: itemH - 2 });
+      }
+
+      if (si > 0) {
+        ctx.fillStyle = "#8090a0"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+        ctx.fillText("\u25B2", listX + listW / 2, listY - 2);
+        m.buttons.push({ type: "mathScrollUp", x: listX, y: listY - 14, w: listW, h: 14 });
+      }
+      if (ei < categories.length) {
+        ctx.fillStyle = "#8090a0"; ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+        ctx.fillText("\u25BC", listX + listW / 2, listY + maxVis * itemH + 14);
+        m.buttons.push({ type: "mathScrollDown", x: listX, y: listY + maxVis * itemH + 4, w: listW, h: 14 });
+      }
+
+      // Right column: Boss selection (reuse same rendering as sprak tab)
+      const bossX = half + 10, bossW = half - 30;
+      ctx.fillStyle = "#506880"; ctx.font = "bold 9px monospace"; ctx.textAlign = "left";
+      ctx.fillText("VALJ BOSS:", bossX, listY - 4);
+
+      const visibleBosses = SIEGE_BOSSES;
+      const maxVisibleBosses = Math.floor((canvas.height - listY - 90) / 34);
+      const scrollOffset = m.bossScrollOffset || 0;
+      const displayBosses = visibleBosses.slice(scrollOffset, scrollOffset + maxVisibleBosses);
+
+      if (scrollOffset > 0) {
+        ctx.fillStyle = "#506880"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+        ctx.fillText("\u25B2", bossX + bossW / 2, listY - 2);
+        m.buttons.push({ type: "bossScrollUp", x: bossX, y: listY - 14, w: bossW, h: 16 });
+      }
+
+      displayBosses.forEach((boss, i) => {
+        const by = listY + i * 34;
+        const sel = boss.id === m.selectedBossId;
+        ctx.fillStyle = sel ? "#3a1a40" : "rgba(20,15,25,0.6)";
+        ctx.fillRect(bossX, by, bossW, 30);
+        if (sel) { ctx.strokeStyle = "#a040c0"; ctx.lineWidth = 2; ctx.strokeRect(bossX, by, bossW, 30); }
+        ctx.font = "20px sans-serif"; ctx.textAlign = "left";
+        ctx.fillText(boss.icon, bossX + 6, by + 22);
+        ctx.fillStyle = sel ? "#e0c0f0" : "#a0a0b0";
+        ctx.font = sel ? "bold 12px monospace" : "11px monospace";
+        ctx.fillText(boss.name, bossX + 32, by + 14);
+        ctx.fillStyle = "#c04040"; ctx.font = "10px sans-serif";
+        ctx.fillText("\uD83D\uDC80".repeat(boss.skulls || 1), bossX + 32, by + 26);
+        m.buttons.push({ type: "selectBoss", bossId: boss.id, x: bossX, y: by, w: bossW, h: 30 });
+      });
+
+      if (scrollOffset + maxVisibleBosses < visibleBosses.length) {
+        const arrowY = listY + displayBosses.length * 34 + 4;
+        ctx.fillStyle = "#506880"; ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+        ctx.fillText("\u25BC", bossX + bossW / 2, arrowY);
+        m.buttons.push({ type: "bossScrollDown", x: bossX, y: arrowY - 12, w: bossW, h: 16 });
+      }
+
+      // Start button (Siege only for math)
+      const btnW = 200, btnH = 32;
+      const btnX = w / 2 - btnW / 2, btnY = canvas.height - 38;
+      const canStart = !!m.selectedMathCategoryId;
+
+      ctx.fillStyle = "#0f0f1a"; ctx.fillRect(btnX - 2, btnY - 2, btnW + 4, btnH + 4);
+      ctx.fillStyle = canStart ? "#1a1a5a" : "#1a1a2a";
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      if (canStart) { ctx.strokeStyle = "#6060e0"; ctx.lineWidth = 2; ctx.strokeRect(btnX, btnY, btnW, btnH); }
+      ctx.fillStyle = canStart ? "#f0f0f0" : "#404050";
+      ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+      ctx.fillText("⚔ MATTE SIEGE", btnX + btnW / 2, btnY + 24);
+      m.buttons.push({ type: "startMathSiege", x: btnX, y: btnY, w: btnW, h: btnH });
     }
 
     function drawLeaderboardTab(m) {
@@ -1435,9 +1565,14 @@
             if (arena.menu.teacherInputVisible) { arena.menu.teacherInputVisible = false; }
             return { action: "hideTeacherInput" };
           }
+          if (btn.type === "playSubTab") { m.playSubTab = btn.subTab; m.scrollOffset = 0; m.mathScrollOffset = 0; return null; }
           if (btn.type === "week") return { action: "selectWeek", weekId: btn.weekId };
           if (btn.type === "start" && m.selectedWeekId) return { action: "startSiege" };
           if (btn.type === "startAdventure" && m.selectedWeekId) return { action: "startAdventure" };
+          if (btn.type === "mathCategory") { m.selectedMathCategoryId = btn.categoryId; return null; }
+          if (btn.type === "startMathSiege" && m.selectedMathCategoryId) return { action: "startMathSiege" };
+          if (btn.type === "mathScrollUp") { m.mathScrollOffset = Math.max(0, (m.mathScrollOffset || 0) - 1); return null; }
+          if (btn.type === "mathScrollDown") { m.mathScrollOffset = (m.mathScrollOffset || 0) + 1; return null; }
           if (btn.type === "lang") return { action: "changeLanguage", lang: btn.lang };
           if (btn.type === "scrollUp") { m.scrollOffset = Math.max(0, m.scrollOffset - 1); return null; }
           if (btn.type === "scrollDown") { m.scrollOffset += 1; return null; }
@@ -3186,6 +3321,7 @@
       // Check game over
       if (s.playerCastleHp <= 0) {
         s.gameOver = true;
+        s.columnMath = null;
         s.winner = "enemy";
         siegeAudio.stopMusic();
         playBossExplosionSound();
@@ -3197,6 +3333,7 @@
         if (typeof s.onGameOver === "function") s.onGameOver("enemy");
       } else if (s.enemyCastleHp <= 0) {
         s.gameOver = true;
+        s.columnMath = null;
         s.winner = "player";
         siegeAudio.stopMusic();
         playBossExplosionSound();
@@ -3601,11 +3738,139 @@
         ctx.font = "bold 16px monospace";
         ctx.fillText("GÖR DIG REDO", canvas.width / 2, canvas.height / 2 + 30);
         ctx.restore();
+      } else if (s.columnMath) {
+        // ─── COLUMN MATH (UPPSTÄLLNING) RENDERING ─────────────
+        ctx.save();
+        const cm = s.columnMath;
+        const cellW = 22, cellH = 22, cellGap = 2;
+        const totalW = cm.maxLen * (cellW + cellGap);
+        const boxW = totalW + 50;
+        const boxH = 4 * (cellH + cellGap) + 24; // carry + a + b + line + answer
+        const boxX = (canvas.width - boxW) / 2;
+        const boxY = 20;
+        // Background
+        ctx.fillStyle = "#0f0f1a"; ctx.fillRect(boxX - 3, boxY - 3, boxW + 6, boxH + 6);
+        ctx.fillStyle = "#1a2a40"; ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.strokeStyle = "#2a4a6a"; ctx.lineWidth = 1; ctx.strokeRect(boxX, boxY, boxW, boxH);
+        // Label
+        ctx.fillStyle = "#60a0e0"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+        ctx.fillText("UPPSTÄLLNING:", canvas.width / 2, boxY + 10);
+
+        const startX = boxX + (boxW - totalW) / 2;
+        const rowY = (row) => boxY + 16 + row * (cellH + cellGap);
+        const blink = Math.floor(performance.now() / 500) % 2 === 0;
+
+        // Draw a row of cells
+        function drawCellRow(row, rowIdx, editable) {
+          for (let i = 0; i < row.length; i++) {
+            const cx = startX + i * (cellW + cellGap);
+            const cy = rowY(rowIdx);
+            const isCursor = cm.cursorRow === rowIdx && cm.cursorCol === i;
+            // Skip non-editable comma cells in carry row (no box above comma)
+            if (rowIdx === 0 && row[i].isComma) continue;
+            if (editable && row[i].editable) {
+              ctx.fillStyle = isCursor && blink ? "#1a3a6a" : "#0a1020";
+              ctx.fillRect(cx, cy, cellW, cellH);
+              ctx.strokeStyle = isCursor ? "#4090f0" : "#2a3a50";
+              ctx.lineWidth = isCursor ? 2 : 1;
+              ctx.strokeRect(cx, cy, cellW, cellH);
+            }
+            if (row[i].ch && row[i].ch !== " ") {
+              ctx.fillStyle = editable ? "#80d0ff" : "#f0f0f0";
+              // Carry cells with multi-char (e.g. "10") use smaller font
+              const isMulti = row[i].multiChar && row[i].ch.length > 1;
+              ctx.font = isMulti ? "bold 11px monospace" : "bold 16px monospace";
+              ctx.textAlign = "center";
+              ctx.fillText(row[i].ch, cx + cellW / 2, cy + (isMulti ? 15 : 17));
+            }
+            if (row[i].isComma && !editable) {
+              ctx.fillStyle = "#f0f0f0"; ctx.font = "bold 16px monospace"; ctx.textAlign = "center";
+              ctx.fillText(",", cx + cellW / 2, cy + 17);
+            }
+          }
+        }
+
+        // Row 0: Carry (editable)
+        drawCellRow(cm.carryRow, 0, true);
+        // Row 1: First operand (read-only, or editable in hard mode)
+        drawCellRow(cm.aRow, 1, !!cm.isHard);
+        // Subtraction strikethrough: if carry[i] has a value, the digit to the LEFT in aRow was borrowed from
+        if (cm.operator === "-") {
+          for (let i = 0; i < cm.carryRow.length; i++) {
+            if (cm.carryRow[i].ch && cm.carryRow[i].ch !== "") {
+              // Find the column to the left (skip comma)
+              let borrowCol = -1;
+              for (let j = i - 1; j >= 0; j--) {
+                if (!cm.aRow[j].isComma && cm.aRow[j].ch && cm.aRow[j].ch.trim() !== "") {
+                  borrowCol = j; break;
+                }
+              }
+              if (borrowCol >= 0) {
+                const sx = startX + borrowCol * (cellW + cellGap);
+                const sy = rowY(1);
+                ctx.save();
+                ctx.strokeStyle = "rgba(255,80,80,0.7)";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(sx + 2, sy + cellH - 2);
+                ctx.lineTo(sx + cellW - 2, sy + 2);
+                ctx.stroke();
+                ctx.restore();
+              }
+            }
+          }
+        }
+        // Operator symbol
+        ctx.fillStyle = "#f0f0f0"; ctx.font = "bold 18px monospace"; ctx.textAlign = "right";
+        ctx.fillText(cm.operator, startX - 6, rowY(2) + 17);
+        // Row 2: Second operand (read-only, or editable in hard mode)
+        drawCellRow(cm.bRow, 2, !!cm.isHard);
+        // Divider line
+        const lineY = rowY(2) + cellH + 3;
+        ctx.strokeStyle = "#f0f0f0"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(startX - 14, lineY); ctx.lineTo(startX + totalW + 4, lineY); ctx.stroke();
+        // Row 3: Answer (editable)
+        const ansRowY = lineY + 4;
+        for (let i = 0; i < cm.ansRow.length; i++) {
+          const cx = startX + i * (cellW + cellGap);
+          const isCursor = cm.cursorRow === 3 && cm.cursorCol === i;
+          if (cm.ansRow[i].isComma) {
+            ctx.fillStyle = "#f0f0f0"; ctx.font = "bold 16px monospace"; ctx.textAlign = "center";
+            ctx.fillText(",", cx + cellW / 2, ansRowY + 17);
+          } else {
+            ctx.fillStyle = isCursor && blink ? "#1a3a6a" : "#0a1020";
+            ctx.fillRect(cx, ansRowY, cellW, cellH);
+            ctx.strokeStyle = isCursor ? "#4090f0" : "#2a3a50";
+            ctx.lineWidth = isCursor ? 2 : 1;
+            ctx.strokeRect(cx, ansRowY, cellW, cellH);
+            if (cm.ansRow[i].ch) {
+              ctx.fillStyle = "#80d0ff"; ctx.font = "bold 16px monospace"; ctx.textAlign = "center";
+              ctx.fillText(cm.ansRow[i].ch, cx + cellW / 2, ansRowY + 17);
+            }
+          }
+        }
+        // Hard mode: show task text centered below the grid with background
+        if (cm.isHard && cm.taskText) {
+          const taskBgW = boxW + 20;
+          const taskBgH = 36;
+          const taskBgX = boxX - 10;
+          const taskBgY = ansRowY + cellH + 6;
+          ctx.fillStyle = "#0f1a2a";
+          ctx.fillRect(taskBgX, taskBgY, taskBgW, taskBgH);
+          ctx.strokeStyle = "#2a4a6a"; ctx.lineWidth = 1;
+          ctx.strokeRect(taskBgX, taskBgY, taskBgW, taskBgH);
+          ctx.fillStyle = "#f0d040"; ctx.font = "bold 16px monospace"; ctx.textAlign = "center";
+          ctx.fillText(cm.taskText, boxX + boxW / 2, taskBgY + 15);
+          ctx.fillStyle = "#80a0c0"; ctx.font = "bold 9px monospace";
+          ctx.fillText("Fyll i uppstallningen!", boxX + boxW / 2, taskBgY + 29);
+        }
+        ctx.restore();
       } else if (s.glosaText) {
         ctx.save();
-        const textW = 320;
+        const isMath = appState._mathMode;
+        const textW = isMath ? 500 : 320;
         const hasImg = s._imgEl && s._imgEl.complete && s._imgEl.naturalWidth > 0;
-        const textH = hasImg ? 100 : 38;
+        const textH = hasImg ? 100 : (isMath ? 52 : 38);
         const textX = (canvas.width - textW) / 2;
         const textY = 42;
         ctx.fillStyle = "#0f0f1a";
@@ -3628,12 +3893,28 @@
           ctx.fillText("STAVA ORDET:", canvas.width / 2, textY + imgSize + 16);
         } else {
           ctx.fillStyle = "#60a0e0";
-          ctx.font = "bold 9px monospace";
+          ctx.font = isMath ? "bold 11px monospace" : "bold 9px monospace";
           ctx.textAlign = "center";
-          ctx.fillText("ÖVERSÄTT:", canvas.width / 2, textY + 11);
+          ctx.fillText(isMath ? "BERAKNA:" : "ÖVERSÄTT:", canvas.width / 2, textY + 13);
           ctx.fillStyle = "#f8fafc";
-          ctx.font = "bold 16px monospace";
-          ctx.fillText(s.glosaText, canvas.width / 2, textY + 30);
+          if (isMath && s.glosaText && s.glosaText.length > 60) {
+            // Word wrap for long math problems
+            ctx.font = "bold 16px monospace";
+            const maxW = textW - 30;
+            const words = s.glosaText.split(" ");
+            let line = "", ly = textY + 32;
+            for (const w of words) {
+              const test = line ? line + " " + w : w;
+              if (ctx.measureText(test).width > maxW && line) {
+                ctx.fillText(line, canvas.width / 2, ly);
+                line = w; ly += 18;
+              } else { line = test; }
+            }
+            if (line) ctx.fillText(line, canvas.width / 2, ly);
+          } else {
+            ctx.font = isMath ? "bold 20px monospace" : "bold 16px monospace";
+            ctx.fillText(s.glosaText, canvas.width / 2, textY + 36);
+          }
         }
         ctx.restore();
       }
@@ -3765,6 +4046,26 @@
           }
         }
 
+        // Math comparison buttons: show < = > for comparison exercises
+        if (appState._mathMode && state.currentWord && state.currentWord.mathType === "comparison" && !s.gameOver) {
+          arena.siege.charBtnBounds = [];
+          const compChars = ["<", "=", ">"];
+          const compBtnW = 60, compBtnH = 40, compGap = 12;
+          const compTotalW = compChars.length * (compBtnW + compGap) - compGap;
+          const compStartX = (canvas.width - compTotalW) / 2;
+          const compY = 100; // Below the question box
+          compChars.forEach((ch, i) => {
+            const bx = compStartX + i * (compBtnW + compGap);
+            ctx.fillStyle = "#0f1a2a";
+            ctx.fillRect(bx, compY, compBtnW, compBtnH);
+            ctx.strokeStyle = "#4080f0"; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, compY, compBtnW, compBtnH);
+            ctx.fillStyle = "#f0f0f0"; ctx.font = "bold 26px monospace"; ctx.textAlign = "center";
+            ctx.fillText(ch, bx + compBtnW / 2, compY + 30);
+            arena.siege.charBtnBounds.push({ x: bx, y: compY, w: compBtnW, h: compBtnH, ch });
+          });
+        }
+
         // Special character buttons below SVAR box
         const siegeLang = normalizeLanguage(appState.practiceAnswerLanguage || appState.selectedLanguage || "english");
         const siegeAllChars = {
@@ -3779,7 +4080,10 @@
         } else {
           siegeFullSet = siegeFlipped ? null : siegeAllChars[siegeLang];
         }
-        arena.siege.charBtnBounds = [];
+        // Don't reset charBtnBounds if comparison buttons were already set
+        if (!(appState._mathMode && state.currentWord && state.currentWord.mathType === "comparison")) {
+          arena.siege.charBtnBounds = [];
+        }
         if (siegeFullSet && !s.gameOver) {
           // For Japanese: pick answer chars + random distractors, then shuffle
           let siegeChars = siegeFullSet;
@@ -6826,6 +7130,7 @@
       triggerVictory() {
         const s = arena.siege;
         s.gameOver = true;
+        s.columnMath = null;
         s.winner = "player";
         // Enemy castle explodes
         const ecx = (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS;
@@ -6856,6 +7161,7 @@
       triggerGiveUp() {
         const s = arena.siege;
         s.gameOver = true;
+        s.columnMath = null;
         s.winner = "enemy";
         // Spawn massive crumble particles from player castle
         const cx = (SIEGE_LEFT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS;
@@ -6923,6 +7229,9 @@
       },
       isSiegeMode() {
         return arena.mode === "siege" && arena.siege.active;
+      },
+      __siegeState() {
+        return arena.siege;
       },
       // ─── ADVENTURE MODE API ────────────────────────────────────
       startAdventureMode(options = {}) {
@@ -7075,6 +7384,14 @@
         if (options.pendingChallenges) m.pendingChallenges = options.pendingChallenges;
       },
       handleCanvasClick(cx, cy) {
+        // Game over buttons — check first regardless of mode
+        if (arena.siege.gameOver && arena.siege.gameOverButtons) {
+          const b = arena.siege.gameOverButtons;
+          if (cy >= b.btnY && cy <= b.btnY + b.btnH) {
+            if (cx >= b.playBtnX && cx <= b.playBtnX + b.btnW) return { action: "playAgain" };
+            if (cx >= b.menuBtnX && cx <= b.menuBtnX + b.btnW) return { action: "menu" };
+          }
+        }
         if (arena.mode === "menu") {
           return handleMenuClick(cx, cy);
         }
@@ -7103,8 +7420,8 @@
               return { action: "giveUp" };
             }
           }
-          // Special char buttons
-          if (arena.siege.charBtnBounds) {
+          // Special char buttons (skip during game over)
+          if (arena.siege.charBtnBounds && !arena.siege.gameOver) {
             for (const btn of arena.siege.charBtnBounds) {
               if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
                 if (btn.action === "prevPage") return { action: "siegeCharPage", dir: -1 };
@@ -8857,6 +9174,224 @@
     }
   }
 
+  // ─── MATH EXERCISE GENERATORS ─────────────────────────────────────
+  function generateDecimalAdd() {
+    const exercises = [];
+    for (let i = 0; i < 30; i++) {
+      const a = Math.round((Math.random() * 9 + 0.1) * 10) / 10;
+      const b = Math.round((Math.random() * 9 + 0.1) * 10) / 10;
+      const sum = Math.round((a + b) * 10) / 10;
+      exercises.push({ sv: `${a.toFixed(1).replace(".", ",")} + ${b.toFixed(1).replace(".", ",")} = ?`, en: sum.toFixed(1).replace(".", ","), mathType: "simple" });
+    }
+    return exercises;
+  }
+
+  function generateDecimalSub() {
+    const exercises = [];
+    for (let i = 0; i < 30; i++) {
+      let a = Math.round((Math.random() * 9 + 0.5) * 10) / 10;
+      let b = Math.round((Math.random() * a) * 10) / 10;
+      if (b === 0) b = 0.1;
+      const diff = Math.round((a - b) * 10) / 10;
+      exercises.push({ sv: `${a.toFixed(1).replace(".", ",")} - ${b.toFixed(1).replace(".", ",")} = ?`, en: diff.toFixed(1).replace(".", ","), mathType: "simple" });
+    }
+    return exercises;
+  }
+
+  function generateComparisons() {
+    const exercises = [];
+    const pairs = [
+      ["0,4", "4/10", "="], ["0,5", "6/10", "<"], ["0,3", "2/10", ">"],
+      ["0,3", "5/10", "<"], ["0,6", "6/10", "="], ["0,9", "8/10", ">"],
+      ["1/10", "0,2", "<"], ["0,8", "8/10", "="], ["3/10", "0,35", "<"],
+      ["0,75", "7/10", ">"], ["0,49", "0,52", "<"], ["0,8", "0,08", ">"],
+      ["0,04", "0,35", "<"], ["0,75", "0,7", ">"], ["3,6", "3,61", "<"],
+      ["9,5", "9,05", ">"], ["4,2", "4,02", ">"], ["6,4", "6,39", ">"],
+      ["7,02", "7,20", "<"], ["6,38", "7,09", "<"],
+    ];
+    for (const [left, right, answer] of pairs) {
+      exercises.push({ sv: `${left} □ ${right}`, en: answer, mathType: "comparison" });
+    }
+    return exercises;
+  }
+
+  function generateColumnAdd() {
+    const exercises = [];
+    for (let i = 0; i < 30; i++) {
+      const a = Math.round((Math.random() * 90 + 10) * 100) / 100;
+      const b = Math.round((Math.random() * 40 + 10) * 100) / 100;
+      const sum = Math.round((a + b) * 100) / 100;
+      exercises.push({
+        sv: `${a.toFixed(2).replace(".", ",")} + ${b.toFixed(2).replace(".", ",")} = ?`,
+        en: sum.toFixed(2).replace(".", ","),
+        mathType: "column",
+        columnData: { operands: [a, b], operator: "+" },
+      });
+    }
+    return exercises;
+  }
+
+  function generateColumnSub() {
+    const exercises = [];
+    for (let i = 0; i < 30; i++) {
+      const a = Math.round((Math.random() * 80 + 20) * 100) / 100;
+      const b = Math.round((Math.random() * (a - 1) + 1) * 100) / 100;
+      const diff = Math.round((a - b) * 100) / 100;
+      exercises.push({
+        sv: `${a.toFixed(2).replace(".", ",")} - ${b.toFixed(2).replace(".", ",")} = ?`,
+        en: diff.toFixed(2).replace(".", ","),
+        mathType: "column",
+        columnData: { operands: [a, b], operator: "-" },
+      });
+    }
+    return exercises;
+  }
+
+  function generateVolumeProblems() {
+    return [
+      { sv: "[1L] + [2dL] = ? liter", en: "1,2", mathType: "word_problem" },
+      { sv: "[1L] + [1L] + [2dL] + [1dL] = ? liter", en: "2,3", mathType: "word_problem" },
+      { sv: "[1L] + [1/2 L] + [1dL] = ? liter", en: "1,6", mathType: "word_problem" },
+      { sv: "[1/2 L] + [1/2 L] + [2dL] + [2dL] + [1dL] = ? liter", en: "1,5", mathType: "word_problem" },
+      { sv: "[2dL] + [2dL] + [1dL] = ? liter", en: "0,5", mathType: "word_problem" },
+      { sv: "[1L] + [1L] + [1L] + [1/2 L] + [1dL] = ? liter", en: "3,6", mathType: "word_problem" },
+      { sv: "[1L] + [1/2 L] + [2dL] + [1dL] + [1dL] = ? liter", en: "1,9", mathType: "word_problem" },
+      { sv: "[1/2 L] + [2dL] + [2dL] + [1dL] + [1dL] + [1dL] = ? liter", en: "1,2", mathType: "word_problem" },
+      { sv: "Kanna har 7,5L saft. Dricker 2,3L. Kvar?", en: "5,2", mathType: "word_problem" },
+      { sv: "Dunk har 6,8L vatten. Forst 1,2L sedan 2,5L. Kvar?", en: "3,1", mathType: "word_problem" },
+      { sv: "Flaska har 4,6L juice. Fyller pa 2,4L. Totalt?", en: "7,0", mathType: "word_problem" },
+      { sv: "Tank har 9,0L. Tappar ut 3,7L. Kvar?", en: "5,3", mathType: "word_problem" },
+      { sv: "Kanna har 5,5L saft. Dricker 1,5L + 2,0L. Kvar?", en: "2,0", mathType: "word_problem" },
+      { sv: "Behallare har 8,3L vatten. Fyller pa 1,7L. Totalt?", en: "10,0", mathType: "word_problem" },
+      { sv: "Dunk har 10,0L saft. Anvander 4,6L. Kvar?", en: "5,4", mathType: "word_problem" },
+      { sv: "Kanna har 6,2L. Haller ut 2,1L + 1,9L. Kvar?", en: "2,2", mathType: "word_problem" },
+      { sv: "Flaska har 3,8L. Fyller pa 2,7L. Totalt?", en: "6,5", mathType: "word_problem" },
+      { sv: "Tank har 7,4L vatten. Anvander 3,6L. Kvar?", en: "3,8", mathType: "word_problem" },
+      { sv: "Dunk har 9,5L saft. Anvander 2,5L + 3,0L. Kvar?", en: "4,0", mathType: "word_problem" },
+      { sv: "Kanna har 4,2L. Fyller pa 1,8L. Totalt?", en: "6,0", mathType: "word_problem" },
+    ];
+  }
+
+  function generateTempProblems() {
+    return [
+      { sv: "Morgon: 37,9°C, kvall: 38,6°C. Hur stor ar skillnaden?", en: "0,7", mathType: "word_problem" },
+      { sv: "Morgon: 37,5°C. Kvallen stiger 0,6°C. Nasta morgon 0,2°C lagre an kvallen. Vad visar den da?", en: "37,9", mathType: "word_problem" },
+      { sv: "Morgon: 38,1°C, kvall: 39,0°C. Hur stor ar skillnaden?", en: "0,9", mathType: "word_problem" },
+      { sv: "Morgon: 37,8°C. Kvallen stiger 0,4°C. Nasta morgon 0,3°C lagre. Vad visar den da?", en: "37,9", mathType: "word_problem" },
+      { sv: "Morgon: 37,6°C, kvall: 38,4°C. Hur stor ar skillnaden?", en: "0,8", mathType: "word_problem" },
+      { sv: "Morgon: 38,0°C. Kvallen sjunker 0,5°C. Nasta morgon stiger 0,3°C. Vad visar den da?", en: "37,8", mathType: "word_problem" },
+      { sv: "Morgon: 38,3°C, kvall: 39,1°C. Hur stor ar skillnaden?", en: "0,8", mathType: "word_problem" },
+      { sv: "Morgon: 37,7°C. Kvallen stiger 0,5°C. Nasta morgon 0,4°C lagre. Vad visar den da?", en: "37,8", mathType: "word_problem" },
+      { sv: "Morgon: 38,0°C, kvall: 38,7°C. Hur stor ar skillnaden?", en: "0,7", mathType: "word_problem" },
+      { sv: "Morgon: 37,9°C. Kvallen sjunker 0,6°C. Nasta morgon stiger 0,2°C. Vad visar den da?", en: "37,5", mathType: "word_problem" },
+      { sv: "Morgon: 37,8°C, kvall: 38,5°C. Hur stor ar skillnaden?", en: "0,7", mathType: "word_problem" },
+      { sv: "Morgon: 38,2°C. Kvallen stiger 0,3°C. Nasta morgon 0,2°C lagre. Vad visar den da?", en: "38,3", mathType: "word_problem" },
+    ];
+  }
+
+  function getMathCategories() {
+    return [
+      { id: "simple-add", name: "Addition (en decimal)", icon: "➕", exercises: generateDecimalAdd() },
+      { id: "simple-sub", name: "Subtraktion (en decimal)", icon: "➖", exercises: generateDecimalSub() },
+      { id: "comparison", name: "Jamforelser (<, =, >)", icon: "⚖️", exercises: generateComparisons() },
+      { id: "word-volume", name: "Textuppgifter: Volym", icon: "🫗", exercises: generateVolumeProblems() },
+      { id: "word-temp", name: "Textuppgifter: Temperatur", icon: "🌡️", exercises: generateTempProblems() },
+      { id: "column-add", name: "Uppstallning: Addition", icon: "📐", exercises: generateColumnAdd() },
+      { id: "column-sub", name: "Uppstallning: Subtraktion", icon: "📐", exercises: generateColumnSub() },
+      { id: "column-add-hard", name: "Uppstallning: Addition HARD", icon: "🔥", exercises: generateColumnAdd().map(e => ({ ...e, mathType: "column-hard" })) },
+      { id: "column-sub-hard", name: "Uppstallning: Subtraktion HARD", icon: "🔥", exercises: generateColumnSub().map(e => ({ ...e, mathType: "column-hard" })) },
+    ];
+  }
+
+  function normalizeMathAnswer(value) {
+    let s = String(value ?? "").trim().replace(/,/g, ".").toLowerCase();
+    // Remove trailing zeros after decimal: "1.20" → "1.2", "1.0" → "1"  but keep "0" as "0"
+    if (s.includes(".")) {
+      s = s.replace(/\.?0+$/, "");
+    }
+    return s;
+  }
+
+  // ─── COLUMN MATH (UPPSTÄLLNING) ──────────────────────────────────
+  function setupColumnMath(word) {
+    if (!word || !word.columnData || !bossFightEngine) return;
+    const { operands, operator } = word.columnData;
+    const a = operands[0], b = operands[1];
+    // Format with 2 decimals
+    const aStr = a.toFixed(2).replace(".", ",");
+    const bStr = b.toFixed(2).replace(".", ",");
+    const answer = operator === "+" ? a + b : a - b;
+    const ansStr = Math.abs(Math.round(answer * 100) / 100).toFixed(2).replace(".", ",");
+    // Always add one extra column for hundreds (carry overflow)
+    const maxLen = Math.max(aStr.length, bStr.length, ansStr.length) + 1;
+    // Pad all to same length (right-aligned)
+    const pad = (s) => s.padStart(maxLen, " ");
+    const aPad = pad(aStr), bPad = pad(bStr), ansPad = pad(ansStr);
+    // Build digit arrays — each char is a cell
+    const toDigits = (s, editable) => s.split("").map(ch => ({ ch: editable ? "" : ch, editable, isComma: ch === "," }));
+    // Carry row: editable everywhere EXCEPT above comma position, allow multi-char for "10" in subtraction
+    const commaPos = ansPad.indexOf(",");
+    const carryRow = Array.from({ length: maxLen }, (_, i) => {
+      const isCommaCol = i === commaPos;
+      return { ch: "", editable: !isCommaCol, isComma: isCommaCol, multiChar: true };
+    });
+    const isHard = word.mathType === "column-hard";
+    // In hard mode, operand rows are editable (player fills them in). Commas are pre-filled.
+    const makeEditableRow = (padStr) => padStr.split("").map(ch => {
+      const isComma = ch === ",";
+      return { ch: isComma ? "," : "", editable: !isComma, isComma };
+    });
+    const aRow = isHard ? makeEditableRow(aPad) : toDigits(aPad, false);
+    const bRow = isHard ? makeEditableRow(bPad) : toDigits(bPad, false);
+    const ansRow = ansPad.split("").map((ch, i) => {
+      const isComma = ch === ",";
+      return { ch: isComma ? "," : "", editable: !isComma, isComma };
+    });
+
+    const cm = {
+      carryRow,
+      aRow,
+      bRow,
+      ansRow,
+      operator,
+      maxLen,
+      commaPos,
+      cursorRow: isHard ? 1 : 3, // Hard mode: start in first operand row
+      cursorCol: 0,
+      expectedAnswer: ansStr,
+      isHard,
+      // Hard mode: store the task text to display beside the grid
+      taskText: isHard ? `${aStr} ${operator} ${bStr}` : null,
+    };
+    // Cursor start position
+    const startRow = isHard ? aRow : ansRow;
+    if (operator === "+") {
+      for (let i = startRow.length - 1; i >= 0; i--) {
+        if (startRow[i].editable) { cm.cursorCol = i; break; }
+      }
+    } else {
+      for (let i = 0; i < startRow.length; i++) {
+        if (startRow[i].editable) { cm.cursorCol = i; break; }
+      }
+    }
+    if (bossFightEngine) {
+      const s = bossFightEngine.__siegeState ? bossFightEngine.__siegeState() : null;
+      if (s) s.columnMath = cm;
+    }
+    return cm;
+  }
+
+  function getColumnMathAnswer() {
+    const s = bossFightEngine && bossFightEngine.__siegeState ? bossFightEngine.__siegeState() : null;
+    if (!s || !s.columnMath) return "";
+    return s.columnMath.ansRow.map(d => d.ch || (d.isComma ? "," : " ")).join("").trim();
+  }
+
+  function clearColumnMath() {
+    const s = bossFightEngine && bossFightEngine.__siegeState ? bossFightEngine.__siegeState() : null;
+    if (s) s.columnMath = null;
+  }
+
   // ─── SIEGE MODE ANSWER HANDLERS ──────────────────────────────────
   let siegeWordQueue = [];
   let siegeWrongQueue = [];
@@ -8917,7 +9452,11 @@
         }
       }
     }
-    initSiegeWordQueue();
+    if (appState._mathMode) {
+      initMathSiegeWordQueue();
+    } else {
+      initSiegeWordQueue();
+    }
     state.streak = 0; // Reset streak on new round
     return siegeWordQueue.length > 0 ? siegeWordQueue[0] : null;
   }
@@ -8941,7 +9480,18 @@
     if (!word) return;
     state.currentWord = word;
     if (bossFightEngine) {
-      if (isSwedishSpellingMode()) {
+      if ((word.mathType === "column" || word.mathType === "column-hard") && word.columnData) {
+        // Column math: set up grid, hide normal glosa
+        clearColumnMath();
+        bossFightEngine.setSiegeGlosa(null);
+        bossFightEngine.setSiegeImage(null);
+        setupColumnMath(word);
+      } else if (word.mathType) {
+        // Math mode: always show question (sv), expect answer (en)
+        clearColumnMath();
+        bossFightEngine.setSiegeGlosa(word.sv);
+        bossFightEngine.setSiegeImage(null);
+      } else if (isSwedishSpellingMode()) {
         // Swedish spelling in siege: show image + audio, answer is Swedish word
         const media = appState.swedishMedia[word.sv];
         const hintText = (word.en && word.en.toLowerCase() !== word.sv.toLowerCase()) ? word.en : "?";
@@ -8963,12 +9513,15 @@
 
   function expectedSiegeAnswer() {
     if (!state.currentWord) return "";
+    // Math mode: answer is always the en field
+    if (state.currentWord.mathType) return String(state.currentWord.en || "");
     // Swedish spelling: answer is always the Swedish word
     if (isSwedishSpellingMode()) return String(state.currentWord.sv || "");
     return siegeFlipped ? String(state.currentWord.sv || "") : String(state.currentWord.en || "");
   }
 
   function onSiegeCorrect() {
+    clearColumnMath();
     state.streak += 1;
     siegeCorrectCount = (siegeCorrectCount || 0) + 1;
     const xpGain = 18;
@@ -9004,6 +9557,7 @@
   }
 
   function onSiegeWrong() {
+    clearColumnMath();
     state.streak = 0;
     siegeWordAnswered(false);
     if (bossFightEngine) {
@@ -9041,6 +9595,7 @@
 
   function showCanvasMenu() {
     if (!bossFightEngine) return;
+    appState._mathMode = false;
     killAllHtmlOverlays();
     // Start music on first menu load — will be pending until user gesture
     siegeAudio.startMusic();
@@ -9131,6 +9686,8 @@
       } else {
         startSiegeGame();
       }
+    } else if (hit.action === "startMathSiege") {
+      startMathSiegeGame();
     } else if (hit.action === "startAdventure") {
       const menuWeekId = bossFightEngine.getMenuSelectedWeekId ? bossFightEngine.getMenuSelectedWeekId() : appState.selectedWeekId;
       if (menuWeekId) {
@@ -9241,7 +9798,29 @@
     } else if (hit.action === "siegeCharPage") {
       if (bossFightEngine) bossFightEngine.siegeCharPageStep(hit.dir);
     } else if (hit.action === "siegeCharInsert") {
-      if (bossFightEngine) bossFightEngine.siegeAnswerType(hit.ch);
+      if (appState._mathMode && state.currentWord && state.currentWord.mathType === "comparison") {
+        // Comparison: clicking < = > updates the question display and answer, then submits
+        if (bossFightEngine) {
+          // Show chosen sign in the question (replace □ with the chosen symbol)
+          const origText = state.currentWord.sv || "";
+          const updatedText = origText.replace("□", hit.ch);
+          bossFightEngine.setSiegeGlosa(updatedText);
+          // Also show in SVAR box
+          bossFightEngine.clearSiegeAnswer();
+          bossFightEngine.siegeAnswerType(hit.ch);
+          // Brief delay so user sees their choice before result
+          setTimeout(() => {
+            if (normalizeMathAnswer(hit.ch) === normalizeMathAnswer(expectedSiegeAnswer())) {
+              onSiegeCorrect();
+            } else {
+              onSiegeWrong();
+            }
+            bossFightEngine.clearSiegeAnswer();
+          }, 400);
+        }
+      } else if (bossFightEngine) {
+        bossFightEngine.siegeAnswerType(hit.ch);
+      }
     } else if (hit.action === "flipSiegeLanguage") {
       siegeFlipped = !siegeFlipped;
       showSiegeGlosa();
@@ -9266,14 +9845,17 @@
       }
       appState.groupFight._lastInviteId = null;
       appState._lastHandledActiveInvite = null;
-      // Wait for animation then go to menu
-      appState._giveUpMenuTimer = setTimeout(() => showCanvasMenu(), 3000);
+      // Game over screen with SPELA IGEN / MENY buttons will show — no auto-redirect
     } else if (hit.action === "playAgain") {
       // Cancel any pending give-up→menu redirect
       if (appState._giveUpMenuTimer) { clearTimeout(appState._giveUpMenuTimer); appState._giveUpMenuTimer = null; }
       appState._lastHandledActiveInvite = null;
       appState.groupFight._lastInviteId = null;
-      startSiegeGame();
+      if (appState._mathMode) {
+        startMathSiegeGame();
+      } else {
+        startSiegeGame();
+      }
     } else if (hit.action === "menu") {
       showCanvasMenu();
     } else if (hit.action === "hideTeacherInput") {
@@ -9362,6 +9944,75 @@
       } else {
         showSiegeGlosa();
       }
+      if (elements.bossFightCanvas) elements.bossFightCanvas.focus();
+    }
+  }
+
+  function initMathSiegeWordQueue() {
+    const exercises = appState._mathExercises || [];
+    siegeWordQueue = [...exercises].sort(() => Math.random() - 0.5);
+    siegeWrongQueue = [];
+  }
+
+  function startMathSiegeGame() {
+    siegeFlipped = false;
+    siegeCompletedRounds = 0;
+    siegeCorrectCount = 0;
+    appState._mathMode = true;
+
+    const categories = getMathCategories();
+    const menuState = bossFightEngine ? bossFightEngine.getMenuState() : {};
+    const catId = menuState.selectedMathCategoryId || appState._selectedMathCategoryId;
+    const cat = categories.find(c => c.id === catId);
+    if (!cat || !cat.exercises.length) {
+      if (bossFightEngine) {
+        bossFightEngine.showTextFlash("Valj en kategori forst!", "#ef4444", "", 3000);
+        bossFightEngine.showMenu();
+      }
+      appState._mathMode = false;
+      return;
+    }
+    appState._mathExercises = cat.exercises;
+    appState._selectedMathCategoryId = catId;
+
+    if (bossFightEngine) {
+      state.bossMode = false;
+      state.fortressMode = false;
+      appState.duel.active = false;
+      appState.groupBattle.active = false;
+      appState.groupBattle.finishing = false;
+      appState.groupBattle.prepEndsAtMs = 0;
+      appState.duel.prepEndsAtMs = 0;
+      if (appState.groupBattle.botTimerId) {
+        window.clearInterval(appState.groupBattle.botTimerId);
+        appState.groupBattle.botTimerId = 0;
+      }
+
+      const selectedBoss = menuState.selectedBossId || "oiia";
+      bossFightEngine.startSiegeMode({
+        playerCastleHp: 200,
+        playerCastleMaxHp: 200,
+        enemyCastleHp: 200,
+        enemyCastleMaxHp: 200,
+        bossId: selectedBoss,
+        totalWords: cat.exercises.length,
+        spawnIntervalMs: 5000,
+        isGroupFight: false,
+        onGameOver: (winner) => {
+          state.bossMode = false;
+          state.fortressMode = false;
+          appState.duel.active = false;
+          appState.groupBattle.active = false;
+          // Keep _mathMode alive so "Play Again" works — cleared in showCanvasMenu()
+        },
+      });
+      killAllHtmlOverlays();
+      if (elements.combatPanel) elements.combatPanel.style.display = "none";
+      if (elements.groupBattleFeed) elements.groupBattleFeed.style.display = "none";
+      const gs = document.getElementById("gameShell");
+      if (gs) gs.style.display = "none";
+      initMathSiegeWordQueue();
+      showSiegeGlosa();
       if (elements.bossFightCanvas) elements.bossFightCanvas.focus();
     }
   }
@@ -12062,6 +12713,78 @@
         if (siegeState.gameOver) return;
         if (siegeState.countdownActive) return;
 
+        // Column math mode — custom grid input
+        const cmState = bossFightEngine.__siegeState ? bossFightEngine.__siegeState().columnMath : null;
+        if (cmState) {
+          e.preventDefault();
+          // Helper: get the row array for current cursor position
+          const getRow = (r) => r === 0 ? cmState.carryRow : r === 1 ? cmState.aRow : r === 2 ? cmState.bRow : cmState.ansRow;
+          const curRow = getRow(cmState.cursorRow);
+          // Which rows are navigable
+          const editableRows = [0, 3]; // carry + answer always
+          if (cmState.isHard) { editableRows.push(1, 2); } // hard mode: operand rows too
+          editableRows.sort((a, b) => a - b);
+
+          if (e.key === "ArrowLeft") {
+            for (let i = cmState.cursorCol - 1; i >= 0; i--) {
+              if (curRow[i] && curRow[i].editable) { cmState.cursorCol = i; break; }
+            }
+          } else if (e.key === "ArrowRight") {
+            for (let i = cmState.cursorCol + 1; i < curRow.length; i++) {
+              if (curRow[i] && curRow[i].editable) { cmState.cursorCol = i; break; }
+            }
+          } else if (e.key === "ArrowUp") {
+            const idx = editableRows.indexOf(cmState.cursorRow);
+            if (idx > 0) {
+              cmState.cursorRow = editableRows[idx - 1];
+              const newRow = getRow(cmState.cursorRow);
+              // Clamp col
+              if (!newRow[cmState.cursorCol] || !newRow[cmState.cursorCol].editable) {
+                for (let i = cmState.cursorCol; i >= 0; i--) {
+                  if (newRow[i] && newRow[i].editable) { cmState.cursorCol = i; break; }
+                }
+              }
+            }
+          } else if (e.key === "ArrowDown") {
+            const idx = editableRows.indexOf(cmState.cursorRow);
+            if (idx < editableRows.length - 1) {
+              cmState.cursorRow = editableRows[idx + 1];
+              const newRow = getRow(cmState.cursorRow);
+              if (!newRow[cmState.cursorCol] || !newRow[cmState.cursorCol].editable) {
+                for (let i = cmState.cursorCol; i < newRow.length; i++) {
+                  if (newRow[i] && newRow[i].editable) { cmState.cursorCol = i; break; }
+                }
+              }
+            }
+          } else if (e.key === "Backspace" || e.key === "Delete") {
+            if (curRow[cmState.cursorCol]) curRow[cmState.cursorCol].ch = "";
+          } else if (e.key === "Enter") {
+            const answer = getColumnMathAnswer();
+            if (!answer.trim()) return;
+            if (normalizeMathAnswer(answer) === normalizeMathAnswer(expectedSiegeAnswer())) {
+              onSiegeCorrect();
+            } else {
+              onSiegeWrong();
+            }
+            bossFightEngine.clearSiegeAnswer();
+          } else if (/^[0-9]$/.test(e.key)) {
+            if (curRow[cmState.cursorCol] && curRow[cmState.cursorCol].editable) {
+              if (cmState.cursorRow === 0 && curRow[cmState.cursorCol].multiChar) {
+                curRow[cmState.cursorCol].ch = (curRow[cmState.cursorCol].ch || "") + e.key;
+              } else {
+                curRow[cmState.cursorCol].ch = e.key;
+              }
+              // Auto-advance in answer row and operand rows (not carry)
+              if (cmState.cursorRow !== 0) {
+                for (let i = cmState.cursorCol + 1; i < curRow.length; i++) {
+                  if (curRow[i] && curRow[i].editable) { cmState.cursorCol = i; break; }
+                }
+              }
+            }
+          }
+          return;
+        }
+
         if (e.key === "Backspace") {
           e.preventDefault();
           bossFightEngine.siegeAnswerBackspace();
@@ -12069,7 +12792,9 @@
           e.preventDefault();
           const answer = bossFightEngine.getSiegeAnswer();
           if (!answer) return;
-          if (normalize(answer) === normalize(expectedSiegeAnswer())) {
+          const isMath = state.currentWord && state.currentWord.mathType;
+          const normFn = isMath ? normalizeMathAnswer : normalize;
+          if (normFn(answer) === normFn(expectedSiegeAnswer())) {
             onSiegeCorrect();
           } else {
             onSiegeWrong();
