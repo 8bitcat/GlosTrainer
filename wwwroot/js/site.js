@@ -377,6 +377,7 @@
         enemyFeed: [],
         gameOver: false,
         grindMode: false,
+        grindProgress: 0,
         winner: null,
         onGameOver: null,
         frameCount: 0,
@@ -2776,10 +2777,9 @@
       const s = arena.siege;
       const now = performance.now();
       s.frameCount++;
-      // In grind mode, castle HP is derived from correct-answer progress (never from combat)
+      // Grind mode: HP driven by grindProgress (unique words answered correctly)
       if (s.grindMode) {
-        const progress = Math.min(1, s.correctWords / Math.max(1, s.totalWords));
-        s.enemyCastleHp = Math.max(0, Math.round(10000 * (1 - progress)));
+        s.enemyCastleHp = Math.max(0, Math.round(10000 * (1 - s.grindProgress)));
       }
       const bossTheme = (SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).theme;
 
@@ -7187,6 +7187,9 @@
           spawnSiegeSoldier("enemy");
         }
       },
+      siegeSetGrindProgress(v) {
+        arena.siege.grindProgress = Math.min(1, Math.max(0, v));
+      },
       siegeGrindHit() {
         const s = arena.siege;
         if (!s.grindMode || s.gameOver) return;
@@ -9574,6 +9577,7 @@
   }
 
   let siegeFlipped = false; // false = show sv, answer en (DEFAULT). true = show en, answer sv.
+  let grindCorrectWords = new Set();
   let siegeCorrectCount = 0;
 
   function showSiegeGlosa() {
@@ -9645,6 +9649,12 @@
       else if (state.streak === 5) { soldierType = "archer"; streakMsg = " 🏹 Archer!"; }
       else if (state.streak === 3) { soldierType = "knight"; streakMsg = " 🐴 Knight!"; }
       bossFightEngine.siegeSpawnPlayerSoldier(soldierType);
+      if (bossFightEngine.getSiegeState?.().grindMode && state.currentWord) {
+        const wKey = (state.currentWord.sv || "") + "|" + (state.currentWord.en || "");
+        grindCorrectWords.add(wKey);
+        const total = bossFightEngine.getSiegeState().totalWords || 1;
+        bossFightEngine.siegeSetGrindProgress(grindCorrectWords.size / total);
+      }
       bossFightEngine.setSiegeFeedback("RÄTT", "#22c55e", `+${xpGain} XP  +${coinGain} coins${streakMsg}`, 3000);
       // Broadcast to opponent in group fights
       if (bossFightEngine.getSiegeState().isGroupFight) {
@@ -9995,6 +10005,7 @@
       bossFightEngine.showTextFlash("🏰 GRIND MODE", "#f0d060", "Svara rätt på alla glosor!", 3000);
     }
     siegeFlipped = false; siegeCompletedRounds = 0; siegeCorrectCount = 0;
+    grindCorrectWords = new Set();
     showSiegeGlosa();
   }
 
