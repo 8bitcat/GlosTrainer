@@ -2776,6 +2776,11 @@
       const s = arena.siege;
       const now = performance.now();
       s.frameCount++;
+      // In grind mode, castle HP is derived from correct-answer progress (never from combat)
+      if (s.grindMode) {
+        const progress = Math.min(1, s.correctWords / Math.max(1, s.totalWords));
+        s.enemyCastleHp = Math.max(0, Math.round(10000 * (1 - progress)));
+      }
       const bossTheme = (SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).theme;
 
       // Periodic ambient sounds
@@ -3179,7 +3184,7 @@
         if (p.state === "walk") {
           p.x += p.unitType === "ambulance" ? SIEGE_SOLDIER_SPEED * 2.2 : SIEGE_SOLDIER_SPEED;
           if (p.x >= SIEGE_RIGHT_CASTLE_X - 2) {
-            s.enemyCastleHp = Math.max(0, s.enemyCastleHp - (p.unitType === "ambulance" ? SIEGE_CASTLE_DMG * 2 : SIEGE_CASTLE_DMG));
+            if (!s.grindMode) s.enemyCastleHp = Math.max(0, s.enemyCastleHp - (p.unitType === "ambulance" ? SIEGE_CASTLE_DMG * 2 : SIEGE_CASTLE_DMG));
             siegeAudio.playSfx("castleHit");
             addImpactParticles(
               (SIEGE_RIGHT_CASTLE_X + SIEGE_CASTLE_W / 2) * SIEGE_PS,
@@ -9640,7 +9645,6 @@
       else if (state.streak === 5) { soldierType = "archer"; streakMsg = " 🏹 Archer!"; }
       else if (state.streak === 3) { soldierType = "knight"; streakMsg = " 🐴 Knight!"; }
       bossFightEngine.siegeSpawnPlayerSoldier(soldierType);
-      if (bossFightEngine.getSiegeState?.().grindMode) bossFightEngine.siegeGrindHit();
       bossFightEngine.setSiegeFeedback("RÄTT", "#22c55e", `+${xpGain} XP  +${coinGain} coins${streakMsg}`, 3000);
       // Broadcast to opponent in group fights
       if (bossFightEngine.getSiegeState().isGroupFight) {
