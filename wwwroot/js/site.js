@@ -376,6 +376,7 @@
         columnMath: null, // {rows: [{digits:[], type:"carry"|"operand"|"answer"}], cursorRow, cursorCol, operator, commaPos}
         enemyFeed: [],
         gameOver: false,
+        grindMode: false,
         winner: null,
         onGameOver: null,
         frameCount: 0,
@@ -1034,10 +1035,11 @@
       ctx.fillText(sfxOn ? "🔊" : "🔈", sfxBtnX + musBtnW / 2, musBtnY + 11);
       m.buttons.push({ type: "toggleSound", x: sfxBtnX, y: musBtnY, w: musBtnW, h: musBtnH });
 
-      // Start buttons (Siege + Adventure side by side)
-      const btnW = 136, btnH = 32, gap = 8;
-      const totalW = btnW * 2 + gap;
-      const btnX1 = w / 2 - totalW / 2, btnX2 = btnX1 + btnW + gap, btnY = canvas.height - 38;
+      // Start buttons row 1: Siege + Adventure
+      const btnW = 130, btnH = 30, gap = 8;
+      const totalW2 = btnW * 2 + gap;
+      const btnX1 = w / 2 - totalW2 / 2, btnX2 = btnX1 + btnW + gap;
+      const btnY = canvas.height - 74;
       const canStart = !!m.selectedWeekId;
 
       // Siege button
@@ -1046,8 +1048,8 @@
       ctx.fillRect(btnX1, btnY, btnW, btnH);
       if (canStart) { ctx.strokeStyle = "#6060e0"; ctx.lineWidth = 2; ctx.strokeRect(btnX1, btnY, btnW, btnH); }
       ctx.fillStyle = canStart ? "#f0f0f0" : "#404050";
-      ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
-      ctx.fillText("⚔ SIEGE", btnX1 + btnW / 2, btnY + 24);
+      ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+      ctx.fillText("⚔ SIEGE", btnX1 + btnW / 2, btnY + 22);
       m.buttons.push({ type: "start", x: btnX1, y: btnY, w: btnW, h: btnH });
 
       // Adventure button
@@ -1056,9 +1058,21 @@
       ctx.fillRect(btnX2, btnY, btnW, btnH);
       if (canStart) { ctx.strokeStyle = "#30c060"; ctx.lineWidth = 2; ctx.strokeRect(btnX2, btnY, btnW, btnH); }
       ctx.fillStyle = canStart ? "#f0f0f0" : "#404050";
-      ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
-      ctx.fillText("🗡 ADVENTURE", btnX2 + btnW / 2, btnY + 24);
+      ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+      ctx.fillText("🗡 ADVENTURE", btnX2 + btnW / 2, btnY + 22);
       m.buttons.push({ type: "startAdventure", x: btnX2, y: btnY, w: btnW, h: btnH });
+
+      // Grind Mode button (full width, row 2)
+      const grindBtnW = totalW2, grindBtnH = 28;
+      const grindBtnX = w / 2 - grindBtnW / 2, grindBtnY = btnY + btnH + 6;
+      ctx.fillStyle = "#0f0f1a"; ctx.fillRect(grindBtnX - 2, grindBtnY - 2, grindBtnW + 4, grindBtnH + 4);
+      ctx.fillStyle = canStart ? "#2a1a00" : "#1a1a2a";
+      ctx.fillRect(grindBtnX, grindBtnY, grindBtnW, grindBtnH);
+      if (canStart) { ctx.strokeStyle = "#c08020"; ctx.lineWidth = 2; ctx.strokeRect(grindBtnX, grindBtnY, grindBtnW, grindBtnH); }
+      ctx.fillStyle = canStart ? "#f0d060" : "#404050";
+      ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+      ctx.fillText("🏰 GRIND MODE  —  klar alla glosor", grindBtnX + grindBtnW / 2, grindBtnY + 20);
+      m.buttons.push({ type: "startGrind", x: grindBtnX, y: grindBtnY, w: grindBtnW, h: grindBtnH });
     }
 
     function drawPlayTabMatte(m, contentY) {
@@ -1639,6 +1653,7 @@
           if (btn.type === "playSubTab") { m.playSubTab = btn.subTab; m.scrollOffset = 0; m.mathScrollOffset = 0; return null; }
           if (btn.type === "week") return { action: "selectWeek", weekId: btn.weekId };
           if (btn.type === "start" && m.selectedWeekId) return { action: "startSiege" };
+          if (btn.type === "startGrind" && m.selectedWeekId) return { action: "startGrind" };
           if (btn.type === "startAdventure" && m.selectedWeekId) return { action: "startAdventure" };
           if (btn.type === "mathCategory") { m.selectedMathCategoryId = btn.categoryId; return null; }
           if (btn.type === "startMathSiege" && m.selectedMathCategoryId) return { action: "startMathSiege" };
@@ -2774,7 +2789,7 @@
 
       // Player soldiers only spawn on correct answers — no auto-spawn
       // Boss AI — answers glosas on timer (solo play)
-      if (!s.isGroupFight && now - s.bossLastAnswerMs >= s.bossSpawnMs) {
+      if (!s.isGroupFight && !s.grindMode && now - s.bossLastAnswerMs >= s.bossSpawnMs) {
         s.bossLastAnswerMs = now;
         const isCorrect = Math.random() < s.bossAccuracy;
         const bossName = (SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0]).name;
@@ -7135,6 +7150,8 @@
         s.selectedBossId = options.bossId || "oiia";
         const boss = SIEGE_BOSSES.find(b => b.id === s.selectedBossId) || SIEGE_BOSSES[0];
         s.bossArmy = boss.army || ["grunt"];
+        s.grindMode = !!options.grindMode;
+        s.grindDmgPerWord = s.grindMode ? Math.ceil(10000 / Math.max(1, options.totalWords || 1)) : 0;
         s.bossAccuracy = boss.accuracy || 0.5;
         s.bossSpawnMs = boss.spawnMs || 5000;
         s.bossLastAnswerMs = performance.now();
@@ -7164,6 +7181,11 @@
         if (arena.siege.enemySoldiers.length < 25) {
           spawnSiegeSoldier("enemy");
         }
+      },
+      siegeGrindHit() {
+        const s = arena.siege;
+        if (!s.grindMode || s.gameOver) return;
+        s.enemyCastleHp = Math.max(0, s.enemyCastleHp - s.grindDmgPerWord);
       },
       siegeCharPageStep(dir) {
         arena.siege._charPage = Math.max(0, (arena.siege._charPage || 0) + dir);
@@ -7277,6 +7299,7 @@
           totalWords: s.totalWords,
           answeredWords: s.answeredWords,
           correctWords: s.correctWords,
+          grindMode: s.grindMode || false,
         };
       },
       pushSiegeEnemyFeed(text, isGood, durationMs) {
@@ -9617,6 +9640,7 @@
       else if (state.streak === 5) { soldierType = "archer"; streakMsg = " 🏹 Archer!"; }
       else if (state.streak === 3) { soldierType = "knight"; streakMsg = " 🐴 Knight!"; }
       bossFightEngine.siegeSpawnPlayerSoldier(soldierType);
+      if (bossFightEngine.getSiegeState?.().grindMode) bossFightEngine.siegeGrindHit();
       bossFightEngine.setSiegeFeedback("RÄTT", "#22c55e", `+${xpGain} XP  +${coinGain} coins${streakMsg}`, 3000);
       // Broadcast to opponent in group fights
       if (bossFightEngine.getSiegeState().isGroupFight) {
@@ -9761,6 +9785,8 @@
       }
     } else if (hit.action === "startMathSiege") {
       startMathSiegeGame();
+    } else if (hit.action === "startGrind") {
+      startGrindGame();
     } else if (hit.action === "startAdventure") {
       const menuWeekId = bossFightEngine.getMenuSelectedWeekId ? bossFightEngine.getMenuSelectedWeekId() : appState.selectedWeekId;
       if (menuWeekId) {
@@ -9936,6 +9962,36 @@
     } else if (hit.action === "navigate") {
       window.location.href = hit.url;
     }
+  }
+
+  function startGrindGame() {
+    let words = currentWords();
+    if (!words.length && appState.selectedWeekId) {
+      const week = (appState.weeks || []).find(w => String(w.id) === String(appState.selectedWeekId));
+      if (week && Array.isArray(week.words)) words = week.words;
+    }
+    if (!words.length) {
+      if (bossFightEngine) bossFightEngine.showTextFlash("Välj en vecka först!", "#ef4444", "", 3000);
+      return;
+    }
+    if (bossFightEngine) {
+      state.bossMode = false; state.fortressMode = false;
+      appState.duel.active = false; appState.groupBattle.active = false;
+      const selectedBoss = bossFightEngine.getMenuState?.()?.selectedBossId || "oiia";
+      bossFightEngine.startSiegeMode({
+        playerCastleHp: 99999, playerCastleMaxHp: 99999,
+        enemyCastleHp: 10000, enemyCastleMaxHp: 10000,
+        bossId: selectedBoss,
+        totalWords: words.length,
+        spawnIntervalMs: 999999,
+        isGroupFight: false,
+        grindMode: true,
+        onGameOver: () => {},
+      });
+      bossFightEngine.showTextFlash("🏰 GRIND MODE", "#f0d060", "Svara rätt på alla glosor!", 3000);
+    }
+    siegeFlipped = false; siegeCompletedRounds = 0; siegeCorrectCount = 0;
+    showSiegeGlosa();
   }
 
   function startSiegeGame(countdownSec = 0, countdownEndMs = 0) {
