@@ -1,0 +1,22 @@
+# Väcker appen på hostingen och triggar påminnelse-kollen.
+# Appen avgör själv om det är dags att skicka (tid + max en gång/dag),
+# så det är ofarligt att detta kör ofta.
+#
+# Kräver en repo-secret PUSH_CRON_KEY — nyckeln hittas på /Teacher/Notiser
+# under "Extern väckning (cron)". Sätt den med:
+#   gh secret set PUSH_CRON_KEY --repo 8bitcat/GlosTrainer
+name: Push reminders
+
+on:
+  schedule:
+    # Var 30:e minut kl 14:00–19:30 UTC (≈ 15/16–21:30 svensk tid)
+    - cron: "*/30 14-19 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigga påminnelse-koll
+        run: |
+          curl -s --max-time 90 "http://glostrainer.runasp.net/api/push/run-reminders?key=${{ secrets.PUSH_CRON_KEY }}" || true

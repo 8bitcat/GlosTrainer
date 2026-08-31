@@ -23,6 +23,8 @@ public sealed class VocabDatabaseInitializer
         await _db.Database.EnsureCreatedAsync(ct);
         await EnsureLocalAuthSchemaAsync(ct);
         await EnsureRealtimeSchemaAsync(ct);
+        await EnsureWordMediaColumnsAsync(ct);
+        await EnsurePushSchemaAsync(ct);
         await SeedNameDictionaryAsync(ct);
         await ClearSeedWeeksIfConfiguredAsync(ct);
 
@@ -454,6 +456,71 @@ END
         }
 
         await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task EnsureWordMediaColumnsAsync(CancellationToken ct)
+    {
+        // EF Core uses DbSet property name as table name: Words
+        const string sql = @"
+IF COL_LENGTH('Words', 'ImageBase64') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Words] ADD [ImageBase64] NVARCHAR(MAX) NULL;
+END
+IF COL_LENGTH('Words', 'AudioBase64') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Words] ADD [AudioBase64] NVARCHAR(MAX) NULL;
+END
+";
+        await _db.Database.ExecuteSqlRawAsync(sql, ct);
+    }
+
+    private async Task EnsurePushSchemaAsync(CancellationToken ct)
+    {
+        const string sql = @"
+IF OBJECT_ID(N'[dbo].[PushSubscriptions]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[PushSubscriptions](
+        [Id] NVARCHAR(450) NOT NULL PRIMARY KEY,
+        [UserProfileId] NVARCHAR(450) NULL,
+        [DisplayName] NVARCHAR(200) NOT NULL DEFAULT N'',
+        [Endpoint] NVARCHAR(MAX) NOT NULL,
+        [EndpointHash] NVARCHAR(64) NOT NULL,
+        [P256dh] NVARCHAR(300) NOT NULL,
+        [Auth] NVARCHAR(150) NOT NULL,
+        [UserAgent] NVARCHAR(300) NULL,
+        [CreatedUtc] DATETIME2 NOT NULL,
+        [LastSeenUtc] DATETIME2 NOT NULL,
+        [FailCount] INT NOT NULL DEFAULT 0,
+        CONSTRAINT [FK_PushSubscriptions_UserProfiles_UserProfileId]
+            FOREIGN KEY([UserProfileId]) REFERENCES [dbo].[UserProfiles]([Id]) ON DELETE SET NULL
+    );
+    CREATE UNIQUE INDEX [IX_PushSubscriptions_EndpointHash] ON [dbo].[PushSubscriptions]([EndpointHash]);
+    CREATE INDEX [IX_PushSubscriptions_UserProfileId] ON [dbo].[PushSubscriptions]([UserProfileId]);
+END
+
+IF OBJECT_ID(N'[dbo].[PushConfigs]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[PushConfigs](
+        [Id] INT NOT NULL PRIMARY KEY,
+        [VapidPublicKey] NVARCHAR(200) NOT NULL DEFAULT N'',
+        [VapidPrivateKey] NVARCHAR(200) NOT NULL DEFAULT N'',
+        [VapidSubject] NVARCHAR(300) NOT NULL DEFAULT N'https://glostrainer.runasp.net',
+        [NotifyOnNewWeek] BIT NOT NULL DEFAULT 1,
+        [ReminderEnabled] BIT NOT NULL DEFAULT 1,
+        [ReminderHour] INT NOT NULL DEFAULT 16,
+        [ReminderWeekId] NVARCHAR(450) NULL,
+        [ReminderRequiredPerfects] INT NOT NULL DEFAULT 5,
+        [LastReminderSentUtc] DATETIME2 NULL,
+        [CronKey] NVARCHAR(64) NOT NULL DEFAULT N''
+    );
+END
+
+IF COL_LENGTH(N'[dbo].[Weeks]', N'CreatedUtc') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Weeks] ADD [CreatedUtc] DATETIME2 NOT NULL CONSTRAINT [DF_Weeks_CreatedUtc] DEFAULT SYSUTCDATETIME();
+END
+";
+        await _db.Database.ExecuteSqlRawAsync(sql, ct);
     }
 
     private async Task EnsureRequiredWeekDataAsync(CancellationToken ct)

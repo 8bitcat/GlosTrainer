@@ -25,6 +25,8 @@ public sealed class AppDbContext : DbContext
     public DbSet<GroupFightInviteMember> GroupFightInviteMembers => Set<GroupFightInviteMember>();
     public DbSet<GroupFightEvent> GroupFightEvents => Set<GroupFightEvent>();
     public DbSet<SitePresence> SitePresences => Set<SitePresence>();
+    public DbSet<PushSubscriptionRecord> PushSubscriptions => Set<PushSubscriptionRecord>();
+    public DbSet<PushConfigRecord> PushConfigs => Set<PushConfigRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -168,5 +170,42 @@ public sealed class AppDbContext : DbContext
 
         modelBuilder.Entity<SitePresence>()
             .HasIndex(x => x.LastSeenUtc);
+
+        modelBuilder.Entity<PushSubscriptionRecord>()
+            .Property(x => x.DisplayName)
+            .HasMaxLength(200);
+
+        modelBuilder.Entity<PushSubscriptionRecord>()
+            .Property(x => x.EndpointHash)
+            .HasMaxLength(64);
+
+        modelBuilder.Entity<PushSubscriptionRecord>()
+            .Property(x => x.P256dh)
+            .HasMaxLength(300);
+
+        modelBuilder.Entity<PushSubscriptionRecord>()
+            .Property(x => x.Auth)
+            .HasMaxLength(150);
+
+        modelBuilder.Entity<PushSubscriptionRecord>()
+            .Property(x => x.UserAgent)
+            .HasMaxLength(300);
+
+        modelBuilder.Entity<PushSubscriptionRecord>()
+            .HasIndex(x => x.EndpointHash)
+            .IsUnique();
+
+        modelBuilder.Entity<PushSubscriptionRecord>()
+            .HasIndex(x => x.UserProfileId);
+
+        modelBuilder.Entity<PushSubscriptionRecord>()
+            .HasOne(x => x.UserProfile)
+            .WithMany()
+            .HasForeignKey(x => x.UserProfileId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<PushConfigRecord>()
+            .Property(x => x.Id)
+            .ValueGeneratedNever();
     }
 }

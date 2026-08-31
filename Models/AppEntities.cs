@@ -48,6 +48,7 @@ public sealed class WeekRecord
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string WeekName { get; set; } = string.Empty;
     public string Language { get; set; } = "english";
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public List<WordRecord> Words { get; set; } = [];
 }
 
@@ -58,6 +59,8 @@ public sealed class WordRecord
     public WeekRecord? Week { get; set; }
     public string Sv { get; set; } = string.Empty;
     public string En { get; set; } = string.Empty;
+    public string? ImageBase64 { get; set; }
+    public string? AudioBase64 { get; set; }
 }
 
 public sealed class HighscoreRecord
@@ -171,6 +174,37 @@ public sealed class GroupFightInviteMember
     public bool IsBot { get; set; }
     public string Status { get; set; } = "Pending";
     public DateTime? RespondedUtc { get; set; }
+}
+
+public sealed class PushSubscriptionRecord
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string? UserProfileId { get; set; }
+    public UserProfile? UserProfile { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string Endpoint { get; set; } = string.Empty;
+    public string EndpointHash { get; set; } = string.Empty;
+    public string P256dh { get; set; } = string.Empty;
+    public string Auth { get; set; } = string.Empty;
+    public string? UserAgent { get; set; }
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime LastSeenUtc { get; set; } = DateTime.UtcNow;
+    public int FailCount { get; set; }
+}
+
+public sealed class PushConfigRecord
+{
+    public int Id { get; set; } = 1;
+    public string VapidPublicKey { get; set; } = string.Empty;
+    public string VapidPrivateKey { get; set; } = string.Empty;
+    public string VapidSubject { get; set; } = "https://glostrainer.runasp.net";
+    public bool NotifyOnNewWeek { get; set; } = true;
+    public bool ReminderEnabled { get; set; } = true;
+    public int ReminderHour { get; set; } = 16;
+    public string? ReminderWeekId { get; set; }
+    public int ReminderRequiredPerfects { get; set; } = 5;
+    public DateTime? LastReminderSentUtc { get; set; }
+    public string CronKey { get; set; } = string.Empty;
 }
 
 public sealed class GroupFightEvent

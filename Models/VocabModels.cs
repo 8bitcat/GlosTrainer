@@ -75,6 +75,10 @@ public sealed class VocabWord
 
     [JsonPropertyName("en")]
     public string En { get; set; } = string.Empty;
+
+    [JsonPropertyName("hasMedia")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool HasMedia { get; set; }
 }
 
 public sealed class HighscoreEntry
@@ -197,4 +201,32 @@ public sealed class GroupFightBroadcastRequest
     public string? Team { get; set; }
     public bool IsGood { get; set; }
     public string? Text { get; set; }
+}
+
+public sealed class PushSubscribeRequest
+{
+    public string? Endpoint { get; set; }
+    public string? P256dh { get; set; }
+    public string? Auth { get; set; }
+}
+
+public sealed class PushUnsubscribeRequest
+{
+    public string? Endpoint { get; set; }
+}
+
+public sealed class PushSendRequest
+{
+    public string? Title { get; set; }
+    public string? Body { get; set; }
+    public string? ProfileId { get; set; }
+}
+
+public sealed class PushConfigUpdateRequest
+{
+    public bool NotifyOnNewWeek { get; set; } = true;
+    public bool ReminderEnabled { get; set; }
+    public int ReminderHour { get; set; } = 17;
+    public string? ReminderWeekId { get; set; }
+    public int ReminderRequiredPerfects { get; set; } = 1;
 }

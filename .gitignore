@@ -20,3 +20,10 @@ appsettings.Development.json
 
 ## Publish settings
 *.publishSettings
+
+## Node / Playwright
+node_modules/
+test-results/
+tests/e2e-results/
+tests/screenshots/
+tests/*.log

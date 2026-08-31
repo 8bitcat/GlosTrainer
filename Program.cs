@@ -18,6 +18,8 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(conn
 builder.Services.AddScoped<LocalAuthService>();
 builder.Services.AddScoped<AuthAccountService>();
 builder.Services.AddScoped<VocabDatabaseInitializer>();
+builder.Services.AddScoped<PushNotificationService>();
+builder.Services.AddHostedService<PushReminderScheduler>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<OpenAiVocabParser>();
@@ -1006,7 +1008,7 @@ app.MapGet("/api/groupfight/invites/{inviteId}/events", async (string inviteId, 
     return Results.Ok(new { items });
 });
 
-app.MapPost("/api/vocab/weeks/{weekId}/words", async (string weekId, WeekWordsUpdateRequest request, AppDbContext db, CancellationToken ct) =>
+app.MapPost("/api/vocab/weeks/{weekId}/words", async (string weekId, WeekWordsUpdateRequest request, AppDbContext db, PushNotificationService push, CancellationToken ct) =>
 {
     if (request.Words is null || request.Words.Count == 0)
     {
@@ -1027,6 +1029,7 @@ app.MapPost("/api/vocab/weeks/{weekId}/words", async (string weekId, WeekWordsUp
         ? NormalizeAppLanguage(week.Language)
         : NormalizeAppLanguage(request.Language);
 
+    var hadWords = week.Words.Count > 0;
     db.Words.RemoveRange(week.Words);
     week.Words = request.Words
         .Where(x => !string.IsNullOrWhiteSpace(x.Sv) && !string.IsNullOrWhiteSpace(x.En))
@@ -1034,6 +1037,23 @@ app.MapPost("/api/vocab/weeks/{weekId}/words", async (string weekId, WeekWordsUp
         .ToList();
 
     await db.SaveChangesAsync(ct);
+
+    // En tom vecka som just fick sina första glosor räknas som "ny läxa upplagd".
+    if (!hadWords && week.Words.Count > 0)
+    {
+        try
+        {
+            var pushConfig = await push.GetOrCreateConfigAsync(ct);
+            if (pushConfig.NotifyOnNewWeek)
+            {
+                await push.SendToAllAsync("Ny läxa i GlosTrainer! 📚", $"\"{week.WeekName}\" är upplagd. In och träna!", "/", $"new-week-{week.Id}", ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "Kunde inte skicka ny-läxa-notis för {Week}", week.WeekName);
+        }
+    }
 
     var weeks = await db.Weeks.AsNoTracking()
         .Include(x => x.Words)
@@ -1050,7 +1070,7 @@ app.MapPost("/api/vocab/weeks/{weekId}/words", async (string weekId, WeekWordsUp
     return Results.Ok(new { weeks });
 }).RequireAuthorization();
 
-app.MapPost("/api/vocab/weeks", async (CreateWeekRequest request, AppDbContext db, CancellationToken ct) =>
+app.MapPost("/api/vocab/weeks", async (CreateWeekRequest request, AppDbContext db, PushNotificationService push, CancellationToken ct) =>
 {
     var weekName = (request.WeekName ?? string.Empty).Trim();
     var language = NormalizeAppLanguage(request.Language);
@@ -1072,6 +1092,22 @@ app.MapPost("/api/vocab/weeks", async (CreateWeekRequest request, AppDbContext d
 
     db.Weeks.Add(week);
     await db.SaveChangesAsync(ct);
+
+    if (week.Words.Count > 0)
+    {
+        try
+        {
+            var pushConfig = await push.GetOrCreateConfigAsync(ct);
+            if (pushConfig.NotifyOnNewWeek)
+            {
+                await push.SendToAllAsync("Ny läxa i GlosTrainer! 📚", $"\"{week.WeekName}\" är upplagd. In och träna!", "/", $"new-week-{week.Id}", ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "Kunde inte skicka ny-läxa-notis för {Week}", week.WeekName);
+        }
+    }
 
     return Results.Ok(new { weekId = week.Id });
 }).RequireAuthorization();
@@ -1682,6 +1718,183 @@ app.MapDelete("/api/vocab/words/{wordId:int}", async (int wordId, AppDbContext d
     return Results.Ok(new { deleted = word.Sv, id = word.Id });
 }).RequireAuthorization("AdminOnly");
 
+// ---------- Push-notiser ----------
+
+app.MapGet("/api/push/vapid-public-key", async (PushNotificationService push, CancellationToken ct) =>
+{
+    var config = await push.GetOrCreateConfigAsync(ct);
+    return Results.Ok(new { publicKey = config.VapidPublicKey });
+}).AllowAnonymous();
+
+app.MapPost("/api/push/subscribe", async (PushSubscribeRequest request, HttpContext httpContext, AppDbContext db, LocalAuthService authService, PushNotificationService push, CancellationToken ct) =>
+{
+    var endpoint = (request.Endpoint ?? string.Empty).Trim();
+    if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(request.P256dh) || string.IsNullOrWhiteSpace(request.Auth))
+    {
+        return Results.BadRequest(new { error = "Ogiltig prenumeration." });
+    }
+
+    var (profileId, displayName) = await ResolvePushProfileAsync(httpContext, db, authService, ct);
+
+    var hash = PushNotificationService.HashEndpoint(endpoint);
+    var sub = await db.PushSubscriptions.FirstOrDefaultAsync(x => x.EndpointHash == hash, ct);
+    var isNew = sub is null;
+    if (sub is null)
+    {
+        sub = new PushSubscriptionRecord { Endpoint = endpoint, EndpointHash = hash };
+        db.PushSubscriptions.Add(sub);
+    }
+
+    sub.P256dh = request.P256dh.Trim();
+    sub.Auth = request.Auth.Trim();
+    if (!string.IsNullOrWhiteSpace(profileId))
+    {
+        sub.UserProfileId = profileId;
+    }
+    if (!string.IsNullOrWhiteSpace(displayName))
+    {
+        sub.DisplayName = displayName;
+    }
+    var userAgent = httpContext.Request.Headers.UserAgent.FirstOrDefault();
+    sub.UserAgent = string.IsNullOrWhiteSpace(userAgent) ? null : userAgent[..Math.Min(userAgent.Length, 300)];
+    sub.LastSeenUtc = DateTime.UtcNow;
+    await db.SaveChangesAsync(ct);
+
+    if (isNew)
+    {
+        try
+        {
+            await push.SendToSubscriptionAsync(sub, "Notiser aktiverade! 🎉", "Du får nu en notis när en ny läxa läggs upp i GlosTrainer.", "/", "welcome", ct);
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "Kunde inte skicka välkomstnotis till {Name}", sub.DisplayName);
+        }
+    }
+
+    return Results.Ok(new { subscribed = true, linkedName = sub.DisplayName });
+}).AllowAnonymous();
+
+app.MapPost("/api/push/unsubscribe", async (PushUnsubscribeRequest request, AppDbContext db, CancellationToken ct) =>
+{
+    var endpoint = (request.Endpoint ?? string.Empty).Trim();
+    if (string.IsNullOrWhiteSpace(endpoint))
+    {
+        return Results.BadRequest(new { error = "Endpoint krävs." });
+    }
+
+    var hash = PushNotificationService.HashEndpoint(endpoint);
+    var sub = await db.PushSubscriptions.FirstOrDefaultAsync(x => x.EndpointHash == hash, ct);
+    if (sub is not null)
+    {
+        db.PushSubscriptions.Remove(sub);
+        await db.SaveChangesAsync(ct);
+    }
+
+    return Results.Ok(new { unsubscribed = true });
+}).AllowAnonymous();
+
+// Extern cron-trigger (GitHub Actions eller cron-job.org) — väcker appen och kör
+// påminnelse-kollen. Appen avgör själv om det är rätt tid att skicka.
+app.MapGet("/api/push/run-reminders", async (string? key, bool? force, PushNotificationService push, CancellationToken ct) =>
+{
+    var config = await push.GetOrCreateConfigAsync(ct);
+    if (string.IsNullOrWhiteSpace(key) || !string.Equals(key, config.CronKey, StringComparison.Ordinal))
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await push.RunReminderCheckAsync(force == true, ct);
+    return Results.Ok(result);
+}).AllowAnonymous();
+
+app.MapGet("/api/push/admin/overview", async (AppDbContext db, PushNotificationService push, HttpContext httpContext, CancellationToken ct) =>
+{
+    var config = await push.GetOrCreateConfigAsync(ct);
+    var subs = await db.PushSubscriptions.AsNoTracking()
+        .OrderByDescending(x => x.LastSeenUtc)
+        .Select(x => new
+        {
+            x.Id,
+            x.DisplayName,
+            x.UserProfileId,
+            x.UserAgent,
+            x.CreatedUtc,
+            x.LastSeenUtc,
+            x.FailCount
+        })
+        .ToListAsync(ct);
+
+    var weeks = await db.Weeks.AsNoTracking()
+        .OrderByDescending(x => x.CreatedUtc)
+        .Select(x => new { x.Id, x.WeekName, x.Language, WordCount = x.Words.Count })
+        .ToListAsync(ct);
+
+    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    return Results.Ok(new
+    {
+        config = new
+        {
+            config.NotifyOnNewWeek,
+            config.ReminderEnabled,
+            config.ReminderHour,
+            config.ReminderWeekId,
+            config.ReminderRequiredPerfects,
+            config.LastReminderSentUtc
+        },
+        cronUrl = $"{baseUrl}/api/push/run-reminders?key={config.CronKey}",
+        subscriptions = subs,
+        weeks
+    });
+}).RequireAuthorization();
+
+app.MapPost("/api/push/admin/config", async (PushConfigUpdateRequest request, PushNotificationService push, AppDbContext db, CancellationToken ct) =>
+{
+    var config = await push.GetOrCreateConfigAsync(ct);
+    config.NotifyOnNewWeek = request.NotifyOnNewWeek;
+    config.ReminderEnabled = request.ReminderEnabled;
+    config.ReminderHour = Math.Clamp(request.ReminderHour, 0, 23);
+    config.ReminderWeekId = string.IsNullOrWhiteSpace(request.ReminderWeekId) ? null : request.ReminderWeekId.Trim();
+    config.ReminderRequiredPerfects = Math.Clamp(request.ReminderRequiredPerfects, 1, 50);
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(new { saved = true });
+}).RequireAuthorization();
+
+app.MapPost("/api/push/admin/send", async (PushSendRequest request, PushNotificationService push, CancellationToken ct) =>
+{
+    var title = (request.Title ?? string.Empty).Trim();
+    var body = (request.Body ?? string.Empty).Trim();
+    if (string.IsNullOrWhiteSpace(title))
+    {
+        return Results.BadRequest(new { error = "Titel krävs." });
+    }
+
+    var sent = string.IsNullOrWhiteSpace(request.ProfileId)
+        ? await push.SendToAllAsync(title, body, "/", null, ct)
+        : await push.SendToProfileAsync(request.ProfileId.Trim(), title, body, "/", null, ct);
+
+    return Results.Ok(new { sent });
+}).RequireAuthorization();
+
+app.MapPost("/api/push/admin/run-reminders", async (PushNotificationService push, CancellationToken ct) =>
+{
+    var result = await push.RunReminderCheckAsync(force: true, ct);
+    return Results.Ok(result);
+}).RequireAuthorization();
+
+app.MapDelete("/api/push/admin/subscriptions/{id}", async (string id, AppDbContext db, CancellationToken ct) =>
+{
+    var sub = await db.PushSubscriptions.FirstOrDefaultAsync(x => x.Id == id, ct);
+    if (sub is null)
+    {
+        return Results.NotFound(new { error = "Prenumerationen hittades inte." });
+    }
+
+    db.PushSubscriptions.Remove(sub);
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(new { deleted = true });
+}).RequireAuthorization();
+
 app.Run();
 
 static async Task<(string ActorId, string DisplayName)?> ResolveChallengeActorAsync(HttpContext httpContext, AppDbContext db, LocalAuthService authService, CancellationToken ct)
@@ -1715,6 +1928,68 @@ static async Task<(string ActorId, string DisplayName)?> ResolveChallengeActorAs
     }
 
     return ($"guest:{normalizedSession}", presence.DisplayName);
+}
+
+// Samma identifieringslogik som progress-endpointen: inloggat konto först,
+// annars gäst-headers — och skapa profil om gästen inte har någon ännu,
+// så att prenumerationen alltid kan kopplas till en spelare.
+static async Task<(string? ProfileId, string? DisplayName)> ResolvePushProfileAsync(HttpContext httpContext, AppDbContext db, LocalAuthService authService, CancellationToken ct)
+{
+    var account = await authService.GetCurrentUserAsync(httpContext.User, ct);
+    if (account?.UserProfileId is not null)
+    {
+        return (account.UserProfileId, account.UserProfile?.Name ?? account.Username);
+    }
+
+    var guestSession = httpContext.Request.Headers["X-Guest-Session"].FirstOrDefault()?.Trim();
+    var guestName = httpContext.Request.Headers["X-Guest-Name"].FirstOrDefault()?.Trim();
+    if (string.IsNullOrWhiteSpace(guestSession) || string.IsNullOrWhiteSpace(guestName))
+    {
+        return (null, guestName);
+    }
+
+    var presence = await db.SitePresences.FirstOrDefaultAsync(x => x.SessionId == guestSession, ct);
+    if (presence?.UserProfileId is not null)
+    {
+        return (presence.UserProfileId, guestName);
+    }
+
+    var uniqueName = guestName;
+    if (await db.UserProfiles.AnyAsync(x => x.Name == uniqueName, ct))
+    {
+        for (int i = 2; i <= 99; i++)
+        {
+            var candidate = $"{guestName}-{i}";
+            if (!await db.UserProfiles.AnyAsync(x => x.Name == candidate, ct))
+            {
+                uniqueName = candidate;
+                break;
+            }
+        }
+    }
+
+    var profile = new UserProfile { Name = uniqueName };
+    db.UserProfiles.Add(profile);
+    await db.SaveChangesAsync(ct);
+
+    if (presence is not null)
+    {
+        presence.UserProfileId = profile.Id;
+    }
+    else
+    {
+        db.SitePresences.Add(new SitePresence
+        {
+            SessionId = guestSession,
+            DisplayName = guestName,
+            IsAuthenticated = false,
+            UserProfileId = profile.Id,
+            LastSeenUtc = DateTime.UtcNow
+        });
+    }
+    await db.SaveChangesAsync(ct);
+
+    return (profile.Id, uniqueName);
 }
 
 static string StripGuestSuffix(string name)

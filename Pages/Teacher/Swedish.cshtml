@@ -1,0 +1,712 @@
+@page
+@model GlosTrainer.Web.Pages.Teacher.SwedishModel
+@{
+    ViewData["Title"] = "Svenska Rattstavning";
+}
+
+<div class="game-shell">
+    <section class="hero-panel">
+        <div style="width:100%">
+            <p class="kicker">Larare</p>
+            <h1>Svenska Rattstavning</h1>
+            <p class="subtitle">Skapa ord med AI-genererad bild och ljud.</p>
+
+            <div class="d-grid gap-2" style="max-width:780px;">
+
+                <!-- Week selector -->
+                <label><strong>Valj vecka</strong></label>
+                <select id="weekSelect"></select>
+
+                <!-- Batch input -->
+                <label><strong>Veckonamn</strong></label>
+                <input id="weekNameInput" type="text" placeholder="t.ex. Rattstavning v14" />
+                <label><strong>Skriv svenska ord (ett per rad)</strong></label>
+                <textarea id="wordsInput" rows="8" placeholder="hund
+katt
+skola
+bjork
+stjarna"></textarea>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+                    <button id="createWeekBtn" type="button">Skapa ny vecka</button>
+                    <button id="addWordsBtn" type="button">Lagg till ord i vecka</button>
+                </div>
+
+                <hr />
+
+                <!-- Generate media -->
+                <h3 style="margin:.25rem 0;">AI-generering (bild + ljud)</h3>
+                <button id="generateAllBtn" type="button">Generera bild + ljud for alla ord</button>
+                <div id="progressBar" style="display:none;margin:.5rem 0;">
+                    <div style="background:#e2e8f0;border-radius:8px;overflow:hidden;height:24px;">
+                        <div id="progressFill" style="background:#3b82f6;height:100%;width:0%;transition:width .3s;"></div>
+                    </div>
+                    <p id="progressText" style="font-size:.85rem;margin:.25rem 0;">0 / 0</p>
+                </div>
+
+                <hr />
+
+                <!-- Microphone access -->
+                <div id="micSection" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:.75rem;margin-bottom:.5rem;">
+                    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                        <span style="font-size:1.3rem;">&#127908;</span>
+                        <strong>Mikrofon</strong>
+                        <span id="micStatus" style="font-size:.85rem;padding:2px 8px;border-radius:6px;background:#fef3c7;color:#92400e;">Ej testad</span>
+                        <button id="micTestBtn" type="button" style="margin-left:auto;">Aktivera mikrofon</button>
+                    </div>
+                    <p id="micMsg" style="font-size:.8rem;margin:.4rem 0 0;color:#64748b;display:none;"></p>
+                </div>
+
+                <!-- Word list with previews -->
+                <h3 style="margin:.25rem 0;">Ordlista</h3>
+                <div id="wordList"></div>
+
+                <p id="statusMsg" class="feedback"></p>
+            </div>
+            <div style="display:flex;gap:.6rem;margin-top:.8rem;flex-wrap:wrap;">
+                <a href="/">Till startsidan</a>
+                <a href="/Teacher/Weeks">Glosverktyg</a>
+            </div>
+        </div>
+    </section>
+</div>
+
+<style>
+    .word-card {
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: .75rem;
+        margin-bottom: .5rem;
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        flex-wrap: wrap;
+        background: #f8fafc;
+    }
+    .word-card img {
+        width: 80px;
+        height: 80px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #e2e8f0;
+    }
+    .word-card .word-info {
+        flex: 1;
+        min-width: 120px;
+    }
+    .word-card .word-sv {
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .word-card .word-en {
+        font-size: .85rem;
+        color: #64748b;
+    }
+    .word-card .word-status {
+        font-size: .8rem;
+        padding: 2px 8px;
+        border-radius: 6px;
+    }
+    .word-card .word-status.has-media {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .word-card .word-status.no-media {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .word-card button {
+        font-size: .85rem;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid #cbd5e1;
+        cursor: pointer;
+        background: #e2e8f0 !important;
+        color: #1e293b !important;
+        font-weight: 600;
+    }
+    .word-card button:hover {
+        background: #cbd5e1 !important;
+    }
+    .word-card .rec-btn {
+        background: #1d4ed8 !important;
+        color: #fff !important;
+        border-color: #1d4ed8 !important;
+        font-weight: 700;
+        font-size: .9rem;
+        padding: 8px 14px;
+    }
+    .word-card .rec-btn:hover {
+        background: #1e40af !important;
+    }
+    .word-card .rec-btn.recording {
+        background: #dc2626 !important;
+        border-color: #dc2626 !important;
+        color: #fff !important;
+        animation: pulse-rec 1s infinite;
+        font-size: 1rem;
+        padding: 10px 16px;
+    }
+    .word-card .del-btn {
+        background: #fff !important;
+        color: #dc2626 !important;
+        border-color: #fca5a5 !important;
+    }
+    .word-card .del-btn:hover {
+        background: #fef2f2 !important;
+    }
+    .word-card .upload-btn {
+        background: #f0fdf4 !important;
+        color: #166534 !important;
+        border-color: #86efac !important;
+    }
+    .word-card .upload-btn:hover {
+        background: #dcfce7 !important;
+    }
+    .word-card .ai-btn {
+        background: #eff6ff !important;
+        color: #1d4ed8 !important;
+        border-color: #93c5fd !important;
+    }
+    .word-card .ai-btn:hover {
+        background: #dbeafe !important;
+    }
+    .spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(0,0,0,0.15);
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        vertical-align: middle;
+        margin-right: 4px;
+    }
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    @@keyframes pulse-rec {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    .word-card button:disabled:not(.active-op) {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .word-card button.active-op {
+        opacity: 0.85;
+    }
+</style>
+
+<script>
+(function () {
+    let weeks = [];
+    let currentWeek = null;
+    let currentWords = []; // [{id, sv, en, hasMedia, image?, audio?}]
+
+    const weekSelect = document.getElementById("weekSelect");
+    const weekNameInput = document.getElementById("weekNameInput");
+    const wordsInput = document.getElementById("wordsInput");
+    const createWeekBtn = document.getElementById("createWeekBtn");
+    const addWordsBtn = document.getElementById("addWordsBtn");
+    const generateAllBtn = document.getElementById("generateAllBtn");
+    const progressBar = document.getElementById("progressBar");
+    const progressFill = document.getElementById("progressFill");
+    const progressText = document.getElementById("progressText");
+    const wordList = document.getElementById("wordList");
+    const statusMsg = document.getElementById("statusMsg");
+
+    function showStatus(msg, isError) {
+        statusMsg.textContent = msg;
+        statusMsg.style.color = isError ? "#dc2626" : "#16a34a";
+        statusMsg.style.whiteSpace = "pre-wrap";
+    }
+
+    async function loadWeeks() {
+        const resp = await fetch("/api/vocab/data");
+        const data = await resp.json();
+        weeks = (data.weeks || []).filter(w => (w.language || "").toLowerCase() === "swedish");
+        weekSelect.innerHTML = '<option value="">-- Valj vecka --</option>';
+        weeks.forEach(w => {
+            const opt = document.createElement("option");
+            opt.value = w.id;
+            opt.textContent = `${w.weekName} (${w.words.length} ord)`;
+            weekSelect.append(opt);
+        });
+    }
+
+    async function loadWeekWords(weekId) {
+        const week = weeks.find(w => w.id === weekId);
+        if (!week) { currentWords = []; renderWords(); return; }
+        wordList.innerHTML = `<div style="display:flex;align-items:center;gap:.5rem;padding:1.5rem;justify-content:center;color:#64748b;"><span class="spinner" style="width:20px;height:20px;border-width:3px;"></span> Laddar ord och media...</div>`;
+        currentWeek = week;
+
+        // Use the admin words endpoint that includes IDs and media
+        try {
+            const resp = await fetch(`/api/vocab/weeks/${encodeURIComponent(weekId)}/words`);
+            if (resp.ok) {
+                const data = await resp.json();
+                currentWords = (data.words || []).map(w => ({
+                    id: w.id,
+                    sv: w.sv,
+                    en: w.en,
+                    hasImage: w.hasImage,
+                    hasAudio: w.hasAudio,
+                    hasMedia: w.hasImage && w.hasAudio,
+                    image: w.image,
+                    audio: w.audio
+                }));
+            }
+        } catch (e) {
+            currentWords = week.words.map(w => ({ sv: w.sv, en: w.en, hasMedia: false }));
+        }
+        renderWords();
+    }
+
+    let cardBusy = false; // Global lock to prevent concurrent operations
+
+    function setCardBusy(busy, card, btnRow) {
+        cardBusy = busy;
+        if (btnRow) {
+            btnRow.querySelectorAll("button").forEach(b => { if (!b.classList.contains("active-op")) b.disabled = busy; });
+        }
+    }
+
+    const SPINNER = '<span class="spinner"></span>';
+
+    async function doUpload(wordId, fd, successMsg, card, btnRow) {
+        if (cardBusy) return;
+        setCardBusy(true, card, btnRow);
+        try {
+            const resp = await fetch(`/api/vocab/words/${wordId}/upload-media`, { method: "POST", body: fd });
+            if (!resp.ok) throw new Error("Uppladdning misslyckades");
+            showStatus(successMsg, false);
+            await loadWeekWords(currentWeek.id);
+        } catch (e) {
+            showStatus(`Fel: ${e.message}`, true);
+        }
+        setCardBusy(false, card, btnRow);
+    }
+
+    function renderWords() {
+        wordList.innerHTML = "";
+        if (currentWords.length === 0) {
+            wordList.innerHTML = "<p style='color:#94a3b8;'>Inga ord i denna vecka.</p>";
+            return;
+        }
+        currentWords.forEach((w, i) => {
+            const card = document.createElement("div");
+            card.className = "word-card";
+            card.style.cssText = "flex-direction:column;align-items:stretch;";
+
+            // Top row
+            const topRow = document.createElement("div");
+            topRow.style.cssText = "display:flex;align-items:center;gap:.75rem;";
+
+            const img = document.createElement("img");
+            img.src = w.image || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23e2e8f0' width='80' height='80'/%3E%3Ctext x='40' y='45' text-anchor='middle' fill='%2394a3b8' font-size='12'%3EIngen bild%3C/text%3E%3C/svg%3E";
+            img.alt = w.en || w.sv;
+            topRow.append(img);
+
+            const info = document.createElement("div");
+            info.className = "word-info";
+            info.innerHTML = `<div class="word-sv">${escHtml(w.sv)}</div><div class="word-en">${escHtml(w.en || "")}</div>`;
+            topRow.append(info);
+
+            const badges = document.createElement("div");
+            badges.style.cssText = "display:flex;flex-direction:column;gap:4px;margin-left:auto;";
+            badges.innerHTML = `
+                <span class="word-status ${w.hasImage ? 'has-media' : 'no-media'}">${w.hasImage ? 'Bild OK' : 'Ingen bild'}</span>
+                <span class="word-status ${w.hasAudio ? 'has-media' : 'no-media'}">${w.hasAudio ? 'Ljud OK' : 'Inget ljud'}</span>`;
+            topRow.append(badges);
+            card.append(topRow);
+
+            // Buttons
+            const btnRow = document.createElement("div");
+            btnRow.style.cssText = "display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem;";
+
+            // Play audio
+            if (w.audio) {
+                const b = document.createElement("button");
+                b.innerHTML = "&#128266; Spela ljud";
+                b.onclick = () => { new Audio(w.audio).play(); };
+                btnRow.append(b);
+            }
+
+            // Upload image
+            const imgBtn = document.createElement("button");
+            imgBtn.className = "upload-btn";
+            imgBtn.innerHTML = "&#128247; Ladda upp bild";
+            imgBtn.onclick = () => {
+                if (cardBusy) return;
+                const input = document.createElement("input");
+                input.type = "file"; input.accept = "image/*";
+                input.onchange = async () => {
+                    if (!input.files[0]) return;
+                    imgBtn.classList.add("active-op");
+                    imgBtn.innerHTML = `${SPINNER} Laddar upp...`;
+                    const fd = new FormData(); fd.append("image", input.files[0]);
+                    await doUpload(w.id, fd, `Bild uppladdad for "${w.sv}"!`, card, btnRow);
+                };
+                input.click();
+            };
+            btnRow.append(imgBtn);
+
+            // Record / upload audio
+            const recBtn = document.createElement("button");
+            recBtn.className = "rec-btn";
+            recBtn.innerHTML = "&#127908; Spela in ljud";
+            let recorder = null, chunks = [], timer = null, secs = 0;
+
+            const stopRecording = () => {
+                if (recorder && recorder.state === "recording") {
+                    recorder.stop();
+                    clearInterval(timer);
+                    recBtn.innerHTML = `${SPINNER} Sparar...`;
+                    recBtn.classList.remove("recording");
+                }
+            };
+
+            const saveRecordedAudio = async (blob) => {
+                recBtn.classList.add("active-op");
+                recBtn.innerHTML = `${SPINNER} Sparar...`;
+                setCardBusy(true, card, btnRow);
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const fd = new FormData();
+                    fd.append("audioBase64", reader.result);
+                    await doUpload(w.id, fd, `Ljud inspelat for "${w.sv}"!`, card, btnRow);
+                };
+                reader.readAsDataURL(blob);
+            };
+
+            recBtn.onclick = async () => {
+                if (cardBusy && !(recorder && recorder.state === "recording")) return;
+
+                // If recording, stop it
+                if (recorder && recorder.state === "recording") {
+                    stopRecording();
+                    return;
+                }
+
+                // Try getUserMedia
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        recorder = new MediaRecorder(stream);
+                        chunks = [];
+                        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+                        recorder.onstop = async () => {
+                            stream.getTracks().forEach(t => t.stop());
+                            const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+                            await saveRecordedAudio(blob);
+                        };
+                        recorder.start();
+                        secs = 0;
+                        setCardBusy(true, card, btnRow);
+                        recBtn.disabled = false; // Keep record btn enabled to stop
+                        recBtn.classList.add("recording");
+                        recBtn.innerHTML = `&#9899; STOPPA (0s)`;
+                        timer = setInterval(() => {
+                            secs++;
+                            recBtn.innerHTML = `&#9899; STOPPA (${secs}s)`;
+                        }, 1000);
+                        return;
+                    } catch (e) { /* fallback below */ }
+                }
+
+                // Fallback: file picker
+                const input = document.createElement("input");
+                input.type = "file"; input.accept = "audio/*";
+                input.setAttribute("capture", "user");
+                input.onchange = async () => {
+                    if (!input.files[0]) return;
+                    recBtn.classList.add("active-op");
+                    recBtn.innerHTML = `${SPINNER} Sparar...`;
+                    const fd = new FormData(); fd.append("audio", input.files[0]);
+                    await doUpload(w.id, fd, `Ljud uppladdat for "${w.sv}"!`, card, btnRow);
+                };
+                input.click();
+            };
+            btnRow.append(recBtn);
+
+            // Upload audio file
+            const audBtn = document.createElement("button");
+            audBtn.className = "upload-btn";
+            audBtn.innerHTML = "&#127925; Ladda upp ljud";
+            audBtn.onclick = () => {
+                if (cardBusy) return;
+                const input = document.createElement("input");
+                input.type = "file"; input.accept = "audio/*";
+                input.onchange = async () => {
+                    if (!input.files[0]) return;
+                    audBtn.classList.add("active-op");
+                    audBtn.innerHTML = `${SPINNER} Laddar upp...`;
+                    const fd = new FormData(); fd.append("audio", input.files[0]);
+                    await doUpload(w.id, fd, `Ljud uppladdat for "${w.sv}"!`, card, btnRow);
+                };
+                input.click();
+            };
+            btnRow.append(audBtn);
+
+            // AI regenerate
+            const aiBtn = document.createElement("button");
+            aiBtn.className = "ai-btn";
+            aiBtn.innerHTML = "&#129302; AI-generera";
+            aiBtn.onclick = async () => {
+                if (cardBusy) return;
+                setCardBusy(true, card, btnRow);
+                aiBtn.classList.add("active-op");
+                aiBtn.innerHTML = `${SPINNER} Genererar...`;
+                try {
+                    const resp = await fetch(`/api/vocab/weeks/${encodeURIComponent(currentWeek.id)}/generate-media`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ forceRegenerate: w.sv })
+                    });
+                    if (!resp.ok) throw new Error("Generering misslyckades");
+                    showStatus(`"${w.sv}" AI-genererad!`, false);
+                    await loadWeekWords(currentWeek.id);
+                } catch (e) {
+                    showStatus(`Fel: ${e.message}`, true);
+                }
+                setCardBusy(false, card, btnRow);
+            };
+            btnRow.append(aiBtn);
+
+            // Delete
+            const delBtn = document.createElement("button");
+            delBtn.className = "del-btn";
+            delBtn.innerHTML = "&#10060; Ta bort";
+            delBtn.onclick = async () => {
+                if (cardBusy) return;
+                if (!confirm(`Ta bort "${w.sv}"?`)) return;
+                setCardBusy(true, card, btnRow);
+                delBtn.classList.add("active-op");
+                delBtn.innerHTML = `${SPINNER} Tar bort...`;
+                try {
+                    const resp = await fetch(`/api/vocab/words/${w.id}`, { method: "DELETE" });
+                    if (!resp.ok) throw new Error("Kunde inte ta bort");
+                    showStatus(`"${w.sv}" borttagen!`, false);
+                    await loadWeeks();
+                    weekSelect.value = currentWeek.id;
+                    await loadWeekWords(currentWeek.id);
+                } catch (e) {
+                    showStatus(`Fel: ${e.message}`, true);
+                }
+                setCardBusy(false, card, btnRow);
+            };
+            btnRow.append(delBtn);
+
+            card.append(btnRow);
+            wordList.append(card);
+        });
+    }
+
+    createWeekBtn.addEventListener("click", async () => {
+        const lines = wordsInput.value.trim().split("\n").filter(l => l.trim());
+        if (lines.length === 0) { showStatus("Skriv minst ett ord.", true); return; }
+
+        const words = parseWordLines(lines);
+        if (words.length === 0) { showStatus("Kunde inte tolka orden.", true); return; }
+
+        const weekName = weekNameInput.value.trim() || `Rattstavning v${getWeekNumber()}`;
+
+        try {
+            const resp = await fetch("/api/vocab/weeks", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ weekName, language: "swedish", words })
+            });
+            if (!resp.ok) throw new Error("Kunde inte skapa vecka");
+            const data = await resp.json();
+            showStatus(`Vecka "${weekName}" skapad med ${words.length} ord!`, false);
+            wordsInput.value = "";
+            await loadWeeks();
+            weekSelect.value = data.id || "";
+            if (data.id) await loadWeekWords(data.id);
+        } catch (e) {
+            showStatus(`Fel: ${e.message}`, true);
+        }
+    });
+
+    addWordsBtn.addEventListener("click", async () => {
+        const weekId = weekSelect.value;
+        if (!weekId) { showStatus("Valj en vecka forst.", true); return; }
+
+        const lines = wordsInput.value.trim().split("\n").filter(l => l.trim());
+        if (lines.length === 0) { showStatus("Skriv minst ett ord.", true); return; }
+
+        const words = parseWordLines(lines);
+        if (words.length === 0) { showStatus("Kunde inte tolka orden.", true); return; }
+
+        // Get existing week data and merge
+        const week = weeks.find(w => w.id === weekId);
+        if (!week) return;
+
+        const allWords = [...week.words, ...words];
+        try {
+            const resp = await fetch(`/api/vocab/weeks/${encodeURIComponent(weekId)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ weekName: week.weekName, language: "swedish", words: allWords })
+            });
+            if (!resp.ok) throw new Error("Kunde inte spara");
+            showStatus(`${words.length} ord tillagda!`, false);
+            wordsInput.value = "";
+            await loadWeeks();
+            weekSelect.value = weekId;
+            await loadWeekWords(weekId);
+        } catch (e) {
+            showStatus(`Fel: ${e.message}`, true);
+        }
+    });
+
+    generateAllBtn.addEventListener("click", async () => {
+        const weekId = weekSelect.value;
+        if (!weekId) { showStatus("Valj en vecka forst.", true); return; }
+
+        const wordsWithoutMedia = currentWords.filter(w => !w.hasMedia);
+        if (wordsWithoutMedia.length === 0) {
+            showStatus("Alla ord har redan bild och ljud!", false);
+            return;
+        }
+
+        generateAllBtn.disabled = true;
+        progressBar.style.display = "block";
+        const total = wordsWithoutMedia.length;
+        let done = 0;
+        progressFill.style.width = "0%";
+        progressText.textContent = `0 / ${total} (detta kan ta ett par minuter...)`;
+
+        try {
+            const resp = await fetch(`/api/vocab/weeks/${encodeURIComponent(weekId)}/generate-media`, {
+                method: "POST"
+            });
+            if (!resp.ok) throw new Error("Generering misslyckades");
+            const data = await resp.json();
+
+            const generated = (data.results || []).filter(r => r.status === "generated").length;
+            const errors = (data.results || []).filter(r => r.status === "error");
+
+            progressFill.style.width = "100%";
+            progressText.textContent = `Klart! ${generated} genererade.`;
+
+            if (errors.length > 0) {
+                const errDetail = errors.map(e => `${e.word}: ${e.error || "okant fel"}`).join("\n");
+                showStatus(`${generated} genererade, ${errors.length} fel:\n${errDetail}`, true);
+            } else {
+                showStatus(`Alla ${generated} ord genererade!`, false);
+            }
+
+            await loadWeeks();
+            weekSelect.value = weekId;
+            await loadWeekWords(weekId);
+        } catch (e) {
+            showStatus(`Fel: ${e.message}`, true);
+        } finally {
+            generateAllBtn.disabled = false;
+        }
+    });
+
+    weekSelect.addEventListener("change", () => {
+        const weekId = weekSelect.value;
+        if (weekId) {
+            loadWeekWords(weekId);
+        } else {
+            currentWords = [];
+            currentWeek = null;
+            renderWords();
+        }
+    });
+
+    function parseWordLines(lines) {
+        return lines
+            .map(line => {
+                const parts = line.split(/\s*[-:=]\s*/);
+                if (parts.length >= 2) {
+                    return { sv: parts[0].trim(), en: parts.slice(1).join(" - ").trim() };
+                }
+                // Single word — use the word itself as the hint
+                return { sv: line.trim(), en: line.trim() };
+            })
+            .filter(w => w.sv.length > 0);
+    }
+
+    function getWeekNumber() {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+        const week1 = new Date(d.getFullYear(), 0, 4);
+        return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+    }
+
+    function escHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    // Microphone test/activation
+    let micGranted = false;
+    const micTestBtn = document.getElementById("micTestBtn");
+    const micStatus = document.getElementById("micStatus");
+    const micMsg = document.getElementById("micMsg");
+
+    async function testMic() {
+        micTestBtn.disabled = true;
+        micTestBtn.textContent = "Testar...";
+        micMsg.style.display = "none";
+
+        // Check if API exists at all
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            micStatus.textContent = "Ej tillganglig";
+            micStatus.style.background = "#fecaca";
+            micStatus.style.color = "#991b1b";
+            micMsg.style.display = "block";
+            micMsg.innerHTML = `<strong>Mikrofon kraver HTTPS.</strong> Sidan kors pa HTTP.<br><br>
+                <strong>Fix for Chrome:</strong><br>
+                1. Oppna <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code><br>
+                2. Skriv in: <code>http://glostrainer.runasp.net</code><br>
+                3. Valj <strong>Enabled</strong> och starta om Chrome<br><br>
+                <em>Alternativ: anvand "Ladda upp ljud"-knappen for att ladda upp inspelade filer.</em>`;
+            micTestBtn.textContent = "Forsok igen";
+            micTestBtn.disabled = false;
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(t => t.stop());
+            micGranted = true;
+            micStatus.textContent = "Aktiverad!";
+            micStatus.style.background = "#dcfce7";
+            micStatus.style.color = "#166534";
+            micMsg.style.display = "block";
+            micMsg.textContent = "Mikrofon fungerar! Du kan nu spela in ljud direkt.";
+            micMsg.style.color = "#166534";
+            micTestBtn.textContent = "Aktiverad";
+            micTestBtn.disabled = true;
+        } catch (e) {
+            if (e.name === "NotAllowedError") {
+                micStatus.textContent = "Nekad";
+                micStatus.style.background = "#fecaca";
+                micStatus.style.color = "#991b1b";
+                micMsg.style.display = "block";
+                micMsg.innerHTML = `Du nekade mikrofontillstand. Klicka pa laset i adressfalet och tillat mikrofon.`;
+            } else {
+                micStatus.textContent = "Fel";
+                micStatus.style.background = "#fecaca";
+                micStatus.style.color = "#991b1b";
+                micMsg.style.display = "block";
+                micMsg.textContent = `Fel: ${e.message}. Anvand "Ladda upp ljud"-knappen istallet.`;
+            }
+            micTestBtn.textContent = "Forsok igen";
+            micTestBtn.disabled = false;
+        }
+    }
+
+    micTestBtn.addEventListener("click", testMic);
+
+    loadWeeks();
+})();
+</script>
