@@ -19,4 +19,4 @@ jobs:
     steps:
       - name: Trigga påminnelse-koll
         run: |
-          curl -s --max-time 90 "http://glostrainer.runasp.net/api/push/run-reminders?key=${{ secrets.PUSH_CRON_KEY }}" || true
+          curl -sL --max-time 90 "https://glostrainer.runasp.net/api/push/run-reminders?key=${{ secrets.PUSH_CRON_KEY }}" || true
