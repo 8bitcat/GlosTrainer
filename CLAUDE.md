@@ -20,12 +20,13 @@ Hosted at: http://glostrainer.runasp.net/
 
 ## Deployment
 
-- **FTP host**: `site57471.siteasp.net:21`, user `site57471`, password from `.publishSettings` file
+- **FTP host**: `site61292.siteasp.net:21`, user `site61292`, password in project memory (`ftp_credentials_update.md`)
 - **Critical**: Must upload `app_offline.htm` first to release file locks on DLLs, then upload files, then delete `app_offline.htm`
-- **Static files**: Upload to `ftp://site57471.siteasp.net/wwwroot/wwwroot/` (double-nested wwwroot!)
-- **DLLs**: Upload to `ftp://site57471.siteasp.net/wwwroot/`
+- **Static files**: Upload to `ftp://site61292.siteasp.net/wwwroot/wwwroot/` (double-nested wwwroot!)
+- **DLLs**: Upload to `ftp://site61292.siteasp.net/wwwroot/`
+- **New NuGet packages**: upload the FULL publish DLL set (incl. transitive deps + updated `deps.json`), otherwise 500.30 at startup. Lesson from 2026-08-31: missing `BouncyCastle.Crypto.dll` + stale `Microsoft.Data.SqlClient.dll` both killed startup.
 - **WebDeploy**: Currently returns 401 (credentials expired). Use FTP instead.
-- **HTTPS**: Broken on hosting side (SSL handshake fails). Use HTTP for testing.
+- **HTTPS**: WORKS since 2026-08-31 (Let's Encrypt via MonsterASP panel). HTTP 307-redirects to HTTPS. Always verify against `https://glostrainer.runasp.net`.
 
 ## Key files
 - `wwwroot/js/site.js` - Main frontend (~5800+ lines, vanilla JS)
