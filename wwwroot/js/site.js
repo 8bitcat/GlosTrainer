@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.10.0";
+  const GAME_VERSION = "1.11.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
