@@ -63,6 +63,53 @@
     "text-overflow:ellipsis;pointer-events:none;";
   document.body.appendChild(answerBar);
 
+  // Rätt/fel-rutan: spelet ritar feedbacken på canvasen som tangentbordet
+  // täcker — spegla den här istället, ovanför svarsraden. Vid FEL visas
+  // texten dubbelt så länge så man hinner läsa rätta svaret.
+  var feedbackBar = document.createElement("div");
+  feedbackBar.id = "mobileFeedbackBar";
+  feedbackBar.style.cssText =
+    "position:fixed;left:50%;transform:translateX(-50%);bottom:64px;display:none;" +
+    "max-width:80vw;padding:8px 18px;z-index:9998;text-align:center;" +
+    "background:rgba(10,16,32,0.95);border-radius:8px;font-family:monospace;" +
+    "pointer-events:none;border:2px solid #24406b;";
+  document.body.appendChild(feedbackBar);
+
+  var feedbackTimer = null;
+
+  window.__onGameFeedback = function (line1, color, line2, durationMs) {
+    if (document.activeElement !== kb) {
+      return; // tangentbordet nere — canvasens egen feedback syns då
+    }
+    var isWrong = String(color || "").toLowerCase() === "#ef4444";
+    var duration = (durationMs && isFinite(durationMs)) ? durationMs : 3000;
+    if (isWrong) {
+      duration *= 2;
+    }
+
+    feedbackBar.innerHTML = "";
+    feedbackBar.style.borderColor = color || "#24406b";
+    var main = document.createElement("div");
+    main.textContent = line1 || "";
+    main.style.cssText = "font-weight:bold;font-size:20px;line-height:1.3;color:" + (color || "#d7e6ff") + ";";
+    feedbackBar.appendChild(main);
+    if (line2) {
+      var sub = document.createElement("div");
+      sub.textContent = line2;
+      sub.style.cssText = "font-size:15px;line-height:1.4;color:#d7e6ff;white-space:normal;";
+      feedbackBar.appendChild(sub);
+    }
+
+    feedbackBar.style.display = "block";
+    positionAnswerBar();
+    if (feedbackTimer) {
+      window.clearTimeout(feedbackTimer);
+    }
+    feedbackTimer = window.setTimeout(function () {
+      feedbackBar.style.display = "none";
+    }, duration);
+  };
+
   var answerPoll = null;
 
   function currentAnswerText() {
@@ -85,6 +132,7 @@
     var vv = window.visualViewport;
     var bottomInset = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
     answerBar.style.bottom = (bottomInset + 10) + "px";
+    feedbackBar.style.bottom = (bottomInset + 10 + answerBar.offsetHeight + 8) + "px";
   }
 
   function showAnswerBar() {
@@ -101,6 +149,11 @@
 
   function hideAnswerBar() {
     answerBar.style.display = "none";
+    feedbackBar.style.display = "none";
+    if (feedbackTimer) {
+      window.clearTimeout(feedbackTimer);
+      feedbackTimer = null;
+    }
     if (answerPoll) {
       window.clearInterval(answerPoll);
       answerPoll = null;

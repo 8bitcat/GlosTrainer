@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.11.1";
+  const GAME_VERSION = "1.11.2";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -6579,6 +6579,8 @@
       showTextFlash(line1, color, line2, durationMs) {
         const now = Date.now();
         arena.textFlash = { line1, color, line2: line2 || null, duration: durationMs || 2000, startedAt: now, expiresAt: now + (durationMs || 2000) };
+        // Mobilen speglar feedbacken ovanför tangentbordet (mobile.js).
+        try { if (window.__onGameFeedback) window.__onGameFeedback(line1, color, line2, durationMs); } catch (_) { /* får aldrig störa spelet */ }
       },
       getBossById(id) {
         return bossRoster.find((b) => b.id === id) || bossRoster[0];
@@ -7233,6 +7235,8 @@
           startedAt: now,
           expiresAt: now + (durationMs || 1800),
         };
+        // Mobilen speglar feedbacken ovanför tangentbordet (mobile.js).
+        try { if (window.__onGameFeedback) window.__onGameFeedback(text, color, sub, durationMs); } catch (_) { /* får aldrig störa spelet */ }
       },
       setSiegeCountdown(seconds) {
         arena.siege.countdownEndsAt = Date.now() + seconds * 1000;
