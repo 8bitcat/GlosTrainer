@@ -49,6 +49,69 @@
     "border:0;padding:0;background:transparent;color:transparent;caret-color:transparent;z-index:41;";
   document.body.appendChild(kb);
 
+  // ── Synlig svarsrad ──
+  // Spelet ritar det skrivna svaret på canvasens nedre del, som tangentbordet
+  // täcker. Den här raden speglar motorns svarsbuffert och läggs precis
+  // ovanför tangentbordet (via visualViewport) så man ser vad man skriver.
+  var answerBar = document.createElement("div");
+  answerBar.id = "mobileAnswerBar";
+  answerBar.style.cssText =
+    "position:fixed;left:50%;transform:translateX(-50%);bottom:10px;display:none;" +
+    "max-width:72vw;min-width:180px;padding:8px 16px;z-index:9998;text-align:center;" +
+    "background:rgba(10,16,32,0.95);border:2px solid #00aa00;border-radius:8px;" +
+    "font:bold 20px/1.3 monospace;color:#00ff66;white-space:nowrap;overflow:hidden;" +
+    "text-overflow:ellipsis;pointer-events:none;";
+  document.body.appendChild(answerBar);
+
+  var answerPoll = null;
+
+  function currentAnswerText() {
+    var engine = window.__engine;
+    if (!engine) {
+      return "";
+    }
+    try {
+      if (engine.isSiegeMode && engine.isSiegeMode() && engine.getSiegeAnswer) {
+        return engine.getSiegeAnswer() || "";
+      }
+      if (engine.isAdventureMode && engine.isAdventureMode() && engine.getAdventureAnswer) {
+        return engine.getAdventureAnswer() || "";
+      }
+    } catch (_) { /* motorn i okänt läge */ }
+    return "";
+  }
+
+  function positionAnswerBar() {
+    var vv = window.visualViewport;
+    var bottomInset = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+    answerBar.style.bottom = (bottomInset + 10) + "px";
+  }
+
+  function showAnswerBar() {
+    answerBar.style.display = "block";
+    positionAnswerBar();
+    if (!answerPoll) {
+      answerPoll = window.setInterval(function () {
+        var text = currentAnswerText();
+        answerBar.textContent = text.length > 0 ? text + "▌" : "skriv ditt svar…";
+        answerBar.style.color = text.length > 0 ? "#00ff66" : "#5a7a93";
+      }, 90);
+    }
+  }
+
+  function hideAnswerBar() {
+    answerBar.style.display = "none";
+    if (answerPoll) {
+      window.clearInterval(answerPoll);
+      answerPoll = null;
+    }
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", positionAnswerBar);
+    window.visualViewport.addEventListener("scroll", positionAnswerBar);
+  }
+
   function typingActive() {
     var engine = window.__engine;
     if (!engine) {
@@ -75,6 +138,9 @@
       kb.blur();
     }
   });
+
+  kb.addEventListener("focus", showAnswerBar);
+  kb.addEventListener("blur", hideAnswerBar);
 
   function dispatchKey(key) {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: key, bubbles: true, cancelable: true }));

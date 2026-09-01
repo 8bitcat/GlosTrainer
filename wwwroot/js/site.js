@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.11.0";
+  const GAME_VERSION = "1.11.1";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -1642,9 +1642,19 @@
       drawNameEditOverlay(m);
     }
 
+    // Start-knapparna ritas ovanpå vecko-/kategorilistorna och måste därför
+    // vinna klicket när ytorna överlappar (annars byter ett tapp på SIEGE
+    // vecka istället — märks mest på mobil).
+    const MENU_PRIORITY_TYPES = new Set(["start", "startGrind", "startAdventure", "startMathSiege"]);
+
+    function menuButtonsInHitOrder(m) {
+      return [...m.buttons].sort((a, b) =>
+        (MENU_PRIORITY_TYPES.has(b.type) ? 1 : 0) - (MENU_PRIORITY_TYPES.has(a.type) ? 1 : 0));
+    }
+
     function handleMenuClick(cx, cy) {
       const m = arena.menu;
-      for (const btn of m.buttons) {
+      for (const btn of menuButtonsInHitOrder(m)) {
         if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
           if (btn.type === "tab") {
             m.selectedTab = btn.tabId; m.scrollOffset = 0;
@@ -1693,7 +1703,7 @@
     function handleMenuHover(cx, cy) {
       const m = arena.menu;
       m.hoveredItem = null;
-      for (const btn of m.buttons) {
+      for (const btn of menuButtonsInHitOrder(m)) {
         if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
           m.hoveredItem = btn;
           return true;
