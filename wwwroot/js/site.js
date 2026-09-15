@@ -1,5 +1,5 @@
 (function () {
-  const GAME_VERSION = "1.11.2";
+  const GAME_VERSION = "1.12.0";
 
   const elements = {
     levelValue: document.getElementById("levelValue"),
@@ -7792,7 +7792,15 @@
   }
 
   function normalize(value) {
-    return String(value ?? "").trim().toLowerCase();
+    // Likställ typografiska tecken med de man faktiskt kan skriva:
+    // ’ ‘ ʼ ´ ` ′ → '   (Word/iOS "smart interpunktion" ger ’ i gloslistor)
+    // – — → -            och blanksteg-serier → ett mellanslag.
+    return String(value ?? "")
+      .replace(/[’‘ʼ´`′]/g, "'")
+      .replace(/[–—]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
   }
 
   function appLanguageKey() {
@@ -8016,6 +8024,7 @@
     if (!elements.specialCharsRow) return;
     const lang = normalizeLanguage(appState.practiceAnswerLanguage || appState.selectedLanguage || "english");
     const charSets = {
+      english: ["'"],
       spanish: ["\u00e1", "\u00e9", "\u00ed", "\u00f3", "\u00fa", "\u00fc", "\u00f1", "\u00bf", "\u00a1"],
       french: ["\u00e0", "\u00e2", "\u00e7", "\u00e8", "\u00e9", "\u00ea", "\u00eb", "\u00ee", "\u00ef", "\u00f4", "\u00f9", "\u00fb", "\u00fc", "\u0153"],
       swedish: ["\u00e5", "\u00e4", "\u00f6"],
@@ -10224,6 +10233,7 @@
     if (!elements.siegeSpecialCharsRow) return;
     const lang = normalizeLanguage(appState.practiceAnswerLanguage || appState.selectedLanguage || "english");
     const charSets = {
+      english: ["'"],
       swedish: ["å","ä","ö"],
       spanish: ["á","é","í","ó","ú","ü","ñ","¿","¡"],
       french: ["à","â","ç","è","é","ê","ë","î","ï","ô","ù","û","ü","œ"],

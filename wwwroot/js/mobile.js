@@ -110,6 +110,24 @@
     }, duration);
   };
 
+  // Apostrofknapp bredvid svarsraden — glosor som "it's" kräver apostrof
+  // och den är svår att hitta på mobiltangentbordet. pointerdown +
+  // preventDefault gör att tangentbordet inte tappas när man tappar knappen.
+  var apoBtn = document.createElement("button");
+  apoBtn.type = "button";
+  apoBtn.id = "mobileApostropheBtn";
+  apoBtn.textContent = "'";
+  apoBtn.setAttribute("aria-label", "Skriv apostrof");
+  apoBtn.style.cssText =
+    "position:fixed;right:10px;bottom:10px;display:none;width:46px;height:44px;" +
+    "z-index:9998;background:rgba(10,16,32,0.95);border:2px solid #00aa00;border-radius:8px;" +
+    "font:bold 24px/1 monospace;color:#00ff66;cursor:pointer;padding:0;";
+  document.body.appendChild(apoBtn);
+  apoBtn.addEventListener("pointerdown", function (event) {
+    event.preventDefault();
+    dispatchKey("'");
+  });
+
   var answerPoll = null;
 
   function currentAnswerText() {
@@ -133,10 +151,12 @@
     var bottomInset = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
     answerBar.style.bottom = (bottomInset + 10) + "px";
     feedbackBar.style.bottom = (bottomInset + 10 + answerBar.offsetHeight + 8) + "px";
+    apoBtn.style.bottom = (bottomInset + 10) + "px";
   }
 
   function showAnswerBar() {
     answerBar.style.display = "block";
+    apoBtn.style.display = "block";
     positionAnswerBar();
     if (!answerPoll) {
       answerPoll = window.setInterval(function () {
@@ -149,6 +169,7 @@
 
   function hideAnswerBar() {
     answerBar.style.display = "none";
+    apoBtn.style.display = "none";
     feedbackBar.style.display = "none";
     if (feedbackTimer) {
       window.clearTimeout(feedbackTimer);
